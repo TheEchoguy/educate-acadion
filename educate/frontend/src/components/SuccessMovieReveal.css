@@ -1,0 +1,155 @@
+/* ========================================================================= */
+/* SUCCESS MOVIE REVEAL STYLING - POST-LOGIN CINEMATIC TRANSITION */
+/* ========================================================================= */
+.success-movie-reveal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999999;
+  background-color: #060911;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  transition: opacity 0.6s ease-out, filter 0.6s ease-out;
+  animation: movieFadeIn 0.5s ease-in;
+}
+
+@keyframes movieFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.success-movie-reveal-overlay.movie-fade-out {
+  opacity: 0;
+  pointer-events: none;
+  filter: blur(12px);
+}
+
+/* AMBIENT LIGHT GLOWS */
+.movie-dark-scrim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at center, rgba(11, 15, 25, 0.5) 0%, rgba(6, 9, 17, 0.96) 100%);
+  pointer-events: none;
+}
+
+.movie-blue-glow {
+  position: absolute;
+  width: 700px;
+  height: 700px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0) 70%);
+  top: -200px;
+  left: -200px;
+  animation: pulseGlow 3s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.movie-purple-glow {
+  position: absolute;
+  width: 700px;
+  height: 700px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, rgba(168, 85, 247, 0) 70%);
+  bottom: -200px;
+  right: -200px;
+  animation: pulseGlow 3s ease-in-out infinite alternate-reverse;
+  pointer-events: none;
+}
+
+@keyframes pulseGlow {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  100% { transform: scale(1.1); opacity: 1; }
+}
+
+/* MOVIE TITLE REVEAL BOX */
+.movie-title-reveal-box {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  animation: titleRevealScale 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes titleRevealScale {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.movie-acadion-title {
+  font-size: 4.8rem;
+  font-weight: 900;
+  letter-spacing: 0.22em;
+  color: #ffffff;
+  margin: 0 0 10px 0;
+  text-transform: uppercase;
+  text-shadow: 0 0 35px rgba(59, 130, 246, 0.5), 0 0 70px rgba(168, 85, 247, 0.3);
+}
+
+.movie-light-sweep {
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #93c5fd 35%,
+    #ffffff 50%,
+    #c084fc 65%,
+    #ffffff 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: lightSweep 2.5s linear infinite;
+}
+
+@keyframes lightSweep {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+.movie-acadion-subtitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  letter-spacing: 0.08em;
+  margin: 0 0 18px 0;
+}
+
+.movie-welcome-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 0.95rem;
+  color: #60a5fa;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.movie-glow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a855f7;
+  box-shadow: 0 0 10px #a855f7;
+}
+
+@media (max-width: 768px) {
+  .movie-acadion-title {
+    font-size: 3rem;
+    letter-spacing: 0.14em;
+  }
+  .movie-acadion-subtitle {
+    font-size: 1rem;
+  }
+}

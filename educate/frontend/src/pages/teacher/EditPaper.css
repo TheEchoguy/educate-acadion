@@ -1,0 +1,130 @@
+.edit-paper-page {
+  min-height: 100vh;
+  padding: 32px 40px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.edit-paper-header h1 {
+  font-size: 2.25rem;
+  margin-bottom: 24px;
+}
+
+.paper-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 30px;
+  background: var(--bg-card);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+}
+
+.paper-info input {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.questions-section {
+  display: grid;
+  gap: 20px;
+}
+
+.question-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  display: grid;
+  gap: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.question-card input,
+.question-card textarea {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.question-card textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.add-btn,
+.save-btn,
+.delete-question-btn {
+  padding: 12px 22px;
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.add-btn {
+  background: var(--bg-card);
+  border: 1px dashed var(--primary);
+  color: var(--primary);
+}
+
+.add-btn:hover {
+  background: var(--primary-light);
+}
+
+.save-btn {
+  background: var(--primary);
+}
+
+.save-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.delete-question-btn {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  justify-self: start;
+}
+
+.delete-question-btn:hover {
+  background: var(--danger);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .edit-paper-page {
+    padding: 20px 16px;
+  }
+
+  .edit-paper-header h1 {
+    font-size: 1.85rem;
+  }
+
+  .editor-actions {
+    flex-direction: column;
+  }
+}

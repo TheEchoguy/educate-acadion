@@ -1,0 +1,191 @@
+/* ========================================================================= */
+/* FULL-VIEWPORT CLEAN CINEMATIC LANDING PAGE USING EXISTING PROJECT VIDEO */
+/* ========================================================================= */
+.fullscreen-cinematic-landing {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #060911;
+  color: #f8fafc;
+  font-family: inherit;
+  overflow: hidden;
+  z-index: 999;
+}
+
+/* NAVBAR */
+.cinematic-navbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: 28px 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  box-sizing: border-box;
+}
+
+.brand-logo a {
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  text-decoration: none;
+  background: linear-gradient(135deg, #ffffff 0%, #60a5fa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+}
+
+.top-login-btn {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  padding: 9px 26px;
+  border-radius: 22px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.top-login-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: #3b82f6;
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  transform: translateY(-2px);
+}
+
+/* FULL VIEWPORT CINEMATIC CANVAS */
+.cinematic-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* MAIN HERO ACADEMIC VIDEO PLAYER */
+.main-hero-academic-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  object-position: center;
+  filter: none !important; /* 100% UNBLURRED CRYSTAL CLEAR VIDEO DISPLAY */
+  z-index: 1;
+}
+
+/* SUBTLE DARK OVERLAY FOR TEXT & BUTTON READABILITY */
+.viewport-subtle-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(6, 9, 17, 0.25) 0%, rgba(6, 9, 17, 0.75) 100%);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* MINIMAL BRANDING OVERLAY & PROMINENT JOIN FREE BUTTON */
+.cinematic-branding-overlay {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  max-width: 920px;
+  padding: 0 24px;
+}
+
+.brand-title {
+  font-size: 4.8rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  background: linear-gradient(135deg, #ffffff 0%, #93c5fd 50%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0 0 8px 0;
+  text-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+  text-transform: uppercase;
+}
+
+.brand-subtitle {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  letter-spacing: 0.06em;
+  margin: 0 0 12px 0;
+  text-shadow: 0 4px 14px rgba(0, 0, 0, 0.9);
+}
+
+.brand-tagline {
+  font-size: 1.08rem;
+  color: #60a5fa;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin: 0 0 36px 0;
+}
+
+/* PRIMARY PROMINENT JOIN FREE BUTTON */
+.primary-action-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 36px;
+}
+
+.prominent-join-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 44px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border: none;
+  border-radius: 36px;
+  color: #ffffff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 12px 36px rgba(59, 130, 246, 0.5);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.prominent-join-btn:hover {
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 0 18px 44px rgba(139, 92, 246, 0.7);
+}
+
+.prominent-join-btn:hover .arrow {
+  transform: translateX(6px);
+}
+
+.arrow {
+  font-size: 1.25rem;
+  transition: transform 0.25s ease;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .brand-title {
+    font-size: 3.2rem;
+    letter-spacing: 0.1em;
+  }
+
+  .brand-subtitle {
+    font-size: 1.05rem;
+  }
+
+  .prominent-join-btn {
+    padding: 14px 32px;
+    font-size: 1rem;
+  }
+}

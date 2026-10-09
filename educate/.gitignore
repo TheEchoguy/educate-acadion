@@ -1,0 +1,11 @@
+# Spring Boot configuration
+backend/src/main/resources/application.properties
+
+# Frontend environment file
+frontend/.env
+
+# Logs
+logs/
+*.log
+
+media-assets/

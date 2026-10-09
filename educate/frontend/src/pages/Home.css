@@ -1,0 +1,322 @@
+/* ========================================================================= */
+/* FULL-DISPLAY TRANSMISSION AI HOME PAGE STYLING */
+/* ========================================================================= */
+.home-page {
+  min-height: 100vh;
+  background-color: #0b0f19;
+  color: #f8fafc;
+  overflow-x: hidden;
+  font-family: inherit;
+}
+
+/* ========================================================================= */
+/* FULL DISPLAY TRANSMISSION HERO BANNER - FAST SLIDE-IN / SLIDE-OUT MODULES */
+/* ========================================================================= */
+.full-display-transmission-hero {
+  position: relative;
+  width: 100%;
+  height: 580px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #060911;
+}
+
+/* CONTAINER FOR SLIDE-IN SLIDE-OUT VIDEO MODULES */
+.slideshow-video-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.reel-slide-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #060911;
+  opacity: 0;
+  transform: translateX(100%);
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.45s ease-out;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ACTIVE SLIDE: ENTERS SLIDING IN TO VIEWPORT */
+.reel-slide-item.slide-active {
+  opacity: 1;
+  transform: translateX(0%);
+  z-index: 2;
+  pointer-events: auto;
+}
+
+/* PREVIOUS SLIDE: EXITS SLIDING OUT TO LEFT */
+.reel-slide-item.slide-exit-left {
+  opacity: 0;
+  transform: translateX(-100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* HIDDEN SLIDES WAITING ON RIGHT */
+.reel-slide-item.slide-hidden {
+  opacity: 0;
+  transform: translateX(100%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* DYNAMIC CATEGORY BACKGROUND MP4 VIDEO - ULTRA CRISP & ENHANCED HD QUALITY */
+.home-category-bg-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: contrast(1.08) brightness(1.06) saturate(1.12) !important; /* ENHANCED CRISP QUALITY */
+  -webkit-filter: contrast(1.08) brightness(1.06) saturate(1.12) !important;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* LIGHT CLEAR OVERLAY FOR MAXIMUM VIDEO CLARITY & SHARP TEXT CONTRAST */
+.full-slide-vignette-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(6, 9, 17, 0.15) 0%,
+    rgba(6, 9, 17, 0.42) 50%,
+    rgba(6, 9, 17, 0.75) 100%
+  );
+  pointer-events: none;
+  z-index: 5;
+}
+
+.full-slide-content {
+  position: relative;
+  z-index: 10;
+  max-width: 1100px;
+  width: 100%;
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.transmission-tabs-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.full-tab-btn {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #e2e8f0;
+  padding: 8px 20px;
+  border-radius: 30px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.full-tab-btn .tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #94a3b8;
+  transition: background 0.3s ease;
+}
+
+.full-tab-btn:hover {
+  background: rgba(30, 41, 59, 0.85);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.full-tab-btn.active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(139, 92, 246, 0.4) 100%);
+  border-color: #c084fc;
+  color: #ffffff;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.45);
+}
+
+.full-tab-btn.active .tab-dot {
+  background: #c084fc;
+  box-shadow: 0 0 8px #c084fc;
+}
+
+/* MOTIVATIONAL QUOTE & CONTENT */
+.motivational-quote-box {
+  margin-bottom: 28px;
+  max-width: 850px;
+}
+
+.slide-category-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #c084fc;
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 14px;
+  backdrop-filter: blur(8px);
+}
+
+.quote-text {
+  font-size: 2.4rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin: 0 0 12px 0;
+  color: #ffffff;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.9), 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+.quote-subtitle {
+  font-size: 1.05rem;
+  color: #f1f5f9;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+/* PROGRESS BAR */
+.slide-progress-bar {
+  width: 280px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.slide-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #a855f7 100%);
+}
+
+/* PORTALS SECTION */
+.portals-section {
+  padding: 60px 24px 80px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.section-header h2 {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0 0 10px 0;
+  background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.section-header p {
+  color: #64748b;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.portals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 28px;
+}
+
+.portal-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px 28px;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.portal-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+.portal-card.teacher-border:hover { border-color: #a855f7; }
+.portal-card.student-border:hover { border-color: #3b82f6; }
+.portal-card.admin-border:hover { border-color: #f59e0b; }
+
+.portal-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+}
+
+.portal-icon-box.purple { background: rgba(168, 85, 247, 0.15); }
+.portal-icon-box.blue { background: rgba(59, 130, 246, 0.15); }
+.portal-icon-box.amber { background: rgba(245, 158, 11, 0.15); }
+
+.portal-card h3 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: #f8fafc;
+}
+
+.portal-card p {
+  color: #94a3b8;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  margin: 0 0 20px 0;
+}
+
+.portal-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.portal-features li {
+  color: #cbd5e1;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 768px) {
+  .full-display-transmission-hero { height: 480px; }
+  .quote-text { font-size: 1.7rem; }
+  .motivational-quote-box { margin-bottom: 20px; }
+}
