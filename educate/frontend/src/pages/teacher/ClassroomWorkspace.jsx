@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import toast from "react-hot-toast";
 import {
@@ -10,19 +10,56 @@ import {
   rejectJoinRequest,
   removeMember,
   importRoster,
-  regenerateJoinCode,
 } from "../../services/classroomService";
 import "./ClassroomWorkspace.css";
+import TeacherSyllabusManagement from "../../components/syllabus/TeacherSyllabusManagement";
+import TeacherSyllabusSchedulingSection from "../../components/syllabus/TeacherSyllabusSchedulingSection";
+import ClassroomHeader from "../../components/classroom/ClassroomHeader";
 
 function ClassroomWorkspace() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
 
   const [classroom, setClassroom] = useState(null);
   const [members, setMembers] = useState([]);
   const [joinRequests, setJoinRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("members"); // "members" | "requests" | "import"
+
+  // Section 1: "management" | Section 2: "syllabus" | Section 3: "scheduling"
+  const sParam = searchParams.get("section");
+  const tParam = searchParams.get("tab") || location.state?.tab;
+  const subParam = searchParams.get("subtab");
+
+  let activeSection = "syllabus";
+  if (sParam === "management" || (tParam && ["members", "requests", "import"].includes(tParam))) {
+    activeSection = "management";
+  } else if (sParam === "scheduling" || tParam === "scheduling") {
+    activeSection = "scheduling";
+  } else if (sParam === "syllabus" || tParam === "syllabus") {
+    activeSection = "syllabus";
+  }
+
+  // Management SubTab: "members" | "requests" | "import"
+  let managementTab = "members";
+  if (subParam && ["members", "requests", "import"].includes(subParam)) {
+    managementTab = subParam;
+  } else if (tParam && ["members", "requests", "import"].includes(tParam)) {
+    managementTab = tParam;
+  }
+
+  const handleSectionChange = (section) => {
+    if (section === "management") {
+      setSearchParams({ section: "management", subtab: managementTab });
+    } else {
+      setSearchParams({ section });
+    }
+  };
+
+  const handleManagementTabChange = (subtab) => {
+    setSearchParams({ section: "management", subtab });
+  };
 
   // Search filter for members
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,13 +68,6 @@ function ClassroomWorkspace() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
-
-  // Regeneration state
-  const [regenerating, setRegenerating] = useState(false);
-
-  useEffect(() => {
-    loadClassroomData();
-  }, [id]);
 
   const loadClassroomData = async () => {
     try {
@@ -59,35 +89,39 @@ function ClassroomWorkspace() {
     }
   };
 
-  const handleCopyCode = () => {
-    if (!classroom?.joinCode) return;
-    navigator.clipboard.writeText(classroom.joinCode);
-    toast.success(`Copied Join Code: ${classroom.joinCode}`);
-  };
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      getClassroomDetails(id),
+      getClassroomMembers(id).catch(() => []),
+      getJoinRequests(id).catch(() => []),
+    ])
+      .then(([clsData, membersData, requestsData]) => {
+        if (active) {
+          setClassroom(clsData);
+          setMembers(membersData || []);
+          setJoinRequests(requestsData || []);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        if (active) {
+          toast.error(err.response?.data?.message || "Failed to load classroom details");
+          setLoading(false);
+        }
+      });
 
-  const handleRegenerateCode = async () => {
-    if (!window.confirm("Are you sure you want to regenerate the join code? The previous join code will immediately be invalidated.")) {
-      return;
-    }
-
-    try {
-      setRegenerating(true);
-      const res = await regenerateJoinCode(id);
-      setClassroom((prev) => ({ ...prev, joinCode: res.joinCode }));
-      toast.success("Join code regenerated successfully!");
-    } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.message || "Failed to regenerate join code");
-    } finally {
-      setRegenerating(false);
-    }
-  };
+    return () => {
+      active = false;
+    };
+  }, [id]);
 
   const handleApprove = async (studentId, studentName) => {
     try {
       await approveJoinRequest(id, studentId);
       toast.success(`Approved ${studentName || "student"} successfully!`);
-      loadClassroomData();
+      await loadClassroomData();
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Approval failed");
@@ -173,11 +207,6 @@ function ClassroomWorkspace() {
       <Navbar />
 
       <div className="workspace-main-container">
-        {/* BACK BUTTON */}
-        <button className="workspace-back-btn" onClick={() => navigate("/teacher/classrooms")}>
-          ← Back to All Classrooms
-        </button>
-
         {loading ? (
           <div className="workspace-loading">
             <div className="spinner"></div>
@@ -187,72 +216,81 @@ function ClassroomWorkspace() {
           <div className="workspace-error">Classroom not found.</div>
         ) : (
           <>
-            {/* HERO HEADER */}
-            <div className="workspace-hero-card">
-              <div className="hero-left-side">
-                <div className="hero-tags-row">
-                  <span className="hero-code-badge">{classroom.subjectCode}</span>
-                  <span className="hero-meta-pill">Sem {classroom.semester} - Section {classroom.section}</span>
-                  <span className="hero-meta-pill">{classroom.department}</span>
-                  <span className="hero-meta-pill">{classroom.academicBatch}</span>
-                </div>
+            <ClassroomHeader
+              classroom={classroom}
+              onBack={() => navigate("/teacher/classrooms")}
+              onCodeRegenerated={(newCode) => setClassroom((prev) => ({ ...prev, joinCode: newCode }))}
+            />
 
-                <h1 className="hero-classroom-title">{classroom.name}</h1>
-                <p className="hero-subject-name">{classroom.subjectName} • Academic Year {classroom.academicYear}</p>
-              </div>
-
-              {/* JOIN CODE CLUSTER */}
-              <div className="hero-right-side">
-                <div className="workspace-code-display">
-                  <span className="code-eyebrow">Classroom Join Code</span>
-                  <div className="code-main-text">{classroom.joinCode || "CODE-NOT-SET"}</div>
-                  <div className="code-actions-group">
-                    <button type="button" className="btn-copy-code" onClick={handleCopyCode}>
-                      📋 Copy Code
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-regen-code"
-                      onClick={handleRegenerateCode}
-                      disabled={regenerating}
-                    >
-                      {regenerating ? "..." : "🔄 Regenerate"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* TAB NAVIGATION */}
-            <div className="workspace-tabs-row">
+            {/* THREE CLEARLY SEPARATED TOP-LEVEL WORKSPACE SECTIONS */}
+            <div className="workspace-top-sections-row">
               <button
                 type="button"
-                className={`tab-btn ${activeTab === "members" ? "active" : ""}`}
-                onClick={() => setActiveTab("members")}
+                className={`top-section-btn ${activeSection === "management" ? "active" : ""}`}
+                onClick={() => handleSectionChange("management")}
               >
-                👥 Enrolled Students ({activeMembers.length})
+                <span className="section-icon">🏫</span>
+                <span className="section-label">Classroom Management</span>
+                {joinRequests.length > 0 && (
+                  <span className="tab-count-pill" title={`${joinRequests.length} pending join requests`}>
+                    {joinRequests.length}
+                  </span>
+                )}
               </button>
 
               <button
                 type="button"
-                className={`tab-btn ${activeTab === "requests" ? "active" : ""}`}
-                onClick={() => setActiveTab("requests")}
+                className={`top-section-btn ${activeSection === "syllabus" ? "active" : ""}`}
+                onClick={() => handleSectionChange("syllabus")}
               >
-                ⏳ Join Requests {joinRequests.length > 0 && <span className="tab-count-pill">{joinRequests.length}</span>}
+                <span className="section-icon">📖</span>
+                <span className="section-label">Syllabus Tracking</span>
               </button>
 
               <button
                 type="button"
-                className={`tab-btn ${activeTab === "import" ? "active" : ""}`}
-                onClick={() => setActiveTab("import")}
+                className={`top-section-btn ${activeSection === "scheduling" ? "active" : ""}`}
+                onClick={() => handleSectionChange("scheduling")}
               >
-                📥 Import Roster (CSV/XLSX)
+                <span className="section-icon">🗓️</span>
+                <span className="section-label">Syllabus Scheduling</span>
+                <span className="section-stage-badge">New</span>
               </button>
             </div>
 
-            {/* TAB 1: MEMBERS */}
-            {activeTab === "members" && (
+            {/* SECTION 1: CLASSROOM MANAGEMENT */}
+            {activeSection === "management" && (
               <div className="tab-panel-container">
+                {/* SUBTABS: ENROLLED STUDENTS | JOIN REQUESTS | IMPORT ROSTER */}
+                <div className="workspace-subtabs-row">
+                  <button
+                    type="button"
+                    className={`subtab-btn ${managementTab === "members" ? "active" : ""}`}
+                    onClick={() => handleManagementTabChange("members")}
+                  >
+                    👥 Enrolled Students ({activeMembers.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`subtab-btn ${managementTab === "requests" ? "active" : ""}`}
+                    onClick={() => handleManagementTabChange("requests")}
+                  >
+                    ⏳ Join Requests {joinRequests.length > 0 && <span className="tab-count-pill">{joinRequests.length}</span>}
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`subtab-btn ${managementTab === "import" ? "active" : ""}`}
+                    onClick={() => handleManagementTabChange("import")}
+                  >
+                    📥 Import Roster (CSV/XLSX)
+                  </button>
+                </div>
+
+                {/* SUBTAB 1: MEMBERS */}
+                {managementTab === "members" && (
+                  <div>
                 <div className="panel-controls-row">
                   <input
                     type="text"
@@ -269,7 +307,7 @@ function ClassroomWorkspace() {
                 {activeMembers.length === 0 ? (
                   <div className="empty-tab-notice">
                     <p>No enrolled students found.</p>
-                    <button className="btn-tab-action" onClick={() => setActiveTab("import")}>
+                    <button className="btn-tab-action" onClick={() => handleManagementTabChange("import")}>
                       Upload Student Roster
                     </button>
                   </div>
@@ -282,7 +320,7 @@ function ClassroomWorkspace() {
                           <th>Student Name</th>
                           <th>Email</th>
                           <th>Source</th>
-                          <th>Status</th>
+                          <th>Role / Status</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -300,7 +338,10 @@ function ClassroomWorkspace() {
                               </span>
                             </td>
                             <td>
-                              <span className="status-pill-green">ACTIVE</span>
+                              <div className="member-role-status-cell">
+                                <span className="member-role-badge">{m.role || "STUDENT"}</span>
+                                <span className="status-pill-green">{(m.membershipStatus || m.status || "ACTIVE").toUpperCase()}</span>
+                              </div>
                             </td>
                             <td>
                               <button
@@ -321,9 +362,9 @@ function ClassroomWorkspace() {
               </div>
             )}
 
-            {/* TAB 2: JOIN REQUESTS */}
-            {activeTab === "requests" && (
-              <div className="tab-panel-container">
+            {/* SUBTAB 2: JOIN REQUESTS */}
+            {managementTab === "requests" && (
+              <div>
                 <div className="panel-intro-text">
                   Students who submit this classroom's join code appear here. Verify their identity and grant access.
                 </div>
@@ -380,9 +421,9 @@ function ClassroomWorkspace() {
               </div>
             )}
 
-            {/* TAB 3: IMPORT ROSTER */}
-            {activeTab === "import" && (
-              <div className="tab-panel-container">
+            {/* SUBTAB 3: IMPORT ROSTER */}
+            {managementTab === "import" && (
+              <div>
                 <div className="import-box-card">
                   <h3>Batch Enroll Students via Roster Upload</h3>
                   <p>
@@ -465,6 +506,29 @@ function ClassroomWorkspace() {
                     )}
                   </div>
                 )}
+              </div>
+            )}
+              </div>
+            )}
+
+            {/* SECTION 2: SYLLABUS TRACKING */}
+            {activeSection === "syllabus" && (
+              <div className="tab-panel-container" style={{ padding: "28px" }}>
+                <TeacherSyllabusManagement
+                  classroomId={id}
+                  classroom={classroom}
+                  onNavigateToScheduling={() => handleSectionChange("scheduling")}
+                />
+              </div>
+            )}
+
+            {/* SECTION 3: SYLLABUS SCHEDULING */}
+            {activeSection === "scheduling" && (
+              <div className="tab-panel-container" style={{ padding: "28px" }}>
+                <TeacherSyllabusSchedulingSection
+                  classroom={classroom}
+                  onNavigateToSyllabus={() => handleSectionChange("syllabus")}
+                />
               </div>
             )}
           </>

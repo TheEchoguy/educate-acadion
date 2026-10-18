@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import toast from "react-hot-toast";
 import { getStudentClassrooms, joinClassroom } from "../../services/classroomService";
 import "./StudentClassrooms.css";
 
 function StudentClassrooms() {
+  const navigate = useNavigate();
   const [classrooms, setClassrooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -12,7 +14,24 @@ function StudentClassrooms() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    loadStudentClassrooms();
+    let active = true;
+    getStudentClassrooms()
+      .then((data) => {
+        if (active) {
+          setClassrooms(data || []);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        if (active) {
+          toast.error(err.response?.data?.message || "Failed to load enrolled classrooms");
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const loadStudentClassrooms = async () => {
@@ -138,6 +157,31 @@ function StudentClassrooms() {
                         <span>Academic Batch:</span>
                         <strong>{cls.academicBatch}</strong>
                       </div>
+                    </div>
+
+                    <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                      <button
+                        type="button"
+                        style={{
+                          width: "100%",
+                          background: "linear-gradient(135deg, #0284c7, #0369a1)",
+                          color: "#ffffff",
+                          border: "none",
+                          padding: "8px 14px",
+                          borderRadius: 8,
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6,
+                          transition: "all 0.2s ease",
+                        }}
+                        onClick={() => navigate(`/student/classrooms/${cls.id}`)}
+                      >
+                        📖 View Syllabus & Revision
+                      </button>
                     </div>
                   </div>
                 ))}

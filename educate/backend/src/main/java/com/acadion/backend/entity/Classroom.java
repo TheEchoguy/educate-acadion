@@ -43,6 +43,12 @@ public class Classroom {
     @Builder.Default
     private String connectionMode = "TEACHER_PROVISIONED";
 
+    /**
+     * Plain join code persistent across page reloads and sessions.
+     * Exposed only to authorized classroom owners (teachers/admin).
+     */
+    private String joinCode;
+
     private String joinCodeHash;
 
     @Builder.Default
@@ -58,7 +64,19 @@ public class Classroom {
     @Builder.Default
     private String status = "ACTIVE";
 
+    @Builder.Default
+    private boolean schedulingInputsVerified = false;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    public boolean isSchedulingInputsVerified() {
+        return schedulingInputsVerified;
+    }
+
+    public void setSchedulingInputsVerified(boolean schedulingInputsVerified) {
+        this.schedulingInputsVerified = schedulingInputsVerified;
+    }
 }
+

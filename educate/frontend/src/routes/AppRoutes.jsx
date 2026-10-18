@@ -31,8 +31,12 @@ import PracticePaperPermission from "../pages/teacher/PracticePaperPermission";
 import StudentProfile from "../pages/student/StudentProfile";
 import TeacherProfile from "../pages/teacher/TeacherProfile";
 import TeacherClassrooms from "../pages/teacher/TeacherClassrooms";
-import ClassroomWorkspace from "../pages/teacher/ClassroomWorkspace";
+import ClassroomWorkspaceSelection from "../pages/teacher/ClassroomWorkspaceSelection";
+import ClassroomManagementWorkspacePage from "../pages/teacher/ClassroomManagementWorkspacePage";
+import SyllabusTrackingWorkspacePage from "../pages/teacher/SyllabusTrackingWorkspacePage";
+import SyllabusSchedulingWorkspacePage from "../pages/teacher/SyllabusSchedulingWorkspacePage";
 import StudentClassrooms from "../pages/student/StudentClassrooms";
+import StudentClassroomWorkspace from "../pages/student/StudentClassroomWorkspace";
 
 function AppRoutes() {
   return (
@@ -66,10 +70,16 @@ function AppRoutes() {
       <Route path="/teacher/paper-analysis/:id" element={<UploadedPaperAnalysis />} />
       <Route path="/teacher/practice-permissions" element={<PracticePaperPermission />} />
       <Route path="/teacher/classrooms" element={<TeacherClassrooms />} />
-      <Route path="/teacher/classrooms/:id" element={<ClassroomWorkspace />} />
+      <Route path="/teacher/classrooms/:id" element={<ClassroomWorkspaceSelection />} />
+      <Route path="/teacher/classrooms/:id/workspaces" element={<ClassroomWorkspaceSelection />} />
+      <Route path="/teacher/classrooms/:id/management" element={<ClassroomManagementWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/syllabus-tracking" element={<SyllabusTrackingWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/syllabus-scheduling" element={<SyllabusSchedulingWorkspacePage />} />
 
       <Route path="/student/dashboard" element={<StudentDashboard />} />
       <Route path="/student/classrooms" element={<StudentClassrooms />} />
+      <Route path="/student/classrooms/:id" element={<StudentClassroomWorkspace />} />
+      <Route path="/student/classrooms/:id/syllabus" element={<StudentClassroomWorkspace />} />
       <Route path="/student/exams" element={<AvailableExams />} />
       <Route path="/student/attend-exam/:id" element={<AttendExam />} />
       <Route path="/student/results" element={<MyResults />} />

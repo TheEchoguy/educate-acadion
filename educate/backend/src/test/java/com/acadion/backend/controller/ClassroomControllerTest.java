@@ -157,4 +157,43 @@ public class ClassroomControllerTest {
                 .andExpect(jsonPath("$.totalRows").value(1))
                 .andExpect(jsonPath("$.addedCount").value(1));
     }
+
+    @Test
+    @WithMockUser(username = "teacher@acadion.com", authorities = {"TEACHER"})
+    @DisplayName("GET /api/classrooms/{id} - returns 200 OK with persistent join code")
+    void testGetClassroomDetailsEndpoint() throws Exception {
+        ClassroomResponse res = ClassroomResponse.builder()
+                .id("cls_1")
+                .name("Data Structures")
+                .joinCode("DS1234")
+                .status("ACTIVE")
+                .build();
+
+        when(classroomService.getClassroomDetails("cls_1", "teacher@acadion.com")).thenReturn(res);
+
+        mockMvc.perform(get("/api/classrooms/cls_1")
+                        .principal(() -> "teacher@acadion.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("cls_1"))
+                .andExpect(jsonPath("$.joinCode").value("DS1234"));
+    }
+
+    @Test
+    @WithMockUser(username = "teacher@acadion.com", authorities = {"TEACHER"})
+    @DisplayName("POST /api/classrooms/{id}/join-code/regenerate - returns 200 OK with new code")
+    void testRegenerateJoinCodeEndpoint() throws Exception {
+        RegenerateJoinCodeResponse res = RegenerateJoinCodeResponse.builder()
+                .classroomId("cls_1")
+                .joinCode("NEWCOD")
+                .joinCodeEnabled(true)
+                .build();
+
+        when(classroomService.regenerateJoinCode("cls_1", "teacher@acadion.com")).thenReturn(res);
+
+        mockMvc.perform(post("/api/classrooms/cls_1/join-code/regenerate")
+                        .principal(() -> "teacher@acadion.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.classroomId").value("cls_1"))
+                .andExpect(jsonPath("$.joinCode").value("NEWCOD"));
+    }
 }

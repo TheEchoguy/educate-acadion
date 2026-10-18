@@ -1,0 +1,13 @@
+package com.acadion.backend.entity;
+
+public enum SyllabusAuditEventType {
+    TOPIC_CREATED,
+    TOPIC_UPDATED,
+    TOPIC_DELETED,
+    TOPIC_STATUS_CHANGED,
+    TOPICS_REORDERED,
+    SYLLABUS_PUBLISHED,
+    ASSESSMENT_MAPPED,
+    ASSESSMENT_UNMAPPED,
+    SYLLABUS_EXPORTED
+}

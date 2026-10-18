@@ -118,4 +118,41 @@ public class EmailSenderService {
             System.err.println("[EmailSenderService] Failed to send Evaluation email to " + toEmail + ": " + e.getMessage());
         }
     }
+
+    public void sendSyllabusPublishedEmail(
+            String toEmail,
+            String studentName,
+            String classroomName,
+            int versionNumber,
+            String versionTitle,
+            String changeSummary,
+            String teacherName
+    ) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(from);
+            message.setTo(toEmail);
+            message.setSubject("Acadion: New Syllabus Published for " + (classroomName != null ? classroomName : "your classroom"));
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("Dear ").append(studentName != null ? studentName : "Student").append(",\n\n");
+            sb.append("A new syllabus version (v").append(versionNumber);
+            if (versionTitle != null && !versionTitle.isBlank()) {
+                sb.append(" - ").append(versionTitle.trim());
+            }
+            sb.append(") has been published for classroom '").append(classroomName != null ? classroomName : "your class").append("'.\n\n");
+
+            if (changeSummary != null && !changeSummary.isBlank()) {
+                sb.append("Change Summary:\n").append(changeSummary.trim()).append("\n\n");
+            }
+            sb.append("Published by: ").append(teacherName != null ? teacherName : "Faculty").append("\n\n");
+            sb.append("Please log in to your Acadion student dashboard to review the updated syllabus topics and track your personal revision.\n\n");
+            sb.append("Best regards,\nAcadion Syllabus Tracking");
+
+            message.setText(sb.toString());
+            mailSender.send(message);
+        } catch (Exception e) {
+            System.err.println("[EmailSenderService] Failed to send Syllabus Publication email to " + toEmail + ": " + e.getMessage());
+        }
+    }
 }

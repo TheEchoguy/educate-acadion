@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
+import { getTeacherOverview } from "../../services/syllabusService";
 import "./TeacherDashboard.css";
 
 import imgPapers from "@media/images/topics/teacher_papers.jpg";
@@ -11,6 +12,8 @@ import imgManual from "@media/images/topics/teacher_manual.jpg";
 function TeacherDashboard() {
   const navigate = useNavigate();
   const [activeModuleSlide, setActiveModuleSlide] = useState(0);
+  const [syllabusOverview, setSyllabusOverview] = useState(null);
+  const [overviewLoading, setOverviewLoading] = useState(true);
 
   const teacherName = localStorage.getItem("name") || "Faculty";
   const teacherDept = localStorage.getItem("department") || "Academic Department";
@@ -105,6 +108,28 @@ function TeacherDashboard() {
     }, 6000);
     return () => clearInterval(timer);
   }, [teacherModules.length]);
+
+  // Load cross-classroom syllabus overview
+  useEffect(() => {
+    let active = true;
+    getTeacherOverview()
+      .then((data) => {
+        if (active) {
+          setSyllabusOverview(data || null);
+          setOverviewLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load cross-classroom syllabus overview", err);
+        if (active) {
+          setSyllabusOverview(null);
+          setOverviewLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="teacher-dashboard-page">
@@ -257,6 +282,152 @@ function TeacherDashboard() {
               <span>• Export CSV</span>
             </div>
           </div>
+        </div>
+
+        {/* CROSS-CLASSROOM SYLLABUS OVERVIEW */}
+        <div className="syllabus-cross-overview-section" style={{ marginTop: 48 }}>
+          <div className="grid-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span className="card-badge purple">ACADEMIC DELIVERY</span>
+                <span style={{ fontSize: "0.78rem", color: "#94a3b8", fontWeight: 600 }}>SYLLABUS TRACKING</span>
+              </div>
+              <h2>Classroom Syllabus &amp; Curriculum Delivery</h2>
+              <p>Cross-classroom curriculum coverage, topic delivery progress, and student revision participation across your active courses.</p>
+            </div>
+
+            {syllabusOverview && (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div className="clean-meta-chip">
+                  Managed: <strong>{syllabusOverview.totalManagedClassrooms ?? 0} Classrooms</strong>
+                </div>
+                <div className="clean-meta-chip">
+                  Topics: <strong>{syllabusOverview.totalSyllabusTopics ?? 0} Total</strong>
+                </div>
+                <div className="clean-meta-chip" style={{ color: "#38bdf8", borderColor: "rgba(56, 189, 248, 0.3)" }}>
+                  Avg Coverage: <strong>{Number(syllabusOverview.overallAverageCoverage || 0).toFixed(1)}%</strong>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {overviewLoading ? (
+            <div style={{ padding: "32px", textAlign: "center", color: "#64748b", background: "rgba(15, 23, 42, 0.4)", borderRadius: 16, border: "1px solid rgba(255, 255, 255, 0.06)" }}>
+              Loading syllabus monitoring metrics...
+            </div>
+          ) : !syllabusOverview || !syllabusOverview.classrooms || syllabusOverview.classrooms.length === 0 ? (
+            <div
+              style={{
+                background: "rgba(15, 23, 42, 0.6)",
+                border: "1px dashed rgba(255, 255, 255, 0.12)",
+                borderRadius: 18,
+                padding: "36px 24px",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: "2rem", marginBottom: 8 }}>📖</div>
+              <h4 style={{ margin: "0 0 6px 0", color: "#f8fafc", fontSize: "1.1rem" }}>No Classroom Syllabus Data Available</h4>
+              <p style={{ margin: "0 0 16px 0", color: "#64748b", fontSize: "0.88rem" }}>
+                Classrooms you create in the Classroom Hub will display live curriculum coverage, topic schedules, and student revision metrics here.
+              </p>
+              <button
+                type="button"
+                className="launch-btn purple"
+                style={{ display: "inline-flex", padding: "8px 20px" }}
+                onClick={() => navigate("/teacher/classrooms")}
+              >
+                <span>Go to Classroom Hub</span>
+                <span className="arrow">→</span>
+              </button>
+            </div>
+          ) : (
+            <div className="clean-modules-grid">
+              {syllabusOverview.classrooms.map((cls) => (
+                <div
+                  key={cls.classroomId}
+                  className="clean-grid-card border-purple"
+                  onClick={() => navigate(`/teacher/classrooms/${cls.classroomId}?tab=syllabus`, { state: { tab: "syllabus" } })}
+                  style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 14 }}
+                >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div className="card-top-bar">
+                      <span className="card-badge purple">
+                        {cls.subjectCode ? cls.subjectCode : "CLASSROOM"}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: 8,
+                          background: cls.currentVersionNumber ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                          color: cls.currentVersionNumber ? "#34d399" : "#fbbf24",
+                          border: `1px solid ${cls.currentVersionNumber ? "rgba(16, 185, 129, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+                        }}
+                      >
+                        {cls.currentVersionNumber ? `v${cls.currentVersionNumber} Published` : "Draft"}
+                      </span>
+                    </div>
+
+                    <h3 style={{ fontSize: "1.1rem", margin: "4px 0 0 0" }}>{cls.classroomName}</h3>
+                    {cls.subjectName && (
+                      <p style={{ fontSize: "0.82rem", color: "#94a3b8" }}>{cls.subjectName}</p>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "6px 0" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "#cbd5e1" }}>
+                      <span>Teaching Coverage</span>
+                      <strong style={{ color: "#38bdf8" }}>{Number(cls.coveragePercentage || 0).toFixed(1)}%</strong>
+                    </div>
+                    <div
+                      style={{
+                        width: "100%",
+                        height: 6,
+                        background: "rgba(255, 255, 255, 0.08)",
+                        borderRadius: 3,
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${Math.min(100, Math.max(0, cls.coveragePercentage || 0))}%`,
+                          height: "100%",
+                          background: "linear-gradient(90deg, #a855f7, #38bdf8)",
+                          borderRadius: 3,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", fontSize: "0.74rem" }}>
+                    <span style={{ background: "rgba(255,255,255,0.05)", padding: "3px 8px", borderRadius: 6, color: "#94a3b8" }}>
+                      {cls.completedTopics || 0}/{cls.topicCount || 0} Topics
+                    </span>
+                    {cls.overdueTopicsCount > 0 && (
+                      <span style={{ background: "rgba(239, 68, 68, 0.15)", color: "#f87171", padding: "3px 8px", borderRadius: 6 }}>
+                        ⚠️ {cls.overdueTopicsCount} Overdue
+                      </span>
+                    )}
+                    {cls.upcomingTopicsCount > 0 && (
+                      <span style={{ background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", padding: "3px 8px", borderRadius: 6 }}>
+                        📅 {cls.upcomingTopicsCount} Upcoming
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="card-footer-meta" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                    <span>
+                      {cls.enrolledStudentsCount > 0
+                        ? `${cls.participatingStudentsCount || 0}/${cls.enrolledStudentsCount} revising (${cls.averageRevisionPercentage != null ? cls.averageRevisionPercentage.toFixed(0) + '%' : '0%'})`
+                        : "No students enrolled"}
+                    </span>
+                    <span style={{ color: "#c084fc", fontWeight: 600 }}>Syllabus →</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
