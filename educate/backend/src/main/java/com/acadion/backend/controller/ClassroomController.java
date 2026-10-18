@@ -64,8 +64,8 @@ public class ClassroomController {
     }
 
     // 5. Upload Roster (CSV / XLSX)
-    @PostMapping(value = "/{id}/roster/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<RosterImportSummary> importRoster(
+    @PostMapping(value = {"/{id}/upload-roster", "/{id}/roster/import"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<RosterImportSummary> uploadRoster(
             @PathVariable("id") String id,
             @RequestParam("file") MultipartFile file,
             Principal principal
@@ -73,6 +73,18 @@ public class ClassroomController {
         String email = getAuthenticatedEmail(principal);
         RosterImportSummary summary = classroomService.importRoster(id, file, email);
         return ResponseEntity.ok(summary);
+    }
+
+    // 5b. Add Single Student manually by USN or Email
+    @PostMapping("/{id}/add-student")
+    public ResponseEntity<Map<String, Object>> addStudent(
+            @PathVariable("id") String id,
+            @RequestBody com.acadion.backend.dto.classroom.AddStudentRequest request,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        Map<String, Object> result = classroomService.addStudent(id, request, email);
+        return ResponseEntity.ok(result);
     }
 
     // 6. Get Classroom Members (Teacher only)

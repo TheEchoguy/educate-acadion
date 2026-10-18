@@ -16,13 +16,12 @@ public class CreateClassroomRequest {
     @NotBlank(message = "Classroom name is required")
     private String name;
 
-    @NotBlank(message = "Subject name is required")
+    private String courseCode;
+
     private String subjectName;
 
-    @NotBlank(message = "Subject code is required")
     private String subjectCode;
 
-    @NotBlank(message = "Department is required")
     private String department;
 
     @NotNull(message = "Semester is required")
@@ -31,9 +30,30 @@ public class CreateClassroomRequest {
     @NotBlank(message = "Section is required")
     private String section;
 
-    @NotBlank(message = "Academic batch is required")
     private String academicBatch;
 
-    @NotBlank(message = "Academic year is required")
     private String academicYear;
+
+    public String getEffectiveCourseCode() {
+        if (courseCode != null && !courseCode.isBlank()) return courseCode.trim();
+        if (subjectCode != null && !subjectCode.isBlank()) return subjectCode.trim();
+        return "BCS701";
+    }
+
+    public String getEffectiveSubjectName() {
+        if (subjectName != null && !subjectName.isBlank()) return subjectName.trim();
+        return name != null ? name.trim() : "Academic Subject";
+    }
+
+    public String getEffectiveDepartment() {
+        return department != null && !department.isBlank() ? department.trim() : "Computer Science & Engineering";
+    }
+
+    public String getEffectiveAcademicBatch() {
+        return academicBatch != null && !academicBatch.isBlank() ? academicBatch.trim() : "2022-2026";
+    }
+
+    public String getEffectiveAcademicYear() {
+        return academicYear != null && !academicYear.isBlank() ? academicYear.trim() : "2025-2026";
+    }
 }

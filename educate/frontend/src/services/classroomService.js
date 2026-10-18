@@ -21,11 +21,18 @@ export const getClassroomDetails = async (classroomId) => {
 };
 
 export const importRoster = async (classroomId, formData) => {
-  const response = await API.post(`/classrooms/${classroomId}/roster/import`, formData, {
+  const response = await API.post(`/classrooms/${classroomId}/upload-roster`, formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
   });
+  return response.data;
+};
+
+export const uploadRoster = importRoster;
+
+export const addStudent = async (classroomId, studentData) => {
+  const response = await API.post(`/classrooms/${classroomId}/add-student`, studentData);
   return response.data;
 };
 

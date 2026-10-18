@@ -26,4 +26,6 @@ public class ClassroomMemberDto {
     private LocalDateTime requestedAt;
     private LocalDateTime approvedAt;
     private LocalDateTime createdAt;
+    @Builder.Default
+    private boolean verifiedInDb = true;
 }

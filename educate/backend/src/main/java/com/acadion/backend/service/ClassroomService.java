@@ -36,10 +36,14 @@ public class ClassroomService {
     private final ClassroomRepository classroomRepository;
     private final ClassroomMembershipRepository classroomMembershipRepository;
     private final UserRepository userRepository;
+    private final org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder passwordEncoder;
 
     private static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final int CODE_LENGTH = 6;
     private static final SecureRandom RANDOM = new SecureRandom();
+
+    private static final java.util.regex.Pattern VTU_USN_PATTERN = java.util.regex.Pattern.compile("(?i)\\b([0-9][A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{3})\\b");
+    private static final java.util.regex.Pattern EMAIL_PATTERN = java.util.regex.Pattern.compile("(?i)\\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})\\b");
 
     // =========================================================================
     // 1. CREATE CLASSROOM (Teacher Only)
@@ -51,21 +55,28 @@ public class ClassroomService {
         String joinCodeHash = hashJoinCode(plainJoinCode);
         LocalDateTime now = LocalDateTime.now();
 
+        String effectiveCourseCode = request.getEffectiveCourseCode().toUpperCase();
+        String effectiveSubjectName = request.getEffectiveSubjectName();
+
         Classroom classroom = Classroom.builder()
                 .name(request.getName().trim())
-                .subjectName(request.getSubjectName().trim())
-                .subjectCode(request.getSubjectCode().trim().toUpperCase())
+                .courseCode(effectiveCourseCode)
+                .subjectName(effectiveSubjectName)
+                .subjectCode(effectiveCourseCode)
                 .teacherId(teacher.getId())
-                .department(request.getDepartment().trim())
+                .department(request.getEffectiveDepartment())
                 .semester(request.getSemester())
                 .section(request.getSection().trim().toUpperCase())
-                .academicBatch(request.getAcademicBatch().trim())
-                .academicYear(request.getAcademicYear().trim())
+                .academicBatch(request.getEffectiveAcademicBatch())
+                .academicYear(request.getEffectiveAcademicYear())
                 .connectionMode("TEACHER_PROVISIONED")
+                .joinCode(plainJoinCode)
                 .joinCodeHash(joinCodeHash)
                 .joinCodeEnabled(true)
                 .joinCodeCreatedAt(now)
                 .joinCodeExpiresAt(now.plusDays(30))
+                .studentIds(new ArrayList<>())
+                .enrolledStudents(new ArrayList<>())
                 .status("ACTIVE")
                 .createdAt(now)
                 .updatedAt(now)
@@ -131,7 +142,84 @@ public class ClassroomService {
     }
 
     // =========================================================================
-    // 4. IMPORT ROSTER (CSV & XLSX) (Teacher Only)
+    // 4. ADD SINGLE STUDENT (Teacher Only)
+    // =========================================================================
+    public Map<String, Object> addStudent(String classroomId, com.acadion.backend.dto.classroom.AddStudentRequest request, String teacherEmail) {
+        Classroom classroom = getExistingClassroom(classroomId);
+        User teacher = getAuthenticatedTeacher(teacherEmail);
+        verifyClassroomOwnership(classroom, teacher);
+
+        String rawUsn = request.getUsn() != null ? request.getUsn().trim() : null;
+        String rawEmail = request.getEmail() != null ? request.getEmail().trim() : null;
+        String rawName = request.getName() != null ? request.getName().trim() : null;
+
+        if ((rawUsn == null || rawUsn.isBlank()) && (rawEmail == null || rawEmail.isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "USN or Email is required to add a student");
+        }
+
+        // 1. Check if user already exists by USN or Email
+        Optional<User> existingUserOpt = Optional.empty();
+        if (rawUsn != null && !rawUsn.isBlank()) {
+            existingUserOpt = userRepository.findByUsnIgnoreCase(rawUsn);
+        }
+        if (existingUserOpt.isEmpty() && rawEmail != null && !rawEmail.isBlank()) {
+            existingUserOpt = userRepository.findByEmailIgnoreCase(rawEmail);
+        }
+
+        User student;
+        boolean accountCreated = false;
+
+        if (existingUserOpt.isPresent()) {
+            student = existingUserOpt.get();
+        } else {
+            // Auto-create verified Student account
+            String normalizedUsn = rawUsn != null && !rawUsn.isBlank() ? rawUsn.toUpperCase() : null;
+            String studentName = rawName != null && !rawName.isBlank() ? rawName : (normalizedUsn != null ? "Student " + normalizedUsn : "Student");
+            String studentEmail = rawEmail != null && !rawEmail.isBlank() ? rawEmail.toLowerCase()
+                    : (normalizedUsn != null ? normalizedUsn.toLowerCase() + "@student.acadion.edu" : "student_" + System.currentTimeMillis() + "@student.acadion.edu");
+
+            student = User.builder()
+                    .name(studentName)
+                    .email(studentEmail)
+                    .usn(normalizedUsn)
+                    .password(passwordEncoder.encode("Student@123"))
+                    .role(Role.STUDENT)
+                    .verified(true)
+                    .approved(true)
+                    .banned(false)
+                    .semester(classroom.getSemester())
+                    .studentDepartment(classroom.getDepartment())
+                    .createdAt(LocalDateTime.now())
+                    .approvedAt(LocalDateTime.now())
+                    .build();
+
+            student = userRepository.save(student);
+            accountCreated = true;
+            log.info("Auto-provisioned new Student account for USN '{}', Email '{}'", student.getUsn(), student.getEmail());
+        }
+
+        // Ensure active membership & classroom document enrollment
+        ensureActiveMembership(classroom, student, "MANUAL_ADD", teacher.getId());
+        enrollStudentInClassroomDoc(classroom, student);
+        classroom.setUpdatedAt(LocalDateTime.now());
+        classroomRepository.save(classroom);
+
+        return Map.of(
+                "success", true,
+                "message", accountCreated
+                        ? "New student account created and enrolled successfully in classroom"
+                        : "Existing student linked and enrolled in classroom",
+                "accountCreated", accountCreated,
+                "studentId", student.getId(),
+                "usn", student.getUsn() != null ? student.getUsn() : "",
+                "name", student.getName(),
+                "email", student.getEmail(),
+                "status", "ACTIVE"
+        );
+    }
+
+    // =========================================================================
+    // 5. IMPORT ROSTER (CSV & XLSX) (Teacher Only)
     // =========================================================================
     public RosterImportSummary importRoster(String classroomId, MultipartFile file, String teacherEmail) {
         Classroom classroom = getExistingClassroom(classroomId);
@@ -143,15 +231,12 @@ public class ClassroomService {
         }
 
         String filename = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
-        List<RosterRow> rows;
+        List<ParsedStudentRow> rows;
 
         try {
             if (filename.endsWith(".xlsx") || filename.endsWith(".xls")) {
                 rows = parseExcelRows(file);
-            } else if (filename.endsWith(".csv") || filename.endsWith(".txt")) {
-                rows = parseCsvRows(file);
             } else {
-                // Try parsing as CSV by default
                 rows = parseCsvRows(file);
             }
         } catch (Exception e) {
@@ -159,129 +244,105 @@ public class ClassroomService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse roster file: " + e.getMessage());
         }
 
-        int totalRows = rows.size();
-        int validRows = 0;
-        int duplicatesInFile = 0;
-        int matchedCount = 0;
+        int totalProcessed = 0;
+        int existingVerifiedUsersLinked = 0;
+        int newStudentAccountsCreated = 0;
         int alreadyMembersCount = 0;
-        int unmatchedCount = 0;
-        int addedCount = 0;
+        int duplicatesInFile = 0;
 
-        Set<String> seenUsns = new HashSet<>();
+        Set<String> seenKeys = new HashSet<>();
         List<String> duplicateUsns = new ArrayList<>();
         List<String> alreadyMemberUsns = new ArrayList<>();
-        List<RosterImportSummary.UnmatchedStudentDetail> unmatchedStudents = new ArrayList<>();
         List<String> invalidRows = new ArrayList<>();
 
-        LocalDateTime now = LocalDateTime.now();
-
-        for (RosterRow row : rows) {
+        for (ParsedStudentRow row : rows) {
             String rawUsn = row.getUsn();
-            if (rawUsn == null || rawUsn.trim().isEmpty()) {
-                invalidRows.add("Row " + row.getRowNumber() + ": Missing or empty USN");
+            String rawEmail = row.getEmail();
+            String rawName = row.getName();
+
+            if ((rawUsn == null || rawUsn.isBlank()) && (rawEmail == null || rawEmail.isBlank())) {
+                invalidRows.add("Row " + row.getRowNumber() + ": Missing USN and Email");
                 continue;
             }
 
-            String normalizedUsn = rawUsn.trim().toUpperCase();
-            if (normalizedUsn.length() < 3) {
-                invalidRows.add("Row " + row.getRowNumber() + ": Invalid USN format '" + rawUsn + "'");
-                continue;
-            }
-
-            validRows++;
-
-            // Deduplicate within the file
-            if (!seenUsns.add(normalizedUsn)) {
+            String dedupeKey = rawUsn != null && !rawUsn.isBlank() ? rawUsn.toUpperCase() : rawEmail.toLowerCase();
+            if (!seenKeys.add(dedupeKey)) {
                 duplicatesInFile++;
-                duplicateUsns.add(normalizedUsn);
+                duplicateUsns.add(dedupeKey);
                 continue;
             }
 
-            // Match against STUDENT users
-            Optional<User> studentOpt = userRepository.findByUsn(normalizedUsn);
-            if (studentOpt.isEmpty()) {
-                unmatchedCount++;
-                unmatchedStudents.add(RosterImportSummary.UnmatchedStudentDetail.builder()
-                        .usn(normalizedUsn)
-                        .reason("Student account not found in system")
-                        .rowNumber(row.getRowNumber())
-                        .build());
-                continue;
+            totalProcessed++;
+
+            // Check if user exists by USN or Email
+            Optional<User> userOpt = Optional.empty();
+            if (rawUsn != null && !rawUsn.isBlank()) {
+                userOpt = userRepository.findByUsnIgnoreCase(rawUsn.trim());
+            }
+            if (userOpt.isEmpty() && rawEmail != null && !rawEmail.isBlank()) {
+                userOpt = userRepository.findByEmailIgnoreCase(rawEmail.trim());
             }
 
-            User student = studentOpt.get();
-            if (student.getRole() != Role.STUDENT) {
-                unmatchedCount++;
-                unmatchedStudents.add(RosterImportSummary.UnmatchedStudentDetail.builder()
-                        .usn(normalizedUsn)
-                        .reason("Registered user with this USN is not a student (Role: " + student.getRole() + ")")
-                        .rowNumber(row.getRowNumber())
-                        .build());
-                continue;
-            }
-
-            matchedCount++;
-
-            // Check existing membership
-            Optional<ClassroomMembership> existingOpt = classroomMembershipRepository
-                    .findByClassroomIdAndStudentId(classroom.getId(), student.getId());
-
-            if (existingOpt.isPresent()) {
-                ClassroomMembership existing = existingOpt.get();
-                if ("ACTIVE".equalsIgnoreCase(existing.getMembershipStatus())) {
-                    alreadyMembersCount++;
-                    alreadyMemberUsns.add(normalizedUsn);
-                    continue;
-                } else {
-                    // Reactivate previous membership (PENDING, REJECTED, REMOVED)
-                    existing.setMembershipStatus("ACTIVE");
-                    existing.setMembershipSource("ROSTER");
-                    existing.setApprovedAt(now);
-                    existing.setApprovedBy(teacher.getId());
-                    existing.setUsnSnapshot(normalizedUsn);
-                    existing.setSemester(classroom.getSemester());
-                    existing.setAcademicYear(classroom.getAcademicYear());
-                    existing.setUpdatedAt(now);
-                    classroomMembershipRepository.save(existing);
-                    addedCount++;
-                }
+            User student;
+            if (userOpt.isPresent()) {
+                student = userOpt.get();
+                existingVerifiedUsersLinked++;
             } else {
-                // Create new ACTIVE membership
-                ClassroomMembership newMembership = ClassroomMembership.builder()
-                        .classroomId(classroom.getId())
-                        .studentId(student.getId())
-                        .usnSnapshot(normalizedUsn)
-                        .membershipSource("ROSTER")
-                        .membershipStatus("ACTIVE")
-                        .requestedAt(now)
-                        .approvedAt(now)
-                        .approvedBy(teacher.getId())
+                // Auto-create student
+                String normalizedUsn = rawUsn != null && !rawUsn.isBlank() ? rawUsn.trim().toUpperCase() : null;
+                String studentName = rawName != null && !rawName.isBlank() ? rawName.trim() : (normalizedUsn != null ? "Student " + normalizedUsn : "Student");
+                String studentEmail = rawEmail != null && !rawEmail.isBlank() ? rawEmail.trim().toLowerCase()
+                        : (normalizedUsn != null ? normalizedUsn.toLowerCase() + "@student.acadion.edu" : "student_" + System.currentTimeMillis() + "@student.acadion.edu");
+
+                student = User.builder()
+                        .name(studentName)
+                        .email(studentEmail)
+                        .usn(normalizedUsn)
+                        .password(passwordEncoder.encode("Student@123"))
+                        .role(Role.STUDENT)
+                        .verified(true)
+                        .approved(true)
+                        .banned(false)
                         .semester(classroom.getSemester())
-                        .academicYear(classroom.getAcademicYear())
-                        .createdAt(now)
-                        .updatedAt(now)
+                        .studentDepartment(classroom.getDepartment())
+                        .createdAt(LocalDateTime.now())
+                        .approvedAt(LocalDateTime.now())
                         .build();
 
-                classroomMembershipRepository.save(newMembership);
-                addedCount++;
+                student = userRepository.save(student);
+                newStudentAccountsCreated++;
             }
+
+            // Check if already active member
+            Optional<ClassroomMembership> existingMembership = classroomMembershipRepository
+                    .findByClassroomIdAndStudentId(classroom.getId(), student.getId());
+            if (existingMembership.isPresent() && "ACTIVE".equalsIgnoreCase(existingMembership.get().getMembershipStatus())) {
+                alreadyMembersCount++;
+                alreadyMemberUsns.add(student.getUsn() != null ? student.getUsn() : student.getEmail());
+            }
+
+            // Ensure active membership & classroom document enrollment
+            ensureActiveMembership(classroom, student, "ROSTER", teacher.getId());
+            enrollStudentInClassroomDoc(classroom, student);
         }
 
-        classroom.setUpdatedAt(now);
+        classroom.setUpdatedAt(LocalDateTime.now());
         classroomRepository.save(classroom);
 
-        log.info("Roster import completed for classroom {}: Total={}, Matched={}, Added={}, AlreadyMembers={}, Unmatched={}",
-                classroom.getId(), totalRows, matchedCount, addedCount, alreadyMembersCount, unmatchedCount);
+        log.info("Roster import completed for classroom {}: TotalProcessed={}, ExistingLinked={}, NewCreated={}, AlreadyMembers={}",
+                classroom.getId(), totalProcessed, existingVerifiedUsersLinked, newStudentAccountsCreated, alreadyMembersCount);
 
         return RosterImportSummary.builder()
-                .totalRows(totalRows)
-                .validRows(validRows)
+                .totalProcessed(totalProcessed)
+                .existingVerifiedUsersLinked(existingVerifiedUsersLinked)
+                .newStudentAccountsCreated(newStudentAccountsCreated)
+                .enrolledStudents(classroom.getEnrolledStudents() != null ? classroom.getEnrolledStudents() : new ArrayList<>())
+                .totalRows(totalProcessed)
+                .validRows(totalProcessed)
                 .duplicatesInFile(duplicatesInFile)
-                .matchedCount(matchedCount)
+                .matchedCount(existingVerifiedUsersLinked)
                 .alreadyMembersCount(alreadyMembersCount)
-                .unmatchedCount(unmatchedCount)
-                .addedCount(addedCount)
-                .unmatchedStudents(unmatchedStudents)
+                .addedCount(totalProcessed - alreadyMembersCount)
                 .duplicateUsns(duplicateUsns)
                 .alreadyMemberUsns(alreadyMemberUsns)
                 .invalidRows(invalidRows)
@@ -289,7 +350,7 @@ public class ClassroomService {
     }
 
     // =========================================================================
-    // 5. GET CLASSROOM MEMBERS (Teacher Only)
+    // 6. GET CLASSROOM MEMBERS (Teacher Only)
     // =========================================================================
     public List<ClassroomMemberDto> getClassroomMembers(String classroomId, String teacherEmail) {
         Classroom classroom = getExistingClassroom(classroomId);
@@ -314,12 +375,13 @@ public class ClassroomService {
                     .requestedAt(m.getRequestedAt())
                     .approvedAt(m.getApprovedAt())
                     .createdAt(m.getCreatedAt())
+                    .verifiedInDb(student != null && student.isVerified())
                     .build();
         }).sorted(Comparator.comparing(ClassroomMemberDto::getStudentName, String.CASE_INSENSITIVE_ORDER)).toList();
     }
 
     // =========================================================================
-    // 6. STUDENT SUBMITS JOIN REQUEST VIA JOIN CODE
+    // 7. STUDENT JOINS VIA JOIN CODE (Immediate Active Membership)
     // =========================================================================
     public Map<String, Object> submitJoinRequest(String rawJoinCode, String studentEmail) {
         if (rawJoinCode == null || rawJoinCode.trim().isEmpty()) {
@@ -337,6 +399,7 @@ public class ClassroomService {
         String hashedCode = hashJoinCode(normalizedCode);
 
         Classroom classroom = classroomRepository.findByJoinCodeHash(hashedCode)
+                .or(() -> classroomRepository.findByJoinCode(normalizedCode))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invalid join code: Classroom not found"));
 
         if (!"ACTIVE".equalsIgnoreCase(classroom.getStatus())) {
@@ -360,16 +423,11 @@ public class ClassroomService {
             if ("ACTIVE".equalsIgnoreCase(existing.getMembershipStatus())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "You are already an active enrolled member of this classroom");
             }
-            if ("PENDING".equalsIgnoreCase(existing.getMembershipStatus())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Your join request for this classroom is already pending teacher approval");
-            }
-
-            // Re-requesting if previously REJECTED or REMOVED
-            existing.setMembershipStatus("PENDING");
+            // Re-activate or approve immediately
+            existing.setMembershipStatus("ACTIVE");
             existing.setMembershipSource("JOIN_CODE");
             existing.setRequestedAt(now);
-            existing.setApprovedAt(null);
-            existing.setApprovedBy(null);
+            existing.setApprovedAt(now);
             existing.setUsnSnapshot(student.getUsn());
             existing.setSemester(classroom.getSemester());
             existing.setAcademicYear(classroom.getAcademicYear());
@@ -381,8 +439,9 @@ public class ClassroomService {
                     .studentId(student.getId())
                     .usnSnapshot(student.getUsn())
                     .membershipSource("JOIN_CODE")
-                    .membershipStatus("PENDING")
+                    .membershipStatus("ACTIVE")
                     .requestedAt(now)
+                    .approvedAt(now)
                     .semester(classroom.getSemester())
                     .academicYear(classroom.getAcademicYear())
                     .createdAt(now)
@@ -392,21 +451,27 @@ public class ClassroomService {
             classroomMembershipRepository.save(newMembership);
         }
 
-        log.info("Student {} ({}) requested to join classroom '{}' ({}) via join code",
-                student.getEmail(), student.getUsn(), classroom.getName(), classroom.getSubjectCode());
+        // Synchronize into Classroom document
+        enrollStudentInClassroomDoc(classroom, student);
+        classroom.setUpdatedAt(now);
+        classroomRepository.save(classroom);
+
+        log.info("Student {} ({}) joined classroom '{}' ({}) via join code",
+                student.getEmail(), student.getUsn(), classroom.getName(), classroom.getCourseCode());
 
         return Map.of(
                 "success", true,
-                "message", "Join request submitted successfully. Awaiting teacher approval.",
+                "message", "Joined classroom successfully!",
                 "classroomId", classroom.getId(),
                 "classroomName", classroom.getName(),
-                "subjectName", classroom.getSubjectName(),
-                "status", "PENDING"
+                "courseCode", classroom.getCourseCode() != null ? classroom.getCourseCode() : classroom.getSubjectCode(),
+                "subjectName", classroom.getSubjectName() != null ? classroom.getSubjectName() : classroom.getName(),
+                "status", "ACTIVE"
         );
     }
 
     // =========================================================================
-    // 7. GET JOIN REQUESTS (Teacher Only)
+    // 8. GET JOIN REQUESTS (Teacher Only)
     // =========================================================================
     public List<ClassroomMemberDto> getJoinRequests(String classroomId, String teacherEmail) {
         Classroom classroom = getExistingClassroom(classroomId);
@@ -431,12 +496,13 @@ public class ClassroomService {
                     .semester(m.getSemester())
                     .requestedAt(m.getRequestedAt())
                     .createdAt(m.getCreatedAt())
+                    .verifiedInDb(student != null && student.isVerified())
                     .build();
         }).toList();
     }
 
     // =========================================================================
-    // 8. APPROVE JOIN REQUEST (Teacher Only)
+    // 9. APPROVE JOIN REQUEST (Teacher Only)
     // =========================================================================
     public Map<String, Object> approveJoinRequest(String classroomId, String studentId, String teacherEmail) {
         Classroom classroom = getExistingClassroom(classroomId);
@@ -451,13 +517,20 @@ public class ClassroomService {
         membership.setApprovedAt(LocalDateTime.now());
         membership.setApprovedBy(teacher.getId());
         membership.setUpdatedAt(LocalDateTime.now());
-
         classroomMembershipRepository.save(membership);
+
+        User student = userRepository.findById(studentId).orElse(null);
+        if (student != null) {
+            enrollStudentInClassroomDoc(classroom, student);
+            classroom.setUpdatedAt(LocalDateTime.now());
+            classroomRepository.save(classroom);
+        }
+
         log.info("Teacher {} approved student {} in classroom {}", teacher.getEmail(), studentId, classroomId);
 
         return Map.of(
                 "success", true,
-                "message", "Student approved successfully into classroom",
+                "message", "Student join request approved successfully",
                 "studentId", studentId,
                 "classroomId", classroomId,
                 "status", "ACTIVE"
@@ -465,7 +538,7 @@ public class ClassroomService {
     }
 
     // =========================================================================
-    // 9. REJECT JOIN REQUEST (Teacher Only)
+    // 10. REJECT JOIN REQUEST (Teacher Only)
     // =========================================================================
     public Map<String, Object> rejectJoinRequest(String classroomId, String studentId, String teacherEmail) {
         Classroom classroom = getExistingClassroom(classroomId);
@@ -492,7 +565,7 @@ public class ClassroomService {
     }
 
     // =========================================================================
-    // 10. REMOVE MEMBER (Teacher Only)
+    // 11. REMOVE MEMBER (Teacher Only)
     // =========================================================================
     public Map<String, Object> removeMember(String classroomId, String studentId, String teacherEmail) {
         Classroom classroom = getExistingClassroom(classroomId);
@@ -505,8 +578,17 @@ public class ClassroomService {
 
         membership.setMembershipStatus("REMOVED");
         membership.setUpdatedAt(LocalDateTime.now());
-
         classroomMembershipRepository.save(membership);
+
+        if (classroom.getStudentIds() != null) {
+            classroom.getStudentIds().remove(studentId);
+        }
+        if (classroom.getEnrolledStudents() != null) {
+            classroom.getEnrolledStudents().removeIf(es -> studentId.equals(es.getStudentId()));
+        }
+        classroom.setUpdatedAt(LocalDateTime.now());
+        classroomRepository.save(classroom);
+
         log.info("Teacher {} removed student {} from classroom {}", teacher.getEmail(), studentId, classroomId);
 
         return Map.of(
@@ -519,7 +601,7 @@ public class ClassroomService {
     }
 
     // =========================================================================
-    // 11. REGENERATE JOIN CODE (Teacher Only)
+    // 12. REGENERATE JOIN CODE (Teacher Only)
     // =========================================================================
     public RegenerateJoinCodeResponse regenerateJoinCode(String classroomId, String teacherEmail) {
         Classroom classroom = getExistingClassroom(classroomId);
@@ -530,6 +612,7 @@ public class ClassroomService {
         String newHash = hashJoinCode(newPlainCode);
         LocalDateTime now = LocalDateTime.now();
 
+        classroom.setJoinCode(newPlainCode);
         classroom.setJoinCodeHash(newHash);
         classroom.setJoinCodeEnabled(true);
         classroom.setJoinCodeCreatedAt(now);
@@ -550,7 +633,7 @@ public class ClassroomService {
     }
 
     // =========================================================================
-    // 12. GET STUDENT CLASSROOMS
+    // 13. GET STUDENT CLASSROOMS
     // =========================================================================
     public List<ClassroomResponse> getStudentClassrooms(String studentEmail) {
         User student = userRepository.findByEmail(studentEmail)
@@ -578,6 +661,70 @@ public class ClassroomService {
     // =========================================================================
     // HELPER & SECURITY METHODS
     // =========================================================================
+
+    private void enrollStudentInClassroomDoc(Classroom classroom, User student) {
+        if (classroom.getStudentIds() == null) {
+            classroom.setStudentIds(new ArrayList<>());
+        }
+        if (!classroom.getStudentIds().contains(student.getId())) {
+            classroom.getStudentIds().add(student.getId());
+        }
+
+        if (classroom.getEnrolledStudents() == null) {
+            classroom.setEnrolledStudents(new ArrayList<>());
+        }
+
+        boolean alreadyExists = classroom.getEnrolledStudents().stream()
+                .anyMatch(es -> (es.getStudentId() != null && es.getStudentId().equals(student.getId()))
+                        || (es.getUsn() != null && student.getUsn() != null && es.getUsn().equalsIgnoreCase(student.getUsn())));
+
+        if (!alreadyExists) {
+            classroom.getEnrolledStudents().add(Classroom.EnrolledStudent.builder()
+                    .studentId(student.getId())
+                    .usn(student.getUsn() != null ? student.getUsn() : "")
+                    .name(student.getName())
+                    .email(student.getEmail())
+                    .joinedAt(LocalDateTime.now())
+                    .status("ENROLLED")
+                    .verifiedInDb(student.isVerified())
+                    .build());
+        }
+    }
+
+    private ClassroomMembership ensureActiveMembership(Classroom classroom, User student, String source, String approvedBy) {
+        LocalDateTime now = LocalDateTime.now();
+        Optional<ClassroomMembership> existingOpt = classroomMembershipRepository
+                .findByClassroomIdAndStudentId(classroom.getId(), student.getId());
+
+        ClassroomMembership membership;
+        if (existingOpt.isPresent()) {
+            membership = existingOpt.get();
+            membership.setMembershipStatus("ACTIVE");
+            membership.setMembershipSource(source);
+            membership.setApprovedAt(now);
+            membership.setApprovedBy(approvedBy);
+            membership.setUsnSnapshot(student.getUsn());
+            membership.setSemester(classroom.getSemester());
+            membership.setAcademicYear(classroom.getAcademicYear());
+            membership.setUpdatedAt(now);
+        } else {
+            membership = ClassroomMembership.builder()
+                    .classroomId(classroom.getId())
+                    .studentId(student.getId())
+                    .usnSnapshot(student.getUsn())
+                    .membershipSource(source)
+                    .membershipStatus("ACTIVE")
+                    .requestedAt(now)
+                    .approvedAt(now)
+                    .approvedBy(approvedBy)
+                    .semester(classroom.getSemester())
+                    .academicYear(classroom.getAcademicYear())
+                    .createdAt(now)
+                    .updatedAt(now)
+                    .build();
+        }
+        return classroomMembershipRepository.save(membership);
+    }
 
     private User getAuthenticatedTeacher(String email) {
         User user = userRepository.findByEmail(email)
@@ -631,9 +778,20 @@ public class ClassroomService {
     }
 
     private ClassroomResponse toClassroomResponse(Classroom c, String teacherName) {
+        // Auto-heal missing plain join code for existing classrooms
+        if ((c.getJoinCode() == null || c.getJoinCode().isBlank()) && c.getJoinCodeHash() != null) {
+            String healedCode = generateRandomCode();
+            c.setJoinCode(healedCode);
+            c.setJoinCodeHash(hashJoinCode(healedCode));
+            try {
+                classroomRepository.save(c);
+            } catch (Exception ignored) {}
+        }
+
         return ClassroomResponse.builder()
                 .id(c.getId())
                 .name(c.getName())
+                .courseCode(c.getCourseCode() != null ? c.getCourseCode() : c.getSubjectCode())
                 .subjectName(c.getSubjectName())
                 .subjectCode(c.getSubjectCode())
                 .teacherId(c.getTeacherId())
@@ -644,6 +802,7 @@ public class ClassroomService {
                 .academicBatch(c.getAcademicBatch())
                 .academicYear(c.getAcademicYear())
                 .connectionMode(c.getConnectionMode())
+                .joinCode(c.getJoinCode())
                 .status(c.getStatus())
                 .joinCodeEnabled(c.isJoinCodeEnabled())
                 .joinCodeExpiresAt(c.getJoinCodeExpiresAt())
@@ -653,82 +812,226 @@ public class ClassroomService {
     }
 
     // =========================================================================
-    // FILE PARSING HELPERS (CSV & Excel)
+    // FILE PARSING HELPERS (CSV & Multi-Row College Sheets)
     // =========================================================================
 
-    private List<RosterRow> parseCsvRows(MultipartFile file) throws Exception {
-        List<RosterRow> list = new ArrayList<>();
+    private boolean isValidUsn(String s) {
+        if (s == null) return false;
+        String clean = s.replaceAll("[^a-zA-Z0-9]", "");
+        if (clean.length() < 7 || clean.length() > 14) return false;
+        String upper = clean.toUpperCase();
+        if (upper.equals("USN") || upper.equals("ROLLNO") || upper.equals("SLNO") || upper.contains("STUDENT") || upper.contains("AVERAGE") || upper.contains("TOTAL")) {
+            return false;
+        }
+        boolean hasDigit = clean.chars().anyMatch(Character::isDigit);
+        boolean hasLetter = clean.chars().anyMatch(Character::isLetter);
+        return hasDigit && hasLetter;
+    }
+
+    private boolean isValidName(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        if (t.length() < 2 || t.length() > 80) return false;
+        String lower = t.toLowerCase();
+        if (lower.equals("name") || lower.contains("student name") || lower.contains("candidate") || lower.equals("sl no") || lower.equals("usn") || lower.contains("total") || lower.contains("average")) {
+            return false;
+        }
+        return t.chars().anyMatch(Character::isLetter);
+    }
+
+    private boolean isValidEmail(String s) {
+        if (s == null) return false;
+        return EMAIL_PATTERN.matcher(s.trim()).matches();
+    }
+
+    private List<ParsedStudentRow> parseCsvRows(MultipartFile file) throws Exception {
+        List<ParsedStudentRow> list = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             int rowNum = 0;
             int usnColIndex = -1;
+            int nameColIndex = -1;
+            int emailColIndex = -1;
 
             while ((line = reader.readLine()) != null) {
                 rowNum++;
                 line = line.trim();
                 if (line.isEmpty()) continue;
 
-                // Split by comma or semicolon
-                String[] tokens = line.split("[,;]");
+                String[] tokens = line.split("[,;\t|]");
+
+                // Check for headers
                 if (usnColIndex == -1) {
-                    // Check if this line is header
                     for (int i = 0; i < tokens.length; i++) {
                         String clean = tokens[i].replaceAll("[\"']", "").trim().toLowerCase();
-                        if (clean.equals("usn") || clean.contains("seat") || clean.contains("student usn") || clean.contains("roll")) {
+                        if (clean.equals("usn") || clean.contains("seat") || clean.contains("student usn") || clean.contains("roll") || clean.contains("reg no")) {
                             usnColIndex = i;
-                            break;
+                        } else if (clean.contains("name") || clean.contains("student name")) {
+                            nameColIndex = i;
+                        } else if (clean.contains("email") || clean.contains("mail")) {
+                            emailColIndex = i;
                         }
                     }
                     if (usnColIndex != -1) {
-                        // Header identified, continue to next row
-                        continue;
+                        continue; // Skip header line
                     }
-                    // No explicit header matched, assume column 0 is USN
-                    usnColIndex = 0;
                 }
 
-                if (usnColIndex < tokens.length) {
-                    String usn = tokens[usnColIndex].replaceAll("[\"']", "").trim();
-                    if (!usn.isEmpty() && !usn.equalsIgnoreCase("usn")) {
-                        list.add(new RosterRow(rowNum, usn));
+                String usnVal = null;
+                String nameVal = null;
+                String emailVal = null;
+
+                if (usnColIndex != -1 && usnColIndex < tokens.length) {
+                    String v = tokens[usnColIndex].replaceAll("[\"']", "").trim();
+                    if (isValidUsn(v)) usnVal = v.toUpperCase();
+                }
+
+                if (nameColIndex != -1 && nameColIndex < tokens.length) {
+                    String v = tokens[nameColIndex].replaceAll("[\"']", "").trim();
+                    if (isValidName(v)) nameVal = v;
+                }
+
+                if (emailColIndex != -1 && emailColIndex < tokens.length) {
+                    String v = tokens[emailColIndex].replaceAll("[\"']", "").trim();
+                    if (isValidEmail(v)) emailVal = v;
+                }
+
+                // If not found by index, inspect all tokens
+                if (usnVal == null) {
+                    for (int i = 0; i < tokens.length; i++) {
+                        String v = tokens[i].replaceAll("[\"']", "").trim();
+                        java.util.regex.Matcher m = VTU_USN_PATTERN.matcher(v);
+                        if (m.find()) {
+                            usnVal = m.group(1).toUpperCase();
+                            if (nameVal == null && i + 1 < tokens.length) {
+                                String n = tokens[i + 1].replaceAll("[\"']", "").trim();
+                                if (isValidName(n)) nameVal = n;
+                            }
+                            break;
+                        } else if (isValidUsn(v)) {
+                            usnVal = v.toUpperCase();
+                            if (nameVal == null && i + 1 < tokens.length) {
+                                String n = tokens[i + 1].replaceAll("[\"']", "").trim();
+                                if (isValidName(n)) nameVal = n;
+                            }
+                            break;
+                        }
                     }
+                }
+
+                if (emailVal == null) {
+                    for (String t : tokens) {
+                        String v = t.replaceAll("[\"']", "").trim();
+                        if (isValidEmail(v)) {
+                            emailVal = v;
+                            break;
+                        }
+                    }
+                }
+
+                if (usnVal != null || emailVal != null) {
+                    list.add(new ParsedStudentRow(rowNum, usnVal, nameVal, emailVal));
                 }
             }
         }
         return list;
     }
 
-    private List<RosterRow> parseExcelRows(MultipartFile file) throws Exception {
-        List<RosterRow> list = new ArrayList<>();
+    private List<ParsedStudentRow> parseExcelRows(MultipartFile file) throws Exception {
+        List<ParsedStudentRow> list = new ArrayList<>();
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
             Sheet sheet = workbook.getSheetAt(0);
             if (sheet == null) return list;
 
             int usnColIndex = -1;
+            int nameColIndex = -1;
+            int emailColIndex = -1;
             DataFormatter formatter = new DataFormatter();
 
             for (Row row : sheet) {
                 int rowNum = row.getRowNum() + 1;
-                if (usnColIndex == -1) {
+
+                // 1. Detect headers if present in this row
+                for (Cell cell : row) {
+                    String val = formatter.formatCellValue(cell).trim().toLowerCase();
+                    if (val.equals("usn") || val.contains("seat") || val.contains("student usn") || val.contains("roll") || val.contains("reg no")) {
+                        usnColIndex = cell.getColumnIndex();
+                    } else if (val.contains("student name") || val.equals("name") || val.contains("candidate name")) {
+                        nameColIndex = cell.getColumnIndex();
+                    } else if (val.contains("email") || val.contains("mail")) {
+                        emailColIndex = cell.getColumnIndex();
+                    }
+                }
+
+                String usnVal = null;
+                String nameVal = null;
+                String emailVal = null;
+
+                if (usnColIndex != -1) {
+                    Cell c = row.getCell(usnColIndex);
+                    if (c != null) {
+                        String v = formatter.formatCellValue(c).trim();
+                        if (isValidUsn(v)) usnVal = v.toUpperCase();
+                    }
+                }
+
+                if (nameColIndex != -1) {
+                    Cell c = row.getCell(nameColIndex);
+                    if (c != null) {
+                        String v = formatter.formatCellValue(c).trim();
+                        if (isValidName(v)) nameVal = v;
+                    }
+                }
+
+                if (emailColIndex != -1) {
+                    Cell c = row.getCell(emailColIndex);
+                    if (c != null) {
+                        String v = formatter.formatCellValue(c).trim();
+                        if (isValidEmail(v)) emailVal = v;
+                    }
+                }
+
+                // Scan cells in row if USN not found yet (handles arbitrary college marksheets like row 11+ sheets)
+                if (usnVal == null) {
                     for (Cell cell : row) {
-                        String val = formatter.formatCellValue(cell).trim().toLowerCase();
-                        if (val.equals("usn") || val.contains("seat") || val.contains("student usn") || val.contains("roll")) {
-                            usnColIndex = cell.getColumnIndex();
+                        String val = formatter.formatCellValue(cell).trim();
+                        java.util.regex.Matcher m = VTU_USN_PATTERN.matcher(val);
+                        if (m.find()) {
+                            usnVal = m.group(1).toUpperCase();
+                            if (nameVal == null) {
+                                Cell nextCell = row.getCell(cell.getColumnIndex() + 1);
+                                if (nextCell != null) {
+                                    String n = formatter.formatCellValue(nextCell).trim();
+                                    if (isValidName(n)) nameVal = n;
+                                }
+                            }
+                            break;
+                        } else if (isValidUsn(val)) {
+                            usnVal = val.toUpperCase();
+                            if (nameVal == null) {
+                                Cell nextCell = row.getCell(cell.getColumnIndex() + 1);
+                                if (nextCell != null) {
+                                    String n = formatter.formatCellValue(nextCell).trim();
+                                    if (isValidName(n)) nameVal = n;
+                                }
+                            }
                             break;
                         }
                     }
-                    if (usnColIndex != -1) {
-                        continue;
-                    }
-                    usnColIndex = 0;
                 }
 
-                Cell targetCell = row.getCell(usnColIndex);
-                if (targetCell != null) {
-                    String usn = formatter.formatCellValue(targetCell).trim();
-                    if (!usn.isEmpty() && !usn.equalsIgnoreCase("usn")) {
-                        list.add(new RosterRow(rowNum, usn));
+                if (emailVal == null) {
+                    for (Cell cell : row) {
+                        String val = formatter.formatCellValue(cell).trim();
+                        if (isValidEmail(val)) {
+                            emailVal = val;
+                            break;
+                        }
                     }
+                }
+
+                if (usnVal != null || emailVal != null) {
+                    list.add(new ParsedStudentRow(rowNum, usnVal, nameVal, emailVal));
                 }
             }
         }
@@ -736,8 +1039,11 @@ public class ClassroomService {
     }
 
     @lombok.Value
-    private static class RosterRow {
+    public static class ParsedStudentRow {
         int rowNumber;
         String usn;
+        String name;
+        String email;
     }
 }
+

@@ -4,10 +4,10 @@ import "./ProfileDropdown.css";
 function ProfileDropdown() {
   const navigate = useNavigate();
 
-  const name = localStorage.getItem("name") || "User";
-  const role = localStorage.getItem("role") || "STUDENT";
-  const semester = localStorage.getItem("semester") || "";
-  const profilePicture = localStorage.getItem("profilePicture") || "";
+  const name = sessionStorage.getItem("name") || localStorage.getItem("name") || "User";
+  const role = sessionStorage.getItem("role") || localStorage.getItem("role") || "STUDENT";
+  const semester = sessionStorage.getItem("semester") || localStorage.getItem("semester") || "";
+  const profilePicture = sessionStorage.getItem("profilePicture") || localStorage.getItem("profilePicture") || "";
 
   const isStudent = role === "STUDENT";
   const isTeacher = role === "TEACHER";

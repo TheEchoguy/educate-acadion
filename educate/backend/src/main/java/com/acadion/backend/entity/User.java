@@ -37,6 +37,7 @@ private boolean approved;
     private LocalDateTime otpExpiry;
 
     // Student Details
+    @org.springframework.data.mongodb.core.index.Indexed
     private String usn;
 
     private Integer semester;

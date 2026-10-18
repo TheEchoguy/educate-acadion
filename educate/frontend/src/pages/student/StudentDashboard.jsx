@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
+import toast from "react-hot-toast";
+import { getStudentClassrooms, joinClassroom } from "../../services/classroomService";
 import { getMyProfile } from "../../services/profileService";
 import "./StudentDashboard.css";
 
@@ -13,6 +15,12 @@ function StudentDashboard() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [activeModuleSlide, setActiveModuleSlide] = useState(0);
+
+  // Classroom Live Integration
+  const [enrolledClassrooms, setEnrolledClassrooms] = useState([]);
+  const [loadingClassrooms, setLoadingClassrooms] = useState(false);
+  const [joinCodeInput, setJoinCodeInput] = useState("");
+  const [joiningClassroom, setJoiningClassroom] = useState(false);
 
   const studentModules = [
     {
@@ -100,8 +108,8 @@ function StudentDashboard() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const storedEmail = localStorage.getItem("email");
-        const storedUsn = localStorage.getItem("usn");
+        const storedEmail = sessionStorage.getItem("email") || localStorage.getItem("email");
+        const storedUsn = sessionStorage.getItem("usn") || localStorage.getItem("usn");
         const data = await getMyProfile(storedEmail, storedUsn);
         if (data) setProfile(data);
       } catch (err) {
@@ -109,7 +117,41 @@ function StudentDashboard() {
       }
     };
     fetchProfile();
+    loadClassrooms();
   }, []);
+
+  const loadClassrooms = async () => {
+    try {
+      setLoadingClassrooms(true);
+      const data = await getStudentClassrooms();
+      setEnrolledClassrooms(data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingClassrooms(false);
+    }
+  };
+
+  const handleJoinClassroom = async (e) => {
+    e.preventDefault();
+    const cleanCode = joinCodeInput.trim().toUpperCase();
+    if (!cleanCode) {
+      toast.error("Please enter a valid classroom join code");
+      return;
+    }
+    try {
+      setJoiningClassroom(true);
+      const res = await joinClassroom(cleanCode);
+      toast.success(res.message || `Joined classroom '${res.classroomName || cleanCode}' successfully!`);
+      setJoinCodeInput("");
+      loadClassrooms();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to join classroom. Please check the code.");
+    } finally {
+      setJoiningClassroom(false);
+    }
+  };
 
   // Automatic slow transition between modules every 6 seconds
   useEffect(() => {
@@ -119,10 +161,10 @@ function StudentDashboard() {
     return () => clearInterval(timer);
   }, [studentModules.length]);
 
-  const studentName = profile?.name || localStorage.getItem("name") || "Student";
-  const studentUsn = profile?.usn || localStorage.getItem("usn") || "";
-  const studentSem = profile?.semester || localStorage.getItem("semester") || "";
-  const studentDept = profile?.department || localStorage.getItem("department") || "";
+  const studentName = profile?.name || sessionStorage.getItem("name") || localStorage.getItem("name") || "Student";
+  const studentUsn = profile?.usn || sessionStorage.getItem("usn") || localStorage.getItem("usn") || "";
+  const studentSem = profile?.semester || sessionStorage.getItem("semester") || localStorage.getItem("semester") || "";
+  const studentDept = profile?.department || sessionStorage.getItem("department") || localStorage.getItem("department") || "";
 
   return (
     <div className="student-dashboard-page">
@@ -142,6 +184,75 @@ function StudentDashboard() {
             {studentDept && <span className="clean-meta-chip">Dept: {studentDept}</span>}
           </div>
         </div>
+
+        {/* PROMINENT HERO JOIN CLASSROOM BOX */}
+        <div className="join-classroom-hero-box">
+          <div className="join-hero-left">
+            <span className="join-pill-tag">⚡ Connect to Course</span>
+            <h2>Join Classroom via Code</h2>
+            <p>Enter the 6-character Join Code provided by your teacher to immediately link this classroom to your dashboard.</p>
+          </div>
+
+          <form onSubmit={handleJoinClassroom} className="join-hero-right">
+            <div className="join-input-wrap">
+              <span className="code-prefix-icon">🔑</span>
+              <input
+                type="text"
+                maxLength={8}
+                placeholder="ENTER 6-CHAR CODE"
+                value={joinCodeInput}
+                onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
+                className="join-code-input"
+              />
+              <button
+                type="submit"
+                className="btn-join-action"
+                disabled={joiningClassroom || !joinCodeInput.trim()}
+              >
+                {joiningClassroom ? "Connecting..." : "Join Now →"}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* ENROLLED CLASSROOMS STRIP */}
+        {enrolledClassrooms.length > 0 && (
+          <div className="enrolled-classrooms-strip">
+            <div className="strip-header">
+              <div>
+                <span className="strip-tag">🏛️ ACTIVE SUBJECTS</span>
+                <h3>My Enrolled Classrooms ({enrolledClassrooms.length})</h3>
+              </div>
+              <button
+                className="btn-manage-all-cls"
+                onClick={() => navigate("/student/classrooms")}
+              >
+                Open Classrooms Hub →
+              </button>
+            </div>
+
+            <div className="enrolled-cards-scroller">
+              {enrolledClassrooms.map((cls) => (
+                <div
+                  key={cls.id}
+                  className="enrolled-mini-card"
+                  onClick={() => navigate("/student/classrooms")}
+                >
+                  <div className="mini-card-top">
+                    <span className="mini-code-badge">{cls.courseCode || cls.subjectCode || "BCS701"}</span>
+                    <span className="mini-sem-sec">Sem {cls.semester} • Sec {cls.section}</span>
+                  </div>
+                  <h4 className="mini-classroom-name">{cls.name}</h4>
+                  <p className="mini-faculty-name">Instructor: <strong>{cls.teacherName || "Faculty"}</strong></p>
+                  <div className="mini-card-bottom">
+                    <span className="mini-active-dot">● Enrolled</span>
+                    <span className="mini-arrow-btn">View Class →</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* FEATURED SHOWCASE BANNER - HORIZONTAL CAMERA SLIDE TRACK FROM FAR END OF DESKTOP */}
         <div className="topic-showcase-banner">

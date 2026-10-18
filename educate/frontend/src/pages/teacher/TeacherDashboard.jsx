@@ -12,8 +12,8 @@ function TeacherDashboard() {
   const navigate = useNavigate();
   const [activeModuleSlide, setActiveModuleSlide] = useState(0);
 
-  const teacherName = localStorage.getItem("name") || "Faculty";
-  const teacherDept = localStorage.getItem("department") || "Academic Department";
+  const teacherName = sessionStorage.getItem("name") || localStorage.getItem("name") || "Faculty";
+  const teacherDept = sessionStorage.getItem("department") || localStorage.getItem("department") || "Academic Department";
 
   const teacherModules = [
     {

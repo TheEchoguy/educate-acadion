@@ -11,8 +11,8 @@ function StudentProfile() {
   const fileInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
-  const email = localStorage.getItem("email") || "";
-  const usn = localStorage.getItem("usn") || "";
+  const email = sessionStorage.getItem("email") || localStorage.getItem("email") || "";
+  const usn = sessionStorage.getItem("usn") || localStorage.getItem("usn") || "";
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);

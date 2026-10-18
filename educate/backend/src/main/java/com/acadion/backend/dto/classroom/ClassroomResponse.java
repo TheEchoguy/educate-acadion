@@ -15,6 +15,7 @@ public class ClassroomResponse {
 
     private String id;
     private String name;
+    private String courseCode;
     private String subjectName;
     private String subjectCode;
     private String teacherId;

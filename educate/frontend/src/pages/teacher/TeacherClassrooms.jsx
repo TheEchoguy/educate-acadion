@@ -12,17 +12,18 @@ function TeacherClassrooms() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const teacherDept = localStorage.getItem("department") || "Computer Science";
+  const teacherDept = sessionStorage.getItem("department") || localStorage.getItem("department") || "Computer Science";
 
   const [formData, setFormData] = useState({
-    name: "",
-    subjectName: "",
-    subjectCode: "",
+    name: "Internet of Things",
+    courseCode: "BCS701",
+    subjectName: "Internet of Things",
+    subjectCode: "BCS701",
     department: teacherDept,
-    semester: 6,
+    semester: 7,
     section: "A",
-    academicBatch: "2022-2026",
-    academicYear: "2025-2026",
+    academicBatch: "2021-2025",
+    academicYear: "2024-2025",
   });
 
   useEffect(() => {
@@ -60,7 +61,11 @@ function TeacherClassrooms() {
     try {
       setCreating(true);
       const res = await createClassroom(formData);
-      toast.success(`Classroom '${res.name}' created successfully!`);
+      toast.success(
+        res.joinCode
+          ? `Classroom '${res.name}' created! Join Code: ${res.joinCode}`
+          : `Classroom '${res.name}' created successfully!`
+      );
       setShowCreateModal(false);
       setFormData({
         name: "",

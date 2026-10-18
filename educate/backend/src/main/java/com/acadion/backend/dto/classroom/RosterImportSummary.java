@@ -14,6 +14,13 @@ import java.util.List;
 @AllArgsConstructor
 public class RosterImportSummary {
 
+    private int totalProcessed;
+    private int existingVerifiedUsersLinked;
+    private int newStudentAccountsCreated;
+
+    @Builder.Default
+    private List<com.acadion.backend.entity.Classroom.EnrolledStudent> enrolledStudents = new ArrayList<>();
+
     private int totalRows;
     private int validRows;
     private int duplicatesInFile;
