@@ -105,16 +105,57 @@ export const updateEvaluationScheme = async (classroomId, schemeData) => {
 // ============================================================================
 // ACADEMIC INTELLIGENCE - IA SPLIT-UP MARKS
 // ============================================================================
-export const downloadIaSampleTemplate = async (classroomId) => {
-  const response = await API.get(`/classrooms/${classroomId}/intelligence/download-sample-template`, {
-    responseType: "blob",
-  });
+export const downloadIaTemplate = async (classroomId, iaNumber = 1) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/download-ia-template?iaNumber=${iaNumber}`,
+    {
+      responseType: "blob",
+    }
+  );
+  return response.data;
+};
+
+export const downloadIaSampleTemplate = downloadIaTemplate;
+
+export const saveManualMarks = async (classroomId, iaNumber, records) => {
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/save-manual-marks?iaNumber=${iaNumber}`,
+    records
+  );
   return response.data;
 };
 
 export const uploadIaMarks = async (classroomId, formData, iaNumber) => {
   const response = await API.post(
     `/classrooms/${classroomId}/intelligence/upload-ia-marks?iaNumber=${iaNumber}`,
+    formData
+  );
+  return response.data;
+};
+
+export const downloadMasterTemplate = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/download-master-template`,
+    {
+      responseType: "blob",
+    }
+  );
+  return response.data;
+};
+
+export const exportMasterReport = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/export-master-report`,
+    {
+      responseType: "blob",
+    }
+  );
+  return response.data;
+};
+
+export const uploadMasterSheet = async (classroomId, formData) => {
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/upload-master-sheet`,
     formData
   );
   return response.data;
@@ -127,6 +168,85 @@ export const getStudentIaBreakdown = async (classroomId, usn) => {
 
 export const getIaRecordsByNumber = async (classroomId, iaNumber) => {
   const response = await API.get(`/classrooms/${classroomId}/intelligence/ia/${iaNumber}`);
+  return response.data;
+};
+
+export const publishIaMarks = async (classroomId, iaNumber = 0, publish = true) => {
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/publish-ia-marks?iaNumber=${iaNumber}&publish=${publish}`
+  );
+  return response.data;
+};
+
+export const getIaPublishStatus = async (classroomId) => {
+  const response = await API.get(`/classrooms/${classroomId}/intelligence/ia-publish-status`);
+  return response.data;
+};
+
+// ============================================================================
+// ACADEMIC INTELLIGENCE - QUESTION BLUEPRINT & PAPER PARSER
+// ============================================================================
+export const getBlueprint = async (classroomId, iaNumber = 1) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/blueprint?iaNumber=${iaNumber}`
+  );
+  return response.data;
+};
+
+export const parseQuestionPaper = async (classroomId, file, iaNumber = 1) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/parse-paper?iaNumber=${iaNumber}`,
+    formData
+  );
+  return response.data;
+};
+
+export const updateBlueprint = async (classroomId, blueprint, iaNumber = 1, applyToAll = false, confirm = false) => {
+  const response = await API.put(
+    `/classrooms/${classroomId}/intelligence/blueprint?iaNumber=${iaNumber}&applyToAll=${applyToAll}&confirm=${confirm}`,
+    blueprint
+  );
+  return response.data;
+};
+
+export const generateBlueprint = async (classroomId, iaNumber = 1, counts = {}) => {
+  const { q1Count = 2, q2Count = 2, q3Count = 2, q4Count = 2 } = counts;
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/blueprint/generate?iaNumber=${iaNumber}&q1Count=${q1Count}&q2Count=${q2Count}&q3Count=${q3Count}&q4Count=${q4Count}`
+  );
+  return response.data;
+};
+
+// ============================================================================
+// ACADEMIC INTELLIGENCE - 4-LEVEL HIERARCHICAL PERFORMANCE ANALYTICS ENGINE
+// ============================================================================
+export const getMyPerformance = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/my-performance`
+  );
+  return response.data;
+};
+
+export const getStudentFourLevelAnalytics = async (classroomId, usn) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/analytics/student/${encodeURIComponent(usn)}`
+  );
+  return response.data;
+};
+
+export const getMyFourLevelAnalytics = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/analytics/my-performance`
+  );
+  return response.data;
+};
+
+export const getClassroomAnalyticsSummary = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/analytics/class-summary`
+  );
   return response.data;
 };
 

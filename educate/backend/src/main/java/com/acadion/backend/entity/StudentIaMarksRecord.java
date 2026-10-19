@@ -59,5 +59,20 @@ public class StudentIaMarksRecord {
     private Map<Integer, Double> moduleMastery = new HashMap<>();
 
     @Builder.Default
+    private Map<String, String> attemptedChoiceGroups = new HashMap<>();
+
+    @Builder.Default
+    private Map<String, Double> maxMarksPerQuestion = new HashMap<>();
+
+    /**
+     * Whether marks have been confirmed and published to students by the teacher.
+     * When false (DRAFT), marks are visible only to the teacher.
+     */
+    @Builder.Default
+    private boolean published = false;
+
+    private Instant publishedAt;
+
+    @Builder.Default
     private Instant updatedAt = Instant.now();
 }

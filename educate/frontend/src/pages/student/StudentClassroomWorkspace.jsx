@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { getClassroomDetails } from "../../services/classroomService";
 import StudentSyllabusView from "../../components/syllabus/student/StudentSyllabusView";
 import EvaluationSchemeConfig from "../../components/classroom/EvaluationSchemeConfig";
+import StudentPerformanceView from "./StudentPerformanceView";
 import "./StudentClassrooms.css";
 
 function StudentClassroomWorkspace() {
@@ -164,11 +165,28 @@ function StudentClassroomWorkspace() {
               >
                 ⚖️ Evaluation Scheme
               </button>
+              <button
+                type="button"
+                className={`ssm-subtab-btn ${activeTab === "performance" ? "active" : ""}`}
+                onClick={() => setActiveTab("performance")}
+                style={{
+                  background: activeTab === "performance" ? "#9333ea" : "rgba(255, 255, 255, 0.05)",
+                  color: "#ffffff",
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                📊 My Performance & Analytics
+              </button>
             </div>
 
             {/* TAB CONTENTS */}
             {activeTab === "syllabus" && <StudentSyllabusView classroomId={id} />}
             {activeTab === "scheme" && <EvaluationSchemeConfig classroomId={id} isTeacher={false} />}
+            {activeTab === "performance" && <StudentPerformanceView classroomId={id} />}
           </>
         )}
       </div>

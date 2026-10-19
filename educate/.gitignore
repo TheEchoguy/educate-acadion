@@ -7,9 +7,11 @@ backend/storage/
 # Frontend environment file
 frontend/.env
 
-# Logs
-logs/
+# Logs & Python cache
 *.log
+logs/__pycache__/
+!logs/*.py
+!logs/requirements.txt
 
 media-assets/
 

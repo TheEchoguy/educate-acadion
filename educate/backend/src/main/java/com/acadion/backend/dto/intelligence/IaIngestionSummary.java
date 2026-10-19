@@ -20,5 +20,9 @@ public class IaIngestionSummary {
     private String filename;
     @Builder.Default
     private List<StudentIaMarksRecord> records = new ArrayList<>();
+    @Builder.Default
+    private List<Integer> ingestedIas = new ArrayList<>();
     private String message;
+    @Builder.Default
+    private boolean published = false;
 }
