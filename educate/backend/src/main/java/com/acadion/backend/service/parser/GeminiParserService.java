@@ -176,6 +176,77 @@ public class GeminiParserService {
         }
     }
 
+    public List<String> decomposeTopicWithGemini(String topic, String moduleTitle, int sessionCount) {
+        if (!isAvailable() || sessionCount <= 0 || topic == null || topic.isBlank()) {
+            return java.util.Collections.emptyList();
+        }
+        try {
+            log.info("Calling Gemini AI to decompose topic '{}' into {} sessions...", topic, sessionCount);
+            String prompt = String.format("""
+                You are an academic syllabus curriculum designer.
+                Given the Module '%s' and Topic '%s', decompose this topic into %d sequential, specific learning focuses/subtopics for %d classroom lectures.
+                Output ONLY a JSON array of %d strings, where each string is a concise, relevant subtopic/learning focus.
+                Do not include generic placeholders. Each item must be specifically about '%s'.
+                Example format: ["Subtopic 1", "Subtopic 2", "Subtopic 3"]
+                """, moduleTitle != null ? moduleTitle : "", topic, sessionCount, sessionCount, sessionCount, topic);
+
+            String requestBodyJson = String.format("""
+                {
+                  "contents": [
+                    {
+                      "parts": [
+                        { "text": %s }
+                      ]
+                    }
+                  ],
+                  "generationConfig": {
+                    "response_mime_type": "application/json",
+                    "temperature": 0.2
+                  }
+                }
+                """, objectMapper.writeValueAsString(prompt));
+
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(15))
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBodyJson))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() != 200) {
+                log.warn("Gemini API returned error status {} for topic decomposition", response.statusCode());
+                return java.util.Collections.emptyList();
+            }
+
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode candidate = root.path("candidates").get(0);
+            if (candidate == null) return java.util.Collections.emptyList();
+
+            String responseText = candidate.path("content").path("parts").get(0).path("text").asText();
+            if (responseText == null || responseText.isBlank()) return java.util.Collections.emptyList();
+
+            responseText = responseText.replaceAll("^```json\\s*", "").replaceAll("```$", "").trim();
+            JsonNode parsedJson = objectMapper.readTree(responseText);
+
+            List<String> results = new ArrayList<>();
+            if (parsedJson.isArray()) {
+                for (JsonNode n : parsedJson) {
+                    if (n.isTextual() && !n.asText().isBlank()) {
+                        results.add(n.asText().trim());
+                    }
+                }
+            }
+            return results;
+        } catch (Exception e) {
+            log.warn("Failed to decompose topic with Gemini AI: {}. Falling back to deterministic progression.", e.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
+
     private ParsedPaperResult mapJsonToParsedResult(JsonNode root) {
         ParsedMetadata meta = new ParsedMetadata();
         JsonNode mNode = root.path("metadata");

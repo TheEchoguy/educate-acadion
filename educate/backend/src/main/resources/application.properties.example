@@ -1,20 +1,19 @@
 server.port=8080
 
 # MongoDB Atlas (REDACTED FOR REVIEW)
-spring.data.mongodb.uri=mongodb+srv://<REDACTED_USER>:<REDACTED_PASSWORD>@<REDACTED_CLUSTER>.mongodb.net/acadiondb?retryWrites=true&w=majority&appName=Cluster0
-spring.data.mongodb.database=acadiondb
+spring.data.mongodb.uri=mongodb+srv://prashantkasar021_db_user:<PASSWORD>@cluster1.jtd3br1.mongodb.net/?appName=Cluster1
+spring.data.mongodb.database=educate
 jdk.tls.client.protocols=TLSv1.2
 
 # JWT Secret (REDACTED FOR REVIEW)
-app.jwt.secret=<REDACTED_JWT_SECRET_KEY_MIN_256_BITS>
+app.jwt.secret=AcadionSecretKeyForJwtAuthenticationSuperSecureKey2026
 app.jwt.expiration=86400000
 
 # SMTP Brevo Relay (REDACTED FOR REVIEW)
 spring.mail.host=smtp-relay.brevo.com
 spring.mail.port=587
-spring.mail.username=<REDACTED_SMTP_USERNAME>
-spring.mail.password=<REDACTED_SMTP_PASSWORD>
-
+spring.mail.username=
+spring.mail.password=
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
 spring.mail.properties.mail.smtp.ssl.trust=*

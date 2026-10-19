@@ -102,6 +102,7 @@ public class ClassroomService {
             ClassroomResponse res = toClassroomResponse(c, teacher.getName());
             res.setActiveMemberCount(classroomMembershipRepository.countByClassroomIdAndMembershipStatus(c.getId(), "ACTIVE"));
             res.setPendingRequestCount(classroomMembershipRepository.countByClassroomIdAndMembershipStatus(c.getId(), "PENDING"));
+            res.setJoinCode(c.getJoinCode());
             return res;
         }).toList();
     }
@@ -123,6 +124,7 @@ public class ClassroomService {
 
         if (classroom.getTeacherId().equals(user.getId()) || user.getRole() == Role.ADMIN) {
             // Teacher owner can see plain join code if requested or regenerated
+            res.setJoinCode(classroom.getJoinCode());
             return res;
         }
 
@@ -265,7 +267,17 @@ public class ClassroomService {
                 continue;
             }
 
-            String dedupeKey = rawUsn != null && !rawUsn.isBlank() ? rawUsn.toUpperCase() : rawEmail.toLowerCase();
+            String trimmedUsn = rawUsn != null ? rawUsn.trim() : null;
+            if (trimmedUsn != null && isHeaderOrTitleText(trimmedUsn)) {
+                continue;
+            }
+
+            String dedupeKey = trimmedUsn != null && !trimmedUsn.isBlank() ? trimmedUsn.toUpperCase() : (rawEmail != null ? rawEmail.trim().toLowerCase() : "");
+            if (dedupeKey.isEmpty()) {
+                invalidRows.add("Row " + row.getRowNumber() + ": Missing USN and Email");
+                continue;
+            }
+
             if (!seenKeys.add(dedupeKey)) {
                 duplicatesInFile++;
                 duplicateUsns.add(dedupeKey);
@@ -276,8 +288,8 @@ public class ClassroomService {
 
             // Check if user exists by USN or Email
             Optional<User> userOpt = Optional.empty();
-            if (rawUsn != null && !rawUsn.isBlank()) {
-                userOpt = userRepository.findByUsnIgnoreCase(rawUsn.trim());
+            if (trimmedUsn != null && !trimmedUsn.isBlank()) {
+                userOpt = userRepository.findByUsnIgnoreCase(trimmedUsn);
             }
             if (userOpt.isEmpty() && rawEmail != null && !rawEmail.isBlank()) {
                 userOpt = userRepository.findByEmailIgnoreCase(rawEmail.trim());
@@ -357,23 +369,30 @@ public class ClassroomService {
         User teacher = getAuthenticatedTeacher(teacherEmail);
         verifyClassroomOwnership(classroom, teacher);
 
-        List<ClassroomMembership> memberships = classroomMembershipRepository.findByClassroomId(classroomId);
+        List<ClassroomMembership> memberships = classroomMembershipRepository
+                .findByClassroomIdAndMembershipStatus(classroomId, "ACTIVE");
 
         return memberships.stream().map(m -> {
             User student = userRepository.findById(m.getStudentId()).orElse(null);
+            String roleName = student != null && student.getRole() != null ? student.getRole().name() : "STUDENT";
+            LocalDateTime joined = m.getApprovedAt() != null ? m.getApprovedAt() : m.getCreatedAt();
             return ClassroomMemberDto.builder()
+                    .id(m.getStudentId())
                     .membershipId(m.getId())
                     .classroomId(m.getClassroomId())
                     .studentId(m.getStudentId())
                     .studentName(student != null ? student.getName() : "Unknown Student")
                     .studentEmail(student != null ? student.getEmail() : "N/A")
                     .usn(m.getUsnSnapshot() != null ? m.getUsnSnapshot() : (student != null ? student.getUsn() : "N/A"))
+                    .role(roleName)
+                    .status(m.getMembershipStatus())
                     .membershipStatus(m.getMembershipStatus())
                     .membershipSource(m.getMembershipSource())
                     .academicYear(m.getAcademicYear())
                     .semester(m.getSemester())
                     .requestedAt(m.getRequestedAt())
                     .approvedAt(m.getApprovedAt())
+                    .joinedAt(joined)
                     .createdAt(m.getCreatedAt())
                     .verifiedInDb(student != null && student.isVerified())
                     .build();
@@ -483,13 +502,17 @@ public class ClassroomService {
 
         return pendingList.stream().map(m -> {
             User student = userRepository.findById(m.getStudentId()).orElse(null);
+            String roleName = student != null && student.getRole() != null ? student.getRole().name() : "STUDENT";
             return ClassroomMemberDto.builder()
+                    .id(m.getStudentId())
                     .membershipId(m.getId())
                     .classroomId(m.getClassroomId())
                     .studentId(m.getStudentId())
                     .studentName(student != null ? student.getName() : "Unknown Student")
                     .studentEmail(student != null ? student.getEmail() : "N/A")
                     .usn(m.getUsnSnapshot() != null ? m.getUsnSnapshot() : (student != null ? student.getUsn() : "N/A"))
+                    .role(roleName)
+                    .status(m.getMembershipStatus())
                     .membershipStatus(m.getMembershipStatus())
                     .membershipSource(m.getMembershipSource())
                     .academicYear(m.getAcademicYear())
@@ -858,13 +881,16 @@ public class ClassroomService {
                 line = line.trim();
                 if (line.isEmpty()) continue;
 
-                String[] tokens = line.split("[,;\t|]");
+                String[] tokens = parseCsvLine(line);
+                if (tokens.length == 0 || isTokensAllEmpty(tokens)) {
+                    continue;
+                }
 
                 // Check for headers
                 if (usnColIndex == -1) {
                     for (int i = 0; i < tokens.length; i++) {
-                        String clean = tokens[i].replaceAll("[\"']", "").trim().toLowerCase();
-                        if (clean.equals("usn") || clean.contains("seat") || clean.contains("student usn") || clean.contains("roll") || clean.contains("reg no")) {
+                        String clean = cleanToken(tokens[i]).toLowerCase();
+                        if (isUsnHeaderCell(clean)) {
                             usnColIndex = i;
                         } else if (clean.contains("name") || clean.contains("student name")) {
                             nameColIndex = i;
@@ -882,36 +908,36 @@ public class ClassroomService {
                 String emailVal = null;
 
                 if (usnColIndex != -1 && usnColIndex < tokens.length) {
-                    String v = tokens[usnColIndex].replaceAll("[\"']", "").trim();
+                    String v = cleanToken(tokens[usnColIndex]);
                     if (isValidUsn(v)) usnVal = v.toUpperCase();
                 }
 
                 if (nameColIndex != -1 && nameColIndex < tokens.length) {
-                    String v = tokens[nameColIndex].replaceAll("[\"']", "").trim();
+                    String v = cleanToken(tokens[nameColIndex]);
                     if (isValidName(v)) nameVal = v;
                 }
 
                 if (emailColIndex != -1 && emailColIndex < tokens.length) {
-                    String v = tokens[emailColIndex].replaceAll("[\"']", "").trim();
+                    String v = cleanToken(tokens[emailColIndex]);
                     if (isValidEmail(v)) emailVal = v;
                 }
 
                 // If not found by index, inspect all tokens
                 if (usnVal == null) {
                     for (int i = 0; i < tokens.length; i++) {
-                        String v = tokens[i].replaceAll("[\"']", "").trim();
+                        String v = cleanToken(tokens[i]);
                         java.util.regex.Matcher m = VTU_USN_PATTERN.matcher(v);
                         if (m.find()) {
                             usnVal = m.group(1).toUpperCase();
                             if (nameVal == null && i + 1 < tokens.length) {
-                                String n = tokens[i + 1].replaceAll("[\"']", "").trim();
+                                String n = cleanToken(tokens[i + 1]);
                                 if (isValidName(n)) nameVal = n;
                             }
                             break;
                         } else if (isValidUsn(v)) {
                             usnVal = v.toUpperCase();
                             if (nameVal == null && i + 1 < tokens.length) {
-                                String n = tokens[i + 1].replaceAll("[\"']", "").trim();
+                                String n = cleanToken(tokens[i + 1]);
                                 if (isValidName(n)) nameVal = n;
                             }
                             break;
@@ -921,7 +947,7 @@ public class ClassroomService {
 
                 if (emailVal == null) {
                     for (String t : tokens) {
-                        String v = t.replaceAll("[\"']", "").trim();
+                        String v = cleanToken(t);
                         if (isValidEmail(v)) {
                             emailVal = v;
                             break;
@@ -940,8 +966,13 @@ public class ClassroomService {
     private List<ParsedStudentRow> parseExcelRows(MultipartFile file) throws Exception {
         List<ParsedStudentRow> list = new ArrayList<>();
         try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+            if (workbook.getNumberOfSheets() == 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The Excel workbook has no sheets");
+            }
             Sheet sheet = workbook.getSheetAt(0);
-            if (sheet == null) return list;
+            if (sheet == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The Excel worksheet is empty");
+            }
 
             int usnColIndex = -1;
             int nameColIndex = -1;
@@ -949,6 +980,10 @@ public class ClassroomService {
             DataFormatter formatter = new DataFormatter();
 
             for (Row row : sheet) {
+                if (row == null || isRowEmpty(row, formatter)) {
+                    continue;
+                }
+
                 int rowNum = row.getRowNum() + 1;
 
                 // 1. Detect headers if present in this row
@@ -1036,6 +1071,164 @@ public class ClassroomService {
             }
         }
         return list;
+    }
+
+    private static String[] parseCsvLine(String line) {
+        if (line == null) return new String[0];
+        List<String> tokens = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        boolean inQuotes = false;
+        char[] chars = line.toCharArray();
+
+        for (int i = 0; i < chars.length; i++) {
+            char c = chars[i];
+            if (c == '"' || c == '\'') {
+                inQuotes = !inQuotes;
+            } else if ((c == ',' || c == ';') && !inQuotes) {
+                tokens.add(sb.toString().trim());
+                sb.setLength(0);
+            } else {
+                sb.append(c);
+            }
+        }
+        tokens.add(sb.toString().trim());
+        return tokens.toArray(new String[0]);
+    }
+
+    private static String cleanToken(String token) {
+        if (token == null) return "";
+        return token.replaceAll("^[\"']+|[\"']+$", "").trim();
+    }
+
+    private static boolean isTokensAllEmpty(String[] tokens) {
+        for (String t : tokens) {
+            if (t != null && !cleanToken(t).isEmpty()) return false;
+        }
+        return true;
+    }
+
+    private static boolean isRowEmpty(Row row, DataFormatter formatter) {
+        if (row == null) return true;
+        for (Cell cell : row) {
+            if (cell != null && !formatter.formatCellValue(cell).trim().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isUsnHeaderCell(String text) {
+        if (text == null) return false;
+        String clean = text.trim().toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (clean.equals("usn")
+                || clean.equals("studentusn")
+                || clean.equals("rollno")
+                || clean.equals("rollnumber")
+                || clean.equals("rollnum")
+                || clean.equals("seatno")
+                || clean.equals("seatnumber")
+                || clean.equals("universityseatnumber")
+                || clean.equals("univseatno")
+                || clean.equals("registrationno")
+                || clean.equals("regno")) {
+            return true;
+        }
+        return (clean.startsWith("usn") && !clean.contains("user"))
+                || clean.contains("studentusn")
+                || clean.contains("seatnumber")
+                || clean.contains("seatno");
+    }
+
+    private int findUsnColumnInRow(Row row, DataFormatter formatter) {
+        int candidateCol = -1;
+        for (Cell cell : row) {
+            if (cell == null) continue;
+            String val = formatter.formatCellValue(cell).trim();
+            if (val.isEmpty()) continue;
+            if (isUsnHeaderCell(val)) {
+                candidateCol = cell.getColumnIndex();
+                break;
+            }
+        }
+        return candidateCol;
+    }
+
+    private int findUsnColumnInTokens(String[] tokens) {
+        for (int i = 0; i < tokens.length; i++) {
+            String val = cleanToken(tokens[i]);
+            if (isUsnHeaderCell(val)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private boolean isHeaderRow(Row row, DataFormatter formatter, int usnColIndex) {
+        if (row == null) return false;
+        Cell targetCell = row.getCell(usnColIndex);
+        if (targetCell != null) {
+            String val = formatter.formatCellValue(targetCell).trim();
+            if (isUsnHeaderCell(val) || isHeaderOrTitleText(val)) {
+                return true;
+            }
+        }
+        Cell firstCell = row.getCell(0);
+        if (firstCell != null) {
+            String firstVal = formatter.formatCellValue(firstCell).trim();
+            if (isHeaderOrTitleText(firstVal) && !firstVal.matches("^\\d+$")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isHeaderRowTokens(String[] tokens, int usnColIndex) {
+        if (tokens == null || tokens.length == 0) return false;
+        if (usnColIndex < tokens.length) {
+            String val = cleanToken(tokens[usnColIndex]);
+            if (isUsnHeaderCell(val) || isHeaderOrTitleText(val)) {
+                return true;
+            }
+        }
+        String firstVal = cleanToken(tokens[0]);
+        if (isHeaderOrTitleText(firstVal) && !firstVal.matches("^\\d+$")) {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isHeaderOrTitleText(String text) {
+        if (text == null) return true;
+        String trimmed = text.trim();
+        if (trimmed.isEmpty()) return true;
+
+        String clean = trimmed.toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (clean.isEmpty()) return true;
+
+        return clean.equals("usn")
+                || clean.equals("studentusn")
+                || clean.equals("rollno")
+                || clean.equals("rollnumber")
+                || clean.equals("rollnum")
+                || clean.equals("seatno")
+                || clean.equals("seatnumber")
+                || clean.equals("slno")
+                || clean.equals("sno")
+                || clean.equals("serialno")
+                || clean.equals("studentname")
+                || clean.equals("name")
+                || clean.equals("email")
+                || clean.equals("emailaddress")
+                || clean.equals("semester")
+                || clean.equals("department")
+                || clean.equals("approvalstatus")
+                || clean.equals("status")
+                || clean.equals("registrationdate")
+                || clean.equals("approveddate")
+                || clean.contains("acadionlms")
+                || clean.contains("approvedstudentsreport")
+                || clean.contains("studentsreport")
+                || clean.contains("rosterreport");
     }
 
     @lombok.Value

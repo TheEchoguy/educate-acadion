@@ -142,7 +142,7 @@ function TeacherClassrooms() {
               <div
                 key={cls.id}
                 className="classroom-card"
-                onClick={() => navigate(`/teacher/classrooms/${cls.id}`)}
+                onClick={() => navigate(`/teacher/classrooms/${cls.id}/workspaces`)}
               >
                 <div className="card-top-header">
                   <span className="subject-code-pill">{cls.subjectCode}</span>
