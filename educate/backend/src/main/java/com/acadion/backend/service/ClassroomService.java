@@ -3,6 +3,7 @@ package com.acadion.backend.service;
 import com.acadion.backend.dto.classroom.ClassroomMemberDto;
 import com.acadion.backend.dto.classroom.ClassroomResponse;
 import com.acadion.backend.dto.classroom.CreateClassroomRequest;
+import com.acadion.backend.dto.classroom.UpdateClassroomRequest;
 import com.acadion.backend.dto.classroom.RegenerateJoinCodeResponse;
 import com.acadion.backend.dto.classroom.RosterImportSummary;
 import com.acadion.backend.entity.Classroom;
@@ -141,6 +142,93 @@ public class ClassroomService {
         }
 
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied to classroom");
+    }
+
+    // =========================================================================
+    // UPDATE CLASSROOM SETTINGS (Teacher Owner or Admin)
+    // =========================================================================
+    public ClassroomResponse updateClassroom(String classroomId, UpdateClassroomRequest request, String userEmail) {
+        Classroom classroom = getExistingClassroom(classroomId);
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User account not found"));
+
+        if (!classroom.getTeacherId().equals(user.getId()) && user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the classroom teacher or admin can modify classroom settings");
+        }
+
+        if (request.getName() != null && !request.getName().isBlank()) {
+            classroom.setName(request.getName().trim());
+        }
+        if (request.getCourseCode() != null && !request.getCourseCode().isBlank()) {
+            classroom.setCourseCode(request.getCourseCode().trim().toUpperCase());
+            classroom.setSubjectCode(request.getCourseCode().trim().toUpperCase());
+        } else if (request.getSubjectCode() != null && !request.getSubjectCode().isBlank()) {
+            classroom.setCourseCode(request.getSubjectCode().trim().toUpperCase());
+            classroom.setSubjectCode(request.getSubjectCode().trim().toUpperCase());
+        }
+        if (request.getSubjectName() != null && !request.getSubjectName().isBlank()) {
+            classroom.setSubjectName(request.getSubjectName().trim());
+        }
+        if (request.getDepartment() != null && !request.getDepartment().isBlank()) {
+            classroom.setDepartment(request.getDepartment().trim());
+        }
+        if (request.getSemester() != null) {
+            classroom.setSemester(request.getSemester());
+        }
+        if (request.getSection() != null && !request.getSection().isBlank()) {
+            classroom.setSection(request.getSection().trim().toUpperCase());
+        }
+        if (request.getAcademicBatch() != null && !request.getAcademicBatch().isBlank()) {
+            classroom.setAcademicBatch(request.getAcademicBatch().trim());
+        }
+        if (request.getAcademicYear() != null && !request.getAcademicYear().isBlank()) {
+            classroom.setAcademicYear(request.getAcademicYear().trim());
+        }
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            classroom.setStatus(request.getStatus().trim().toUpperCase());
+        }
+        if (request.getJoinCodeEnabled() != null) {
+            classroom.setJoinCodeEnabled(request.getJoinCodeEnabled());
+        }
+
+        classroom.setUpdatedAt(LocalDateTime.now());
+        Classroom saved = classroomRepository.save(classroom);
+        log.info("User {} updated classroom '{}' (ID: {})", userEmail, saved.getName(), saved.getId());
+
+        User teacher = userRepository.findById(saved.getTeacherId()).orElse(null);
+        ClassroomResponse response = toClassroomResponse(saved, teacher != null ? teacher.getName() : "Faculty");
+        response.setJoinCode(saved.getJoinCode());
+        return response;
+    }
+
+    // =========================================================================
+    // DELETE CLASSROOM (Teacher Owner or Admin)
+    // =========================================================================
+    public Map<String, Object> deleteClassroom(String classroomId, String userEmail) {
+        Classroom classroom = getExistingClassroom(classroomId);
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User account not found"));
+
+        if (!classroom.getTeacherId().equals(user.getId()) && user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the classroom teacher or admin can delete this classroom");
+        }
+
+        // 1. Delete associated memberships
+        try {
+            classroomMembershipRepository.deleteByClassroomId(classroomId);
+        } catch (Exception e) {
+            log.warn("Failed to delete memberships for classroom {}: {}", classroomId, e.getMessage());
+        }
+
+        // 2. Delete the classroom entity
+        classroomRepository.delete(classroom);
+        log.info("User {} deleted classroom '{}' (ID: {})", userEmail, classroom.getName(), classroomId);
+
+        return Map.of(
+                "success", true,
+                "message", "Classroom '" + classroom.getName() + "' deleted successfully",
+                "classroomId", classroomId
+        );
     }
 
     // =========================================================================

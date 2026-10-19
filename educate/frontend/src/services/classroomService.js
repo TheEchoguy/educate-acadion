@@ -20,6 +20,16 @@ export const getClassroomDetails = async (classroomId) => {
   return response.data;
 };
 
+export const updateClassroom = async (classroomId, classroomData) => {
+  const response = await API.put(`/classrooms/${classroomId}`, classroomData);
+  return response.data;
+};
+
+export const deleteClassroom = async (classroomId) => {
+  const response = await API.delete(`/classrooms/${classroomId}`);
+  return response.data;
+};
+
 export const importRoster = async (classroomId, formData) => {
   const response = await API.post(`/classrooms/${classroomId}/upload-roster`, formData, {
     headers: {

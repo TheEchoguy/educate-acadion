@@ -10,6 +10,8 @@ export default function ClassroomHeader({
   onRegenerateCode = null,
   regenerating = false,
   showJoinCode = true,
+  onEditClassroom = null,
+  onDeleteClassroom = null,
 }) {
   if (!classroom) return null;
 
@@ -51,6 +53,32 @@ export default function ClassroomHeader({
           <span className={`classroom-status-badge badge-status status-${status.toLowerCase()}`}>
             <span className="status-dot">●</span> {status}
           </span>
+          {(onEditClassroom || onDeleteClassroom) && (
+            <div className="classroom-header-action-group">
+              {onEditClassroom && (
+                <button
+                  type="button"
+                  className="btn-header-action btn-header-edit"
+                  onClick={onEditClassroom}
+                  id="btn-header-edit-classroom"
+                  title="Edit Classroom Settings"
+                >
+                  ⚙️ Settings
+                </button>
+              )}
+              {onDeleteClassroom && (
+                <button
+                  type="button"
+                  className="btn-header-action btn-header-delete"
+                  onClick={onDeleteClassroom}
+                  id="btn-header-delete-classroom"
+                  title="Delete Classroom"
+                >
+                  🗑️ Delete
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

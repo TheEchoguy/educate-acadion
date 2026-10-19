@@ -13,6 +13,8 @@ import {
   uploadRoster,
   addStudent,
   regenerateJoinCode,
+  updateClassroom,
+  deleteClassroom,
 } from "../../services/classroomService";
 import "./ClassroomWorkspace.css";
 import TeacherSyllabusManagement from "../../components/syllabus/TeacherSyllabusManagement";
@@ -30,6 +32,24 @@ function ClassroomWorkspace() {
   const [joinRequests, setJoinRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
+
+  // Edit & Delete Classroom Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    subjectName: "",
+    subjectCode: "",
+    department: "",
+    semester: "1",
+    section: "A",
+    academicBatch: "",
+    status: "ACTIVE",
+    joinCodeEnabled: true,
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingClassroom, setDeletingClassroom] = useState(false);
 
   // Section 1: "management" | Section 2: "syllabus" | Section 3: "scheduling"
   const sParam = searchParams.get("section");
@@ -146,6 +166,58 @@ function ClassroomWorkspace() {
       toast.error(err.response?.data?.message || "Failed to regenerate join code");
     } finally {
       setRegenerating(false);
+    }
+  };
+
+  const handleOpenEditModal = () => {
+    if (!classroom) return;
+    setEditFormData({
+      name: classroom.name || "",
+      subjectName: classroom.subjectName || "",
+      subjectCode: classroom.subjectCode || "",
+      department: classroom.department || "",
+      semester: classroom.semester ? String(classroom.semester) : "1",
+      section: classroom.section || "A",
+      academicBatch: classroom.academicBatch || classroom.academicYear || "",
+      status: classroom.status || "ACTIVE",
+      joinCodeEnabled: classroom.joinCodeEnabled !== false,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editFormData.name.trim() || !editFormData.subjectName.trim()) {
+      toast.error("Classroom name and subject name are required");
+      return;
+    }
+
+    try {
+      setEditSubmitting(true);
+      const updated = await updateClassroom(id, editFormData);
+      setClassroom(updated);
+      setShowEditModal(false);
+      toast.success("Classroom settings updated successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to update classroom settings");
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleDeleteSubmit = async () => {
+    try {
+      setDeletingClassroom(true);
+      await deleteClassroom(id);
+      toast.success("Classroom deleted successfully");
+      setShowDeleteModal(false);
+      navigate("/teacher/classrooms");
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to delete classroom");
+    } finally {
+      setDeletingClassroom(false);
     }
   };
 
@@ -283,6 +355,8 @@ function ClassroomWorkspace() {
               onRegenerateCode={handleRegenerateCode}
               regenerating={regenerating}
               showJoinCode={true}
+              onEditClassroom={handleOpenEditModal}
+              onDeleteClassroom={() => setShowDeleteModal(true)}
             />
 
             {/* THREE CLEARLY SEPARATED TOP-LEVEL WORKSPACE SECTIONS */}
@@ -673,6 +747,192 @@ function ClassroomWorkspace() {
           </>
         )}
       </div>
+
+      {/* EDIT CLASSROOM SETTINGS MODAL */}
+      {showEditModal && (
+        <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>⚙️ Edit Classroom Settings</h2>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowEditModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="create-classroom-form">
+              <div className="form-group">
+                <label>Classroom Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. 5th Sem CS-A"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                />
+              </div>
+
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label>Subject Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Database Systems"
+                    value={editFormData.subjectName}
+                    onChange={(e) => setEditFormData({ ...editFormData, subjectName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Subject Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. CS501"
+                    value={editFormData.subjectCode}
+                    onChange={(e) => setEditFormData({ ...editFormData, subjectCode: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row-3">
+                <div className="form-group">
+                  <label>Department</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. CSE"
+                    value={editFormData.department}
+                    onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Semester</label>
+                  <select
+                    value={editFormData.semester}
+                    onChange={(e) => setEditFormData({ ...editFormData, semester: e.target.value })}
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                      <option key={s} value={s}>
+                        Semester {s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Section</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. A"
+                    value={editFormData.section}
+                    onChange={(e) => setEditFormData({ ...editFormData, section: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row-2">
+                <div className="form-group">
+                  <label>Academic Batch / Year</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 2024-2025"
+                    value={editFormData.academicBatch}
+                    onChange={(e) => setEditFormData({ ...editFormData, academicBatch: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                  >
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="INACTIVE">INACTIVE</option>
+                    <option value="ARCHIVED">ARCHIVED</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group checkbox-form-group">
+                <label className="checkbox-label-row">
+                  <input
+                    type="checkbox"
+                    checked={editFormData.joinCodeEnabled}
+                    onChange={(e) => setEditFormData({ ...editFormData, joinCodeEnabled: e.target.checked })}
+                  />
+                  <span>Allow student self-enrollment via Join Code</span>
+                </label>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={editSubmitting}
+                >
+                  {editSubmitting ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {showDeleteModal && (
+        <div className="modal-backdrop" onClick={() => !deletingClassroom && setShowDeleteModal(false)}>
+          <div className="modal-content-card modal-delete-confirm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🗑️ Delete Classroom</h2>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deletingClassroom}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="delete-modal-body">
+              <p>Are you sure you want to permanently delete this classroom?</p>
+              <div className="delete-classroom-highlight">
+                <strong>{classroom?.name}</strong> ({classroom?.subjectCode ? `${classroom.subjectCode} - ` : ""}{classroom?.subjectName})
+              </div>
+              <p className="delete-warning-text">
+                ⚠️ This will permanently remove the classroom along with student memberships and enrollment records. This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deletingClassroom}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-danger-confirm"
+                onClick={handleDeleteSubmit}
+                disabled={deletingClassroom}
+              >
+                {deletingClassroom ? "Deleting..." : "Permanently Delete Classroom"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

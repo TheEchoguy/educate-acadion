@@ -63,6 +63,27 @@ public class ClassroomController {
         return ResponseEntity.ok(classroomService.getClassroomDetails(id, email));
     }
 
+    // 4b. Update Classroom Settings (Teacher owner or Admin)
+    @PutMapping("/{id}")
+    public ResponseEntity<ClassroomResponse> updateClassroom(
+            @PathVariable("id") String id,
+            @RequestBody com.acadion.backend.dto.classroom.UpdateClassroomRequest request,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.updateClassroom(id, request, email));
+    }
+
+    // 4c. Delete Classroom (Teacher owner or Admin)
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> deleteClassroom(
+            @PathVariable("id") String id,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.deleteClassroom(id, email));
+    }
+
     // 5. Upload Roster (CSV / XLSX)
     @PostMapping(value = {"/{id}/upload-roster", "/{id}/roster/import"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<RosterImportSummary> uploadRoster(
