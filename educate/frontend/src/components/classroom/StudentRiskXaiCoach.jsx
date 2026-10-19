@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getMyRiskXai, getStudentRiskXai } from "../../services/classroomService";
+import StudentRagTutorModal from "./StudentRagTutorModal";
 import "./StudentRiskXaiCoach.css";
 
 const StudentRiskXaiCoach = ({ classroomId, studentUsn = null }) => {
@@ -7,6 +8,11 @@ const StudentRiskXaiCoach = ({ classroomId, studentUsn = null }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [completedSteps, setCompletedSteps] = useState({});
+  const [tutorModal, setTutorModal] = useState({
+    isOpen: false,
+    focusTopic: null,
+    focusModule: null,
+  });
 
   useEffect(() => {
     let active = true;
@@ -189,31 +195,65 @@ const StudentRiskXaiCoach = ({ classroomId, studentUsn = null }) => {
       {/* 3. PERSONALIZED AI ACTION PLAN */}
       {studentActionPlan && studentActionPlan.length > 0 && (
         <div className="xai-section">
-          <div className="xai-section-head">
+          <div className="xai-section-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
             <div>
               <h4 className="xai-section-title">🎯 Targeted AI Study Prescription</h4>
               <p className="xai-section-sub">
                 Follow this actionable checklist to reinforce your weak topic areas before next assessment:
               </p>
             </div>
+            <button
+              type="button"
+              className="xai-study-tutor-btn"
+              onClick={() =>
+                setTutorModal({
+                  isOpen: true,
+                  focusTopic: "High-Priority Exam Topics & Weak Points",
+                  focusModule: 1,
+                })
+              }
+            >
+              🤖 Study with AI Tutor
+            </button>
           </div>
 
           <div className="xai-plan-checklist">
-            {studentActionPlan.map((step, idx) => (
-              <label
-                key={idx}
-                className={`xai-plan-item ${completedSteps[idx] ? "completed" : ""}`}
-                onClick={() => toggleStep(idx)}
-              >
-                <input
-                  type="checkbox"
-                  checked={!!completedSteps[idx]}
-                  onChange={() => toggleStep(idx)}
-                  className="xai-checkbox"
-                />
-                <span className="xai-step-text">{step}</span>
-              </label>
-            ))}
+            {studentActionPlan.map((step, idx) => {
+              // Extract potential module number or topic keywords from step
+              const modMatch = step.match(/Module\s*(\d)/i);
+              const stepMod = modMatch ? parseInt(modMatch[1], 10) : 1;
+
+              return (
+                <div
+                  key={idx}
+                  className={`xai-plan-item ${completedSteps[idx] ? "completed" : ""}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!completedSteps[idx]}
+                    onChange={() => toggleStep(idx)}
+                    className="xai-checkbox"
+                  />
+                  <span className="xai-step-text" onClick={() => toggleStep(idx)} style={{ cursor: "pointer", flex: 1 }}>
+                    {step}
+                  </span>
+                  <button
+                    type="button"
+                    className="xai-tutor-chip"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTutorModal({
+                        isOpen: true,
+                        focusTopic: step.replace(/^(Focus on|Revise|Review|Practice)\s*/i, "").slice(0, 50),
+                        focusModule: stepMod,
+                      });
+                    }}
+                  >
+                    🤖 Study Notes
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -227,6 +267,22 @@ const StudentRiskXaiCoach = ({ classroomId, studentUsn = null }) => {
             <p>{teacherIntervention}</p>
           </div>
         </div>
+      )}
+
+      {/* 5. INTERACTIVE RAG STUDY TUTOR DRAWER / MODAL */}
+      {tutorModal.isOpen && (
+        <StudentRagTutorModal
+          classroomId={classroomId}
+          focusTopic={tutorModal.focusTopic}
+          focusModule={tutorModal.focusModule}
+          onClose={() =>
+            setTutorModal({
+              isOpen: false,
+              focusTopic: null,
+              focusModule: null,
+            })
+          }
+        />
       )}
     </div>
   );

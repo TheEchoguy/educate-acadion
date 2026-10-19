@@ -19,9 +19,10 @@ import {
 import "./IaMarksUploadSection.css";
 import TeacherClassAnalyticsView from "./TeacherClassAnalyticsView";
 import TeacherRiskWatchlistView from "./TeacherRiskWatchlistView";
+import TeacherNotesManager from "./TeacherNotesManager";
 
 const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [] }) => {
-  const [activeStep, setActiveStep] = useState(1); // 1: Blueprint, 2: Excel Ingestion / Manual Grid, 3: 4-Level Analytics, 4: AI Risk Watchlist
+  const [activeStep, setActiveStep] = useState(1); // 1: Blueprint, 2: Excel Ingestion / Manual Grid, 3: 4-Level Analytics, 4: AI Risk Watchlist, 5: Module Notes RAG
   const [entryMode, setEntryMode] = useState("excel"); // 'excel' | 'manual'
   const [manualMarks, setManualMarks] = useState({}); // { [usn]: { [code]: value } }
   const [isSavingManual, setIsSavingManual] = useState(false);
@@ -716,6 +717,14 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
         >
           <span className="step-number">4</span>
           <span>Step 4: 🚨 AI Risk Watchlist & XAI</span>
+        </button>
+        <button
+          type="button"
+          className={`ia-step-btn ${activeStep === 5 ? "active" : ""}`}
+          onClick={() => setActiveStep(5)}
+        >
+          <span className="step-number">5</span>
+          <span>Step 5: 📚 Module Notes & RAG Setup</span>
         </button>
       </div>
 
@@ -1564,6 +1573,13 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
         <TeacherRiskWatchlistView
           classroomId={classroomId}
           classroomName={classroomName}
+        />
+      )}
+
+      {/* STEP 5: MODULE 1-5 COURSE NOTES RAG INGESTION & STUDY TUTOR */}
+      {activeStep === 5 && (
+        <TeacherNotesManager
+          classroomId={classroomId}
         />
       )}
 

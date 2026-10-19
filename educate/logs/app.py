@@ -17,8 +17,9 @@ import uvicorn
 from ai_extractor import extract_questions_with_ai, MODEL_NAME
 from pdf_reader import extract_text_from_pdf_bytes, extract_text_from_pdf_file, extract_text_from_image_bytes
 from ml_risk_xai import analyze_student_risk
+from rag_tutor import index_module_notes, ask_study_tutor, get_indexed_modules
 
-app = FastAPI(title="Acadion AI Paper Parser & ML XAI Microservice", version="1.1.0")
+app = FastAPI(title="Acadion AI Paper Parser, ML XAI & RAG Tutor Microservice", version="1.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,6 +46,12 @@ class StudentRiskPredictionRequest(BaseModel):
     attendancePct: Optional[float] = 85.0
     weakTopics: Optional[List[str]] = []
 
+class RagChatRequest(BaseModel):
+    classroomId: str
+    query: str
+    focusTopic: Optional[str] = None
+    focusModule: Optional[int] = None
+
 @app.get("/")
 @app.get("/health")
 def health():
@@ -54,6 +61,59 @@ def health():
         "model": MODEL_NAME,
         "port": 5000
     }
+
+@app.post("/rag/upload-notes")
+async def rag_upload_notes_endpoint(
+    file: UploadFile = File(...),
+    classroomId: str = Form(...),
+    moduleNumber: int = Form(...)
+):
+    """
+    Uploads and indexes course notes PDF for a specific syllabus module (1 to 5).
+    """
+    try:
+        content = await file.read()
+        filename = file.filename or f"module_{moduleNumber}_notes.pdf"
+        result = index_module_notes(
+            classroom_id=classroomId,
+            module_number=int(moduleNumber),
+            pdf_bytes=content,
+            filename=filename
+        )
+        return result
+    except Exception as e:
+        print(f"[RAG Upload Error]: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to index module notes: {str(e)}")
+
+@app.post("/rag/chat")
+def rag_chat_endpoint(req: RagChatRequest):
+    """
+    Grounded Study Tutor chat against uploaded course notes.
+    """
+    try:
+        if not req.query or not req.query.strip():
+            raise HTTPException(status_code=400, detail="Empty query provided")
+
+        result = ask_study_tutor(
+            classroom_id=req.classroomId,
+            student_query=req.query,
+            focus_topic=req.focusTopic,
+            focus_module=req.focusModule
+        )
+        return result
+    except Exception as e:
+        print(f"[RAG Chat Error]: {e}")
+        raise HTTPException(status_code=500, detail=f"RAG Tutor query failed: {str(e)}")
+
+@app.get("/rag/modules/{classroom_id}")
+def rag_get_modules_status_endpoint(classroom_id: str):
+    """
+    Returns indexing status for Modules 1 to 5.
+    """
+    try:
+        return get_indexed_modules(classroom_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check module status: {str(e)}")
 
 @app.post("/ml/predict-student-risk")
 def predict_student_risk_endpoint(req: StudentRiskPredictionRequest):

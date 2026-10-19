@@ -274,3 +274,37 @@ export const getClassroomRiskWatchlist = async (classroomId) => {
   return response.data;
 };
 
+// ============================================================================
+// ACADEMIC INTELLIGENCE - MODULE 1–5 NOTES RAG STUDY TUTOR
+// ============================================================================
+export const uploadModuleNotes = async (classroomId, moduleNumber, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/notes/upload?moduleNumber=${moduleNumber}`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+  return response.data;
+};
+
+export const askRagTutor = async (classroomId, payload) => {
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/tutor/chat`,
+    payload
+  );
+  return response.data;
+};
+
+export const getModuleNotesStatus = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/notes/status`
+  );
+  return response.data;
+};
+
+
