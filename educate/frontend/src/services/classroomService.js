@@ -31,15 +31,26 @@ export const deleteClassroom = async (classroomId) => {
 };
 
 export const importRoster = async (classroomId, formData) => {
-  const response = await API.post(`/classrooms/${classroomId}/upload-roster`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const response = await API.post(`/classrooms/${classroomId}/upload-roster`, formData);
   return response.data;
 };
 
 export const uploadRoster = importRoster;
+
+export const parseRoster = async (classroomId, formData) => {
+  const response = await API.post(`/classrooms/${classroomId}/roster/parse`, formData);
+  return response.data;
+};
+
+export const enrollBatch = async (classroomId, students) => {
+  const response = await API.post(`/classrooms/${classroomId}/roster/enroll-batch`, { students });
+  return response.data;
+};
+
+export const removeAllMembers = async (classroomId) => {
+  const response = await API.delete(`/classrooms/${classroomId}/members`);
+  return response.data;
+};
 
 export const addStudent = async (classroomId, studentData) => {
   const response = await API.post(`/classrooms/${classroomId}/add-student`, studentData);
@@ -80,3 +91,42 @@ export const regenerateJoinCode = async (classroomId) => {
   const response = await API.post(`/classrooms/${classroomId}/join-code/regenerate`);
   return response.data;
 };
+
+export const getEvaluationScheme = async (classroomId) => {
+  const response = await API.get(`/classrooms/${classroomId}/evaluation-scheme`);
+  return response.data;
+};
+
+export const updateEvaluationScheme = async (classroomId, schemeData) => {
+  const response = await API.put(`/classrooms/${classroomId}/evaluation-scheme`, schemeData);
+  return response.data;
+};
+
+// ============================================================================
+// ACADEMIC INTELLIGENCE - IA SPLIT-UP MARKS
+// ============================================================================
+export const downloadIaSampleTemplate = async (classroomId) => {
+  const response = await API.get(`/classrooms/${classroomId}/intelligence/download-sample-template`, {
+    responseType: "blob",
+  });
+  return response.data;
+};
+
+export const uploadIaMarks = async (classroomId, formData, iaNumber) => {
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/upload-ia-marks?iaNumber=${iaNumber}`,
+    formData
+  );
+  return response.data;
+};
+
+export const getStudentIaBreakdown = async (classroomId, usn) => {
+  const response = await API.get(`/classrooms/${classroomId}/intelligence/student/${usn}`);
+  return response.data;
+};
+
+export const getIaRecordsByNumber = async (classroomId, iaNumber) => {
+  const response = await API.get(`/classrooms/${classroomId}/intelligence/ia/${iaNumber}`);
+  return response.data;
+};
+

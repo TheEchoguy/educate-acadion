@@ -206,11 +206,13 @@ public class AcademicDocumentService {
     public Classroom verifyTeacherOwnership(String classroomId, String teacherEmail) {
         Classroom classroom = classroomRepository.findById(classroomId)
                 .orElseThrow(() -> new IllegalArgumentException("Classroom not found: " + classroomId));
-        User user = userRepository.findByEmail(teacherEmail)
+        User user = userRepository.findFirstByEmailIgnoreCase(teacherEmail)
+                .or(() -> userRepository.findByEmail(teacherEmail))
                 .orElseThrow(() -> new AccessDeniedException("User not found: " + teacherEmail));
 
-        boolean isOwner = classroom.getTeacherId() != null && classroom.getTeacherId().equals(user.getId());
-        boolean isAdmin = user.getRole() != null && user.getRole().name().equals("ADMIN");
+        boolean isOwner = classroom.getTeacherId() != null && 
+                (classroom.getTeacherId().equals(user.getId()) || classroom.getTeacherId().equalsIgnoreCase(user.getEmail()));
+        boolean isAdmin = user.getRole() != null && "ADMIN".equalsIgnoreCase(user.getRole().name());
 
         if (!isOwner && !isAdmin) {
             throw new AccessDeniedException("Access denied: You are not the authorized instructor for this classroom");

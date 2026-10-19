@@ -96,7 +96,29 @@ public class ClassroomController {
         return ResponseEntity.ok(summary);
     }
 
-    // 5b. Add Single Student manually by USN or Email
+    // 5b. Parse Roster File (Excel / CSV) - Checks USNs in DB without enrolling yet
+    @PostMapping(value = "/{id}/roster/parse", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<com.acadion.backend.dto.classroom.RosterParseResult> parseRosterPreview(
+            @PathVariable("id") String id,
+            @RequestParam("file") MultipartFile file,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.parseRosterPreview(id, file, email));
+    }
+
+    // 5c. Enroll Batch of Students (All or Selected from parsed list)
+    @PostMapping("/{id}/roster/enroll-batch")
+    public ResponseEntity<Map<String, Object>> enrollBatch(
+            @PathVariable("id") String id,
+            @RequestBody com.acadion.backend.dto.classroom.BulkEnrollRequest request,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.enrollBatch(id, request, email));
+    }
+
+    // 5d. Add Single Student manually by USN or Email
     @PostMapping("/{id}/add-student")
     public ResponseEntity<Map<String, Object>> addStudent(
             @PathVariable("id") String id,
@@ -116,6 +138,16 @@ public class ClassroomController {
     ) {
         String email = getAuthenticatedEmail(principal);
         return ResponseEntity.ok(classroomService.getClassroomMembers(id, email));
+    }
+
+    // 6b. Remove All Members from Classroom (Teacher only)
+    @DeleteMapping("/{id}/members")
+    public ResponseEntity<Map<String, Object>> removeAllMembers(
+            @PathVariable("id") String id,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.removeAllMembers(id, email));
     }
 
     // 7. Student Submits Join-Code Request

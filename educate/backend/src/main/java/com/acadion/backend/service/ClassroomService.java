@@ -1,11 +1,14 @@
 package com.acadion.backend.service;
 
+import com.acadion.backend.dto.classroom.AddStudentRequest;
+import com.acadion.backend.dto.classroom.BulkEnrollRequest;
 import com.acadion.backend.dto.classroom.ClassroomMemberDto;
 import com.acadion.backend.dto.classroom.ClassroomResponse;
 import com.acadion.backend.dto.classroom.CreateClassroomRequest;
-import com.acadion.backend.dto.classroom.UpdateClassroomRequest;
 import com.acadion.backend.dto.classroom.RegenerateJoinCodeResponse;
 import com.acadion.backend.dto.classroom.RosterImportSummary;
+import com.acadion.backend.dto.classroom.RosterParseResult;
+import com.acadion.backend.dto.classroom.UpdateClassroomRequest;
 import com.acadion.backend.entity.Classroom;
 import com.acadion.backend.entity.ClassroomMembership;
 import com.acadion.backend.entity.Role;
@@ -250,10 +253,10 @@ public class ClassroomService {
         // 1. Check if user already exists by USN or Email
         Optional<User> existingUserOpt = Optional.empty();
         if (rawUsn != null && !rawUsn.isBlank()) {
-            existingUserOpt = userRepository.findByUsnIgnoreCase(rawUsn);
+            existingUserOpt = userRepository.findFirstByUsnIgnoreCase(rawUsn);
         }
         if (existingUserOpt.isEmpty() && rawEmail != null && !rawEmail.isBlank()) {
-            existingUserOpt = userRepository.findByEmailIgnoreCase(rawEmail);
+            existingUserOpt = userRepository.findFirstByEmailIgnoreCase(rawEmail);
         }
 
         User student;
@@ -377,10 +380,10 @@ public class ClassroomService {
             // Check if user exists by USN or Email
             Optional<User> userOpt = Optional.empty();
             if (trimmedUsn != null && !trimmedUsn.isBlank()) {
-                userOpt = userRepository.findByUsnIgnoreCase(trimmedUsn);
+                userOpt = userRepository.findFirstByUsnIgnoreCase(trimmedUsn);
             }
             if (userOpt.isEmpty() && rawEmail != null && !rawEmail.isBlank()) {
-                userOpt = userRepository.findByEmailIgnoreCase(rawEmail.trim());
+                userOpt = userRepository.findFirstByEmailIgnoreCase(rawEmail.trim());
             }
 
             User student;
@@ -447,6 +450,194 @@ public class ClassroomService {
                 .alreadyMemberUsns(alreadyMemberUsns)
                 .invalidRows(invalidRows)
                 .build();
+    }
+
+    // =========================================================================
+    // 5b. PARSE ROSTER PREVIEW (Excel / CSV) - Checks DB without Enrolling
+    // =========================================================================
+    public RosterParseResult parseRosterPreview(String classroomId, MultipartFile file, String teacherEmail) {
+        Classroom classroom = getExistingClassroom(classroomId);
+        User teacher = getAuthenticatedTeacher(teacherEmail);
+        verifyClassroomOwnership(classroom, teacher);
+
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No roster file provided or file is empty");
+        }
+
+        String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "roster.xlsx";
+        String lowerFilename = filename.toLowerCase();
+        List<ParsedStudentRow> rows;
+
+        try {
+            if (lowerFilename.endsWith(".xlsx") || lowerFilename.endsWith(".xls")) {
+                rows = parseExcelRows(file);
+            } else {
+                rows = parseCsvRows(file);
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse roster file {}: {}", filename, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse roster file: " + e.getMessage());
+        }
+
+        List<RosterParseResult.ParsedStudentPreview> previewList = new ArrayList<>();
+        int matchedInDbCount = 0;
+        int notInDbCount = 0;
+        int alreadyEnrolledCount = 0;
+
+        Set<String> seenKeys = new HashSet<>();
+
+        for (ParsedStudentRow row : rows) {
+            String rawUsn = row.getUsn();
+            String rawEmail = row.getEmail();
+            String rawName = row.getName();
+
+            String trimmedUsn = rawUsn != null ? rawUsn.trim().toUpperCase() : null;
+            String trimmedEmail = rawEmail != null ? rawEmail.trim().toLowerCase() : null;
+
+            if ((trimmedUsn == null || trimmedUsn.isBlank()) && (trimmedEmail == null || trimmedEmail.isBlank())) {
+                continue;
+            }
+
+            if (trimmedUsn != null && isHeaderOrTitleText(trimmedUsn)) {
+                continue;
+            }
+
+            String dedupeKey = (trimmedUsn != null && !trimmedUsn.isBlank()) ? trimmedUsn : trimmedEmail;
+            if (!seenKeys.add(dedupeKey)) {
+                continue;
+            }
+
+            // Check if user exists in database
+            Optional<User> userOpt = Optional.empty();
+            if (trimmedUsn != null && !trimmedUsn.isBlank()) {
+                userOpt = userRepository.findFirstByUsnIgnoreCase(trimmedUsn);
+            }
+            if (userOpt.isEmpty() && trimmedEmail != null && !trimmedEmail.isBlank()) {
+                userOpt = userRepository.findFirstByEmailIgnoreCase(trimmedEmail);
+            }
+
+            boolean existsInDb = userOpt.isPresent();
+            String studentId = null;
+            String resolvedName = rawName != null && !rawName.isBlank() ? rawName.trim() : null;
+            String resolvedEmail = trimmedEmail;
+            boolean alreadyEnrolled = false;
+
+            if (existsInDb) {
+                User dbUser = userOpt.get();
+                studentId = dbUser.getId();
+                if (resolvedName == null || resolvedName.isBlank()) {
+                    resolvedName = dbUser.getName();
+                }
+                if (resolvedEmail == null || resolvedEmail.isBlank()) {
+                    resolvedEmail = dbUser.getEmail();
+                }
+                matchedInDbCount++;
+
+                // Check enrollment
+                Optional<ClassroomMembership> membership = classroomMembershipRepository
+                        .findByClassroomIdAndStudentId(classroom.getId(), studentId);
+                if (membership.isPresent() && "ACTIVE".equalsIgnoreCase(membership.get().getMembershipStatus())) {
+                    alreadyEnrolled = true;
+                    alreadyEnrolledCount++;
+                }
+            } else {
+                notInDbCount++;
+            }
+
+            String statusMessage;
+            if (alreadyEnrolled) {
+                statusMessage = "Already Enrolled";
+            } else if (existsInDb) {
+                statusMessage = "Registered in DB";
+            } else {
+                statusMessage = "Not Registered in DB";
+            }
+
+            previewList.add(RosterParseResult.ParsedStudentPreview.builder()
+                    .rowNumber(row.getRowNumber())
+                    .usn(trimmedUsn)
+                    .email(resolvedEmail)
+                    .name(resolvedName)
+                    .existsInDb(existsInDb)
+                    .studentId(studentId)
+                    .alreadyEnrolled(alreadyEnrolled)
+                    .statusMessage(statusMessage)
+                    .build());
+        }
+
+        return RosterParseResult.builder()
+                .filename(filename)
+                .totalRows(previewList.size())
+                .matchedInDbCount(matchedInDbCount)
+                .notInDbCount(notInDbCount)
+                .alreadyEnrolledCount(alreadyEnrolledCount)
+                .students(previewList)
+                .build();
+    }
+
+    // =========================================================================
+    // 5c. ENROLL BATCH OF STUDENTS (All or Selected from parsed list)
+    // =========================================================================
+    public Map<String, Object> enrollBatch(String classroomId, BulkEnrollRequest request, String teacherEmail) {
+        Classroom classroom = getExistingClassroom(classroomId);
+        User teacher = getAuthenticatedTeacher(teacherEmail);
+        verifyClassroomOwnership(classroom, teacher);
+
+        if (request == null || request.getStudents() == null || request.getStudents().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No students provided to enroll");
+        }
+
+        int addedCount = 0;
+        int alreadyEnrolledCount = 0;
+        List<String> enrolledUsns = new ArrayList<>();
+
+        for (AddStudentRequest studentReq : request.getStudents()) {
+            try {
+                Map<String, Object> res = addStudent(classroomId, studentReq, teacherEmail);
+                if (Boolean.TRUE.equals(res.get("success"))) {
+                    addedCount++;
+                    enrolledUsns.add(studentReq.getUsn() != null ? studentReq.getUsn() : studentReq.getEmail());
+                }
+            } catch (ResponseStatusException rse) {
+                if (rse.getStatusCode() == HttpStatus.CONFLICT) {
+                    alreadyEnrolledCount++;
+                } else {
+                    log.warn("Error adding student {} to classroom {}: {}", studentReq.getUsn(), classroomId, rse.getReason());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to enroll student {}: {}", studentReq.getUsn(), e.getMessage());
+            }
+        }
+
+        return Map.of(
+                "success", true,
+                "addedCount", addedCount,
+                "alreadyEnrolledCount", alreadyEnrolledCount,
+                "totalSubmitted", request.getStudents().size(),
+                "enrolledUsns", enrolledUsns
+        );
+    }
+
+    // =========================================================================
+    // 5d. REMOVE ALL MEMBERS FROM CLASSROOM (Teacher Only)
+    // =========================================================================
+    public Map<String, Object> removeAllMembers(String classroomId, String teacherEmail) {
+        Classroom classroom = getExistingClassroom(classroomId);
+        User teacher = getAuthenticatedTeacher(teacherEmail);
+        verifyClassroomOwnership(classroom, teacher);
+
+        classroomMembershipRepository.deleteByClassroomId(classroomId);
+        classroom.setEnrolledStudents(new ArrayList<>());
+        classroom.setUpdatedAt(LocalDateTime.now());
+        classroomRepository.save(classroom);
+
+        log.info("Teacher {} removed all members from classroom {}", teacherEmail, classroomId);
+
+        return Map.of(
+                "success", true,
+                "message", "All students have been removed from the classroom",
+                "classroomId", classroomId
+        );
     }
 
     // =========================================================================

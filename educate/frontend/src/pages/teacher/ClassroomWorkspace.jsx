@@ -5,13 +5,11 @@ import toast from "react-hot-toast";
 import {
   getClassroomDetails,
   getClassroomMembers,
-  getJoinRequests,
-  approveJoinRequest,
-  rejectJoinRequest,
   removeMember,
-  importRoster,
-  uploadRoster,
+  removeAllMembers,
   addStudent,
+  parseRoster,
+  enrollBatch,
   regenerateJoinCode,
   updateClassroom,
   deleteClassroom,
@@ -19,6 +17,8 @@ import {
 import "./ClassroomWorkspace.css";
 import TeacherSyllabusManagement from "../../components/syllabus/TeacherSyllabusManagement";
 import TeacherSyllabusSchedulingSection from "../../components/syllabus/TeacherSyllabusSchedulingSection";
+import EvaluationSchemeConfig from "../../components/classroom/EvaluationSchemeConfig";
+import IaMarksUploadSection from "../../components/classroom/IaMarksUploadSection";
 import ClassroomHeader from "../../components/classroom/ClassroomHeader";
 
 function ClassroomWorkspace() {
@@ -29,7 +29,6 @@ function ClassroomWorkspace() {
 
   const [classroom, setClassroom] = useState(null);
   const [members, setMembers] = useState([]);
-  const [joinRequests, setJoinRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
 
@@ -51,31 +50,43 @@ function ClassroomWorkspace() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingClassroom, setDeletingClassroom] = useState(false);
 
+  // Remove All Students Modal State
+  const [showRemoveAllModal, setShowRemoveAllModal] = useState(false);
+  const [removingAll, setRemovingAll] = useState(false);
+
   // Section 1: "management" | Section 2: "syllabus" | Section 3: "scheduling"
   const sParam = searchParams.get("section");
   const tParam = searchParams.get("tab") || location.state?.tab;
   const subParam = searchParams.get("subtab");
 
   let activeSection = "syllabus";
-  if (sParam === "management" || (tParam && ["members", "requests", "import"].includes(tParam))) {
+  if (sParam === "management" || (tParam && ["members", "import", "iamarks"].includes(tParam))) {
     activeSection = "management";
   } else if (sParam === "scheduling" || tParam === "scheduling") {
     activeSection = "scheduling";
+  } else if (sParam === "scheme" || tParam === "scheme") {
+    activeSection = "scheme";
+  } else if (sParam === "iamarks" || sParam === "intelligence" || tParam === "iamarks") {
+    activeSection = "management";
   } else if (sParam === "syllabus" || tParam === "syllabus") {
     activeSection = "syllabus";
   }
 
-  // Management SubTab: "members" | "requests" | "import"
+  // Management SubTab: "members" | "import" | "iamarks"
   let managementTab = "members";
-  if (subParam && ["members", "requests", "import"].includes(subParam)) {
+  if (subParam && ["members", "import", "iamarks"].includes(subParam)) {
     managementTab = subParam;
-  } else if (tParam && ["members", "requests", "import"].includes(tParam)) {
+  } else if (tParam && ["members", "import", "iamarks"].includes(tParam)) {
     managementTab = tParam;
+  } else if (sParam === "iamarks" || sParam === "intelligence") {
+    managementTab = "iamarks";
   }
 
   const handleSectionChange = (section) => {
     if (section === "management") {
       setSearchParams({ section: "management", subtab: managementTab });
+    } else if (section === "iamarks") {
+      setSearchParams({ section: "management", subtab: "iamarks" });
     } else {
       setSearchParams({ section });
     }
@@ -92,23 +103,23 @@ function ClassroomWorkspace() {
   const [quickStudent, setQuickStudent] = useState({ usn: "", email: "", name: "" });
   const [addingStudent, setAddingStudent] = useState(false);
 
-  // Roster file upload state
+  // Classroom Import (Excel/CSV parse preview & batch enrollment) state
   const [selectedFile, setSelectedFile] = useState(null);
-  const [importing, setImporting] = useState(false);
-  const [importSummary, setImportSummary] = useState(null);
+  const [parsingRoster, setParsingRoster] = useState(false);
+  const [parsedRoster, setParsedRoster] = useState(null);
+  const [enrollingBatch, setEnrollingBatch] = useState(false);
+  const [addingMemberId, setAddingMemberId] = useState(null);
 
   const loadClassroomData = async () => {
     try {
       setLoading(true);
-      const [clsData, membersData, requestsData] = await Promise.all([
+      const [clsData, membersData] = await Promise.all([
         getClassroomDetails(id),
         getClassroomMembers(id).catch(() => []),
-        getJoinRequests(id).catch(() => []),
       ]);
 
       setClassroom(clsData);
       setMembers(membersData || []);
-      setJoinRequests(requestsData || []);
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to load classroom details");
@@ -122,13 +133,11 @@ function ClassroomWorkspace() {
     Promise.all([
       getClassroomDetails(id),
       getClassroomMembers(id).catch(() => []),
-      getJoinRequests(id).catch(() => []),
     ])
-      .then(([clsData, membersData, requestsData]) => {
+      .then(([clsData, membersData]) => {
         if (active) {
           setClassroom(clsData);
           setMembers(membersData || []);
-          setJoinRequests(requestsData || []);
           setLoading(false);
         }
       })
@@ -143,6 +152,7 @@ function ClassroomWorkspace() {
     return () => {
       active = false;
     };
+  }, [id]);
   }, [id]);
 
   const handleCopyCode = () => {
@@ -250,11 +260,12 @@ function ClassroomWorkspace() {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
+      setParsedRoster(null);
     }
   };
 
-  const handleRosterSubmit = async (e) => {
-    e.preventDefault();
+  const handleParseRoster = async (e) => {
+    if (e) e.preventDefault();
     if (!selectedFile) {
       toast.error("Please select a valid CSV or XLSX roster file first");
       return;
@@ -264,48 +275,106 @@ function ClassroomWorkspace() {
     formData.append("file", selectedFile);
 
     try {
-      setImporting(true);
-      const summary = await uploadRoster(id, formData);
-      setImportSummary(summary);
-      toast.success(
-        `Roster Uploaded! ${summary.totalProcessed || summary.totalRows} processed (${summary.existingVerifiedUsersLinked || summary.addedCount || 0} verified in DB, ${summary.newStudentAccountsCreated || 0} new accounts created)`
-      );
-      setSelectedFile(null);
-      // Reset file input element
-      const fileInput = document.getElementById("excelRosterInput") || document.getElementById("rosterFileInput");
-      if (fileInput) fileInput.value = "";
-      loadClassroomData();
+      setParsingRoster(true);
+      const result = await parseRoster(id, formData);
+      setParsedRoster(result);
+      toast.success(`Parsed ${result.totalRows} student(s) from ${result.filename}!`);
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.message || "Roster upload failed");
+      toast.error(err.response?.data?.message || "Failed to parse roster file");
     } finally {
-      setImporting(false);
+      setParsingRoster(false);
     }
   };
 
-  const handleApprove = async (studentId, studentName) => {
+  const handleAddIndividualStudent = async (student, index) => {
     try {
-      await approveJoinRequest(id, studentId);
-      toast.success(`Approved ${studentName || "student"} successfully!`);
+      setAddingMemberId(student.usn || student.email || index);
+      await addStudent(id, {
+        usn: student.usn,
+        email: student.email,
+        name: student.name,
+      });
+      toast.success(`Enrolled ${student.name || student.usn || "student"} successfully!`);
+      setParsedRoster((prev) => {
+        if (!prev) return prev;
+        const updatedList = [...prev.students];
+        updatedList[index] = {
+          ...updatedList[index],
+          alreadyEnrolled: true,
+          statusMessage: "Already Enrolled",
+        };
+        return {
+          ...prev,
+          alreadyEnrolledCount: prev.alreadyEnrolledCount + 1,
+          students: updatedList,
+        };
+      });
       loadClassroomData();
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.message || "Failed to approve student");
+      toast.error(err.response?.data?.message || "Failed to enroll student");
+    } finally {
+      setAddingMemberId(null);
     }
   };
 
-  const handleReject = async (studentId, studentName) => {
-    if (!window.confirm(`Reject join request for ${studentName || "this student"}?`)) {
+  const handleAddAllStudents = async () => {
+    if (!parsedRoster || !parsedRoster.students || parsedRoster.students.length === 0) return;
+    const toAdd = parsedRoster.students
+      .filter((s) => !s.alreadyEnrolled)
+      .map((s) => ({ usn: s.usn, email: s.email, name: s.name }));
+
+    if (toAdd.length === 0) {
+      toast.info("All students in this file are already enrolled!");
       return;
     }
 
     try {
-      await rejectJoinRequest(id, studentId);
-      toast.success(`Rejected join request for ${studentName || "student"}`);
+      setEnrollingBatch(true);
+      const res = await enrollBatch(id, toAdd);
+      toast.success(`Successfully enrolled ${res.addedCount || toAdd.length} student(s)!`);
+      setParsedRoster((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          alreadyEnrolledCount: prev.students.length,
+          students: prev.students.map((s) => ({
+            ...s,
+            alreadyEnrolled: true,
+            statusMessage: "Already Enrolled",
+          })),
+        };
+      });
       loadClassroomData();
     } catch (err) {
       console.error(err);
-      toast.error(err.response?.data?.message || "Failed to reject request");
+      toast.error(err.response?.data?.message || "Failed to batch enroll students");
+    } finally {
+      setEnrollingBatch(false);
+    }
+  };
+
+  const handleResetImport = () => {
+    setSelectedFile(null);
+    setParsedRoster(null);
+    const fileInput = document.getElementById("excelRosterInput") || document.getElementById("rosterFileInput");
+    if (fileInput) fileInput.value = "";
+  };
+
+  const handleRemoveAllMembers = async () => {
+    try {
+      setRemovingAll(true);
+      await removeAllMembers(id);
+      toast.success("All students removed from classroom");
+      setShowRemoveAllModal(false);
+      setMembers([]);
+      loadClassroomData();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to remove students");
+    } finally {
+      setRemovingAll(false);
     }
   };
 
@@ -368,11 +437,6 @@ function ClassroomWorkspace() {
               >
                 <span className="section-icon">🏫</span>
                 <span className="section-label">Classroom Management</span>
-                {joinRequests.length > 0 && (
-                  <span className="tab-count-pill" title={`${joinRequests.length} pending join requests`}>
-                    {joinRequests.length}
-                  </span>
-                )}
               </button>
 
               <button
@@ -393,12 +457,31 @@ function ClassroomWorkspace() {
                 <span className="section-label">Syllabus Scheduling</span>
                 <span className="section-stage-badge">New</span>
               </button>
+
+              <button
+                type="button"
+                className={`top-section-btn ${activeSection === "scheme" ? "active" : ""}`}
+                onClick={() => handleSectionChange("scheme")}
+              >
+                <span className="section-icon">⚖️</span>
+                <span className="section-label">Evaluation Scheme</span>
+              </button>
+
+              <button
+                type="button"
+                className={`top-section-btn ${activeSection === "iamarks" || (activeSection === "management" && managementTab === "iamarks") ? "active" : ""}`}
+                onClick={() => handleSectionChange("iamarks")}
+              >
+                <span className="section-icon">📊</span>
+                <span className="section-label">IA Split-Up Marks</span>
+                <span className="section-stage-badge">Feature 2</span>
+              </button>
             </div>
 
             {/* SECTION 1: CLASSROOM MANAGEMENT */}
             {activeSection === "management" && (
               <div className="tab-panel-container">
-                {/* SUBTABS: ENROLLED STUDENTS | JOIN REQUESTS | IMPORT ROSTER */}
+                {/* SUBTABS: ENROLLED STUDENTS | CLASSROOM IMPORT | IA SPLIT-UP MARKS */}
                 <div className="workspace-subtabs-row">
                   <button
                     type="button"
@@ -410,122 +493,69 @@ function ClassroomWorkspace() {
 
                   <button
                     type="button"
-                    className={`subtab-btn ${managementTab === "requests" ? "active" : ""}`}
-                    onClick={() => handleManagementTabChange("requests")}
+                    className={`subtab-btn ${managementTab === "import" ? "active" : ""}`}
+                    onClick={() => handleManagementTabChange("import")}
                   >
-                    ⏳ Join Requests {joinRequests.length > 0 && <span className="tab-count-pill">{joinRequests.length}</span>}
+                    📥 Classroom Import
                   </button>
 
                   <button
                     type="button"
-                    className={`subtab-btn ${managementTab === "import" ? "active" : ""}`}
-                    onClick={() => handleManagementTabChange("import")}
+                    className={`subtab-btn ${managementTab === "iamarks" ? "active" : ""}`}
+                    onClick={() => handleManagementTabChange("iamarks")}
                   >
-                    📥 Import Roster (CSV/XLSX)
+                    📊 IA Split-Up Marks
                   </button>
                 </div>
 
-                {/* SUBTAB 1: MEMBERS */}
+                {/* SUBTAB 1: ENROLLED STUDENTS */}
                 {managementTab === "members" && (
                   <div>
-                    {/* 1. ONBOARDING & ROSTER TOOLS GRID */}
-                    <div className="roster-management-grid">
-                      {/* Tool A: Upload Excel/CSV Roster */}
-                      <div className="roster-card upload-roster-box">
-                        <div className="roster-card-header">
-                          <span className="roster-card-icon">📁</span>
-                          <div>
-                            <h3>Upload Student Excel / CSV Roster</h3>
-                            <p>Upload multi-row sheets like <code>Iot-7A-SplitupMarks.xlsx</code> or CSV with USN & Name</p>
-                          </div>
+                    {/* QUICK ADD SINGLE STUDENT BOX */}
+                    <div className="roster-card quick-add-box" style={{ marginBottom: "20px" }}>
+                      <div className="roster-card-header">
+                        <span className="roster-card-icon">👤</span>
+                        <div>
+                          <h3>Quick Add Single Student</h3>
+                          <p>Enroll student directly by USN (e.g. <code>1DB23CS007</code>) or Email address</p>
                         </div>
-
-                        <form onSubmit={handleRosterSubmit} className="roster-form-inline">
-                          <div className="file-input-wrapper">
-                            <input
-                              type="file"
-                              id="excelRosterInput"
-                              accept=".xlsx,.xls,.csv"
-                              onChange={handleFileChange}
-                            />
-                            <label htmlFor="excelRosterInput" className="file-select-btn">
-                              {selectedFile ? `Selected: ${selectedFile.name}` : "Choose .xlsx or .csv File"}
-                            </label>
-                          </div>
-
-                          <button
-                            type="submit"
-                            className="btn-primary-upload"
-                            disabled={!selectedFile || importing}
-                          >
-                            {importing ? "Uploading & Enrolling..." : "Upload & Sync Roster"}
-                          </button>
-                        </form>
-
-                        {/* LIVE IMPORT SUMMARY BANNER */}
-                        {importSummary && (
-                          <div className="live-summary-banner">
-                            <div className="summary-badge-group">
-                              <span className="summary-pill total">
-                                Total Processed: <strong>{importSummary.totalProcessed || importSummary.totalRows || 0}</strong>
-                              </span>
-                              <span className="summary-pill verified">
-                                ✓ Verified DB Users: <strong>{importSummary.existingVerifiedUsersLinked || importSummary.addedCount || 0}</strong>
-                              </span>
-                              <span className="summary-pill created">
-                                + New Accounts Created: <strong>{importSummary.newStudentAccountsCreated || 0}</strong>
-                              </span>
-                            </div>
-                          </div>
-                        )}
                       </div>
 
-                      {/* Tool B: Quick Add Student by USN/Email */}
-                      <div className="roster-card quick-add-box">
-                        <div className="roster-card-header">
-                          <span className="roster-card-icon">👤</span>
-                          <div>
-                            <h3>Quick Add Student</h3>
-                            <p>Add student by USN (e.g., <code>1DB23CS007</code>) or Email address</p>
-                          </div>
+                      <form onSubmit={handleQuickAddStudent} className="quick-add-form">
+                        <div className="quick-inputs-row">
+                          <input
+                            type="text"
+                            placeholder="Student USN (e.g. 1DB23CS007)"
+                            value={quickStudent.usn}
+                            onChange={(e) => setQuickStudent({ ...quickStudent, usn: e.target.value })}
+                            className="input-quick"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Student Name (optional)"
+                            value={quickStudent.name}
+                            onChange={(e) => setQuickStudent({ ...quickStudent, name: e.target.value })}
+                            className="input-quick"
+                          />
+                          <input
+                            type="email"
+                            placeholder="Email (optional)"
+                            value={quickStudent.email}
+                            onChange={(e) => setQuickStudent({ ...quickStudent, email: e.target.value })}
+                            className="input-quick"
+                          />
                         </div>
-
-                        <form onSubmit={handleQuickAddStudent} className="quick-add-form">
-                          <div className="quick-inputs-row">
-                            <input
-                              type="text"
-                              placeholder="Student USN (e.g. 1DB23CS007)"
-                              value={quickStudent.usn}
-                              onChange={(e) => setQuickStudent({ ...quickStudent, usn: e.target.value })}
-                              className="input-quick"
-                            />
-                            <input
-                              type="text"
-                              placeholder="Student Name (optional)"
-                              value={quickStudent.name}
-                              onChange={(e) => setQuickStudent({ ...quickStudent, name: e.target.value })}
-                              className="input-quick"
-                            />
-                            <input
-                              type="email"
-                              placeholder="Email (optional)"
-                              value={quickStudent.email}
-                              onChange={(e) => setQuickStudent({ ...quickStudent, email: e.target.value })}
-                              className="input-quick"
-                            />
-                          </div>
-                          <button
-                            type="submit"
-                            className="btn-quick-add"
-                            disabled={addingStudent || (!quickStudent.usn && !quickStudent.email)}
-                          >
-                            {addingStudent ? "Adding..." : "+ Add to Classroom"}
-                          </button>
-                        </form>
-                      </div>
+                        <button
+                          type="submit"
+                          className="btn-quick-add"
+                          disabled={addingStudent || (!quickStudent.usn && !quickStudent.email)}
+                        >
+                          {addingStudent ? "Adding..." : "+ Add to Classroom"}
+                        </button>
+                      </form>
                     </div>
 
-                    {/* 2. SEARCH & STATS ROW */}
+                    {/* SEARCH & CONTROLS ROW */}
                     <div className="panel-controls-row">
                       <div className="search-box-wrapper">
                         <span className="search-icon">🔍</span>
@@ -540,14 +570,24 @@ function ClassroomWorkspace() {
                       <div className="panel-stats-text">
                         Showing <strong>{activeMembers.length}</strong> enrolled students
                       </div>
+                      {activeMembers.length > 0 && (
+                        <button
+                          type="button"
+                          className="btn-remove-all-members"
+                          onClick={() => setShowRemoveAllModal(true)}
+                          title="Remove all enrolled students from this classroom"
+                        >
+                          🗑️ Remove All Students
+                        </button>
+                      )}
                     </div>
 
-                    {/* 3. ENROLLED STUDENTS TABLE */}
+                    {/* ENROLLED STUDENTS TABLE */}
                     {activeMembers.length === 0 ? (
                       <div className="empty-tab-notice">
                         <div className="empty-icon-lg">👥</div>
                         <h4>No Enrolled Students Yet</h4>
-                        <p>Upload a roster sheet (e.g. <code>Iot-7A-SplitupMarks.xlsx</code>) or use Quick Add above to enroll students.</p>
+                        <p>Use the <strong>Classroom Import</strong> tab to upload an Excel file or use Quick Add above.</p>
                       </div>
                     ) : (
                       <div className="table-responsive">
@@ -603,123 +643,171 @@ function ClassroomWorkspace() {
                   </div>
                 )}
 
-                {/* SUBTAB 2: JOIN REQUESTS */}
-                {managementTab === "requests" && (
-                  <div>
-                    <div className="panel-intro-text">
-                      Students who submitted this classroom's 6-character Join Code.
-                    </div>
+                {/* SUBTAB 2: CLASSROOM IMPORT */}
+                {managementTab === "import" && (
+                  <div className="classroom-import-view">
+                    {!parsedRoster ? (
+                      <div className="import-box-card">
+                        <div className="import-box-header">
+                          <span className="import-header-icon">📥</span>
+                          <div>
+                            <h3>Classroom Import — Student Spreadsheet</h3>
+                            <p>
+                              Upload an Excel (<code>.xlsx</code> / <code>.xls</code>) or CSV (<code>.csv</code>) file with <strong>USN</strong> and <strong>Gmail / Email</strong> columns.
+                              The system will parse the file, verify each student against existing records in the database, and display a preview list so you can add them individually or all at once.
+                            </p>
+                          </div>
+                        </div>
 
-                    {joinRequests.length === 0 ? (
-                      <div className="empty-tab-notice">
-                        <p>No pending join requests at this time.</p>
+                        <form onSubmit={handleParseRoster} className="roster-upload-form">
+                          <div className="file-dropzone">
+                            <input
+                              type="file"
+                              id="rosterFileInput"
+                              accept=".csv,.xlsx,.xls"
+                              onChange={handleFileChange}
+                            />
+                            <label htmlFor="rosterFileInput" className="dropzone-label">
+                              <span className="dropzone-icon">📄</span>
+                              <span className="dropzone-text">
+                                {selectedFile ? `Selected: ${selectedFile.name}` : "Click or drop an Excel (.xlsx / .xls) or CSV file"}
+                              </span>
+                              <span className="dropzone-hint">
+                                Supports standard columns: <code>USN</code> and <code>Gmail</code> (e.g. <code>1DB23CS192</code> | <code>skus0426@gmail.com</code>)
+                              </span>
+                            </label>
+                          </div>
+
+                          <div className="dropzone-actions-bar">
+                            <button
+                              type="submit"
+                              className="btn-parse-roster"
+                              disabled={!selectedFile || parsingRoster}
+                            >
+                              {parsingRoster ? "⏳ Parsing & Inspecting Database..." : "🔍 Parse & Check Students"}
+                            </button>
+                          </div>
+                        </form>
                       </div>
                     ) : (
-                      <div className="table-responsive">
-                        <table className="workspace-table">
-                          <thead>
-                            <tr>
-                              <th>Sl No</th>
-                              <th>USN</th>
-                              <th>Student Name</th>
-                              <th>Email</th>
-                              <th>Requested At</th>
-                              <th>Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {joinRequests.map((req, idx) => (
-                              <tr key={req.membershipId || req.studentId || idx}>
-                                <td className="sl-no-cell">{idx + 1}</td>
-                                <td>
-                                  <span className="usn-badge">{req.usn}</span>
-                                </td>
-                                <td className="student-name-cell">{req.studentName}</td>
-                                <td className="email-cell">{req.studentEmail}</td>
-                                <td>{req.requestedAt ? new Date(req.requestedAt).toLocaleString() : "Recently"}</td>
-                                <td>
-                                  <div className="request-actions-group">
-                                    <button
-                                      type="button"
-                                      className="btn-approve"
-                                      onClick={() => handleApprove(req.studentId, req.studentName)}
-                                    >
-                                      ✓ Approve
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn-reject"
-                                      onClick={() => handleReject(req.studentId, req.studentName)}
-                                    >
-                                      ✕ Reject
-                                    </button>
-                                  </div>
-                                </td>
+                      <div className="parsed-roster-section">
+                        {/* PARSED SUMMARY BANNER */}
+                        <div className="parsed-summary-card">
+                          <div className="parsed-summary-top">
+                            <div className="file-info-col">
+                              <span className="file-icon">📊</span>
+                              <div>
+                                <h4>{parsedRoster.filename}</h4>
+                                <p className="file-parsed-meta">Parsed {parsedRoster.totalRows} student record(s) from spreadsheet</p>
+                              </div>
+                            </div>
+
+                            <div className="parsed-actions-col">
+                              <button
+                                type="button"
+                                className="btn-upload-new-file"
+                                onClick={handleResetImport}
+                              >
+                                🔄 Upload Different File
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-add-all-students"
+                                onClick={handleAddAllStudents}
+                                disabled={enrollingBatch || parsedRoster.students.filter((s) => !s.alreadyEnrolled).length === 0}
+                              >
+                                {enrollingBatch
+                                  ? "Enrolling All..."
+                                  : `➕ Add All Available Students (${parsedRoster.students.filter((s) => !s.alreadyEnrolled).length})`}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* STAT METRIC PILLS */}
+                          <div className="parsed-metrics-grid">
+                            <div className="metric-badge metric-total">
+                              <span className="metric-label">Total in File</span>
+                              <span className="metric-val">{parsedRoster.totalRows}</span>
+                            </div>
+                            <div className="metric-badge metric-matched">
+                              <span className="metric-label">✓ In Database</span>
+                              <span className="metric-val">{parsedRoster.matchedInDbCount}</span>
+                            </div>
+                            <div className="metric-badge metric-not-in-db">
+                              <span className="metric-label">⚠️ Not In Database</span>
+                              <span className="metric-val">{parsedRoster.notInDbCount}</span>
+                            </div>
+                            <div className="metric-badge metric-enrolled">
+                              <span className="metric-label">👥 Already Enrolled</span>
+                              <span className="metric-val">{parsedRoster.alreadyEnrolledCount}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* PREVIEW STUDENT TABLE */}
+                        <div className="table-responsive" style={{ marginTop: "24px" }}>
+                          <table className="workspace-table roster-preview-table">
+                            <thead>
+                              <tr>
+                                <th style={{ width: "50px" }}>#</th>
+                                <th>USN</th>
+                                <th>Student Name</th>
+                                <th>Email / Gmail</th>
+                                <th>Database Status</th>
+                                <th style={{ textAlign: "right" }}>Action</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {parsedRoster.students.map((s, idx) => (
+                                <tr key={s.usn || s.email || idx}>
+                                  <td className="sl-no-cell">{s.rowNumber || idx + 1}</td>
+                                  <td>
+                                    <span className="usn-badge">{s.usn || "N/A"}</span>
+                                  </td>
+                                  <td className="student-name-cell">
+                                    <strong>{s.name || (s.existsInDb ? "Registered Student" : "New Student")}</strong>
+                                  </td>
+                                  <td className="email-cell">{s.email || "N/A"}</td>
+                                  <td>
+                                    {s.alreadyEnrolled ? (
+                                      <span className="badge-already-enrolled">✓ Already Enrolled</span>
+                                    ) : s.existsInDb ? (
+                                      <span className="badge-in-db">✅ Registered in DB</span>
+                                    ) : (
+                                      <span className="badge-not-in-db">⚠️ New Account</span>
+                                    )}
+                                  </td>
+                                  <td style={{ textAlign: "right" }}>
+                                    {s.alreadyEnrolled ? (
+                                      <span className="btn-enrolled-disabled">✓ Enrolled</span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="btn-add-individual"
+                                        onClick={() => handleAddIndividualStudent(s, idx)}
+                                        disabled={addingMemberId === (s.usn || s.email || idx)}
+                                      >
+                                        {addingMemberId === (s.usn || s.email || idx) ? "Adding..." : "+ Add Member"}
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* SUBTAB 3: IMPORT ROSTER */}
-                {managementTab === "import" && (
-                  <div>
-                    <div className="import-box-card">
-                      <h3>Batch Enroll Students via Roster Upload</h3>
-                      <p>
-                        Upload an institutional Excel (<code>.xlsx</code>) or CSV (<code>.csv</code>) file containing student USNs.
-                        Existing student accounts matching the USN will be automatically enrolled, or new verified student accounts will be created.
-                      </p>
-
-                      <form onSubmit={handleRosterSubmit} className="roster-upload-form">
-                        <div className="file-dropzone">
-                          <input
-                            type="file"
-                            id="rosterFileInput"
-                            accept=".csv,.xlsx,.xls"
-                            onChange={handleFileChange}
-                          />
-                          <label htmlFor="rosterFileInput" className="dropzone-label">
-                            <span className="dropzone-icon">📁</span>
-                            <span className="dropzone-text">
-                              {selectedFile ? selectedFile.name : "Click to select CSV or XLSX file"}
-                            </span>
-                            <span className="dropzone-hint">
-                              Supports standard CSV or multi-row sheets like <code>Iot-7A-SplitupMarks.xlsx</code>
-                            </span>
-                          </label>
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="btn-upload-roster"
-                          disabled={!selectedFile || importing}
-                        >
-                          {importing ? "Processing Roster..." : "Upload and Match Roster"}
-                        </button>
-                      </form>
-                    </div>
-
-                    {/* LIVE IMPORT SUMMARY BANNER */}
-                    {importSummary && (
-                      <div className="live-summary-banner" style={{ marginTop: "20px" }}>
-                        <div className="summary-badge-group">
-                          <span className="summary-pill total">
-                            Total Processed: <strong>{importSummary.totalProcessed || importSummary.totalRows || 0}</strong>
-                          </span>
-                          <span className="summary-pill verified">
-                            ✓ Verified DB Users: <strong>{importSummary.existingVerifiedUsersLinked || importSummary.addedCount || 0}</strong>
-                          </span>
-                          <span className="summary-pill created">
-                            + New Accounts Created: <strong>{importSummary.newStudentAccountsCreated || 0}</strong>
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                {/* SUBTAB 3: IA SPLIT-UP MARKS & MODULE MAPPER */}
+                {managementTab === "iamarks" && (
+                  <IaMarksUploadSection
+                    classroomId={id}
+                    classroomName={classroom?.name}
+                    enrolledStudents={activeMembers}
+                  />
                 )}
               </div>
             )}
@@ -742,6 +830,13 @@ function ClassroomWorkspace() {
                   classroom={classroom}
                   onNavigateToSyllabus={() => handleSectionChange("syllabus")}
                 />
+              </div>
+            )}
+
+            {/* SECTION 4: EVALUATION SCHEME */}
+            {activeSection === "scheme" && (
+              <div className="tab-panel-container" style={{ padding: "28px" }}>
+                <EvaluationSchemeConfig classroomId={id} isTeacher={true} />
               </div>
             )}
           </>
@@ -928,6 +1023,54 @@ function ClassroomWorkspace() {
                 disabled={deletingClassroom}
               >
                 {deletingClassroom ? "Deleting..." : "Permanently Delete Classroom"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REMOVE ALL STUDENTS CONFIRMATION MODAL */}
+      {showRemoveAllModal && (
+        <div className="modal-backdrop" onClick={() => !removingAll && setShowRemoveAllModal(false)}>
+          <div className="modal-content-card modal-delete-confirm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🗑️ Remove All Students</h2>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowRemoveAllModal(false)}
+                disabled={removingAll}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="delete-modal-body">
+              <p>Are you sure you want to remove all students from this classroom?</p>
+              <div className="delete-classroom-highlight">
+                <strong>{classroom?.name}</strong> — {activeMembers.length} enrolled student(s)
+              </div>
+              <p className="delete-warning-text">
+                ⚠️ This will unenroll all currently enrolled students from this classroom. You can re-enroll them anytime using Classroom Import or Quick Add.
+              </p>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowRemoveAllModal(false)}
+                disabled={removingAll}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-danger-confirm"
+                onClick={handleRemoveAllMembers}
+                disabled={removingAll}
+              >
+                {removingAll ? "Removing All..." : "Yes, Remove All Students"}
               </button>
             </div>
           </div>

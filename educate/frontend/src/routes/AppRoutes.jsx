@@ -35,6 +35,8 @@ import ClassroomWorkspaceSelection from "../pages/teacher/ClassroomWorkspaceSele
 import ClassroomManagementWorkspacePage from "../pages/teacher/ClassroomManagementWorkspacePage";
 import SyllabusTrackingWorkspacePage from "../pages/teacher/SyllabusTrackingWorkspacePage";
 import SyllabusSchedulingWorkspacePage from "../pages/teacher/SyllabusSchedulingWorkspacePage";
+import EvaluationSchemeWorkspacePage from "../pages/teacher/EvaluationSchemeWorkspacePage";
+import IaMarksWorkspacePage from "../pages/teacher/IaMarksWorkspacePage";
 import StudentClassrooms from "../pages/student/StudentClassrooms";
 import StudentClassroomWorkspace from "../pages/student/StudentClassroomWorkspace";
 
@@ -75,6 +77,9 @@ function AppRoutes() {
       <Route path="/teacher/classrooms/:id/management" element={<ClassroomManagementWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/syllabus-tracking" element={<SyllabusTrackingWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/syllabus-scheduling" element={<SyllabusSchedulingWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/evaluation-scheme" element={<EvaluationSchemeWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/ia-marks" element={<IaMarksWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/intelligence" element={<IaMarksWorkspacePage />} />
 
       <Route path="/student/dashboard" element={<StudentDashboard />} />
       <Route path="/student/classrooms" element={<StudentClassrooms />} />
