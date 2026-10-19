@@ -1,16 +1,23 @@
 package com.acadion.backend.controller;
 
 import com.acadion.backend.dto.intelligence.ClassroomAnalyticsSummaryDTO;
+import com.acadion.backend.dto.intelligence.ClassroomRiskWatchlistResponse;
 import com.acadion.backend.dto.intelligence.IaIngestionSummary;
 import com.acadion.backend.dto.intelligence.ManualMarksRecordRequest;
 import com.acadion.backend.dto.intelligence.StudentFourLevelAnalyticsDTO;
 import com.acadion.backend.dto.intelligence.StudentIaBreakdownResponse;
 import com.acadion.backend.dto.intelligence.StudentPerformanceResponse;
+import com.acadion.backend.dto.intelligence.StudentRiskXaiResponse;
 import com.acadion.backend.entity.IaQuestionBlueprint;
 import com.acadion.backend.entity.StudentIaMarksRecord;
+import com.acadion.backend.dto.intelligence.ModuleNotesStatusResponse;
+import com.acadion.backend.dto.intelligence.RagTutorChatRequest;
+import com.acadion.backend.dto.intelligence.RagTutorChatResponse;
+import com.acadion.backend.service.AcademicRiskService;
 import com.acadion.backend.service.ClassroomPaperParserService;
 import com.acadion.backend.service.HierarchicalAnalyticsService;
 import com.acadion.backend.service.IaMarksIngestionService;
+import com.acadion.backend.service.RagTutorService;
 import com.acadion.backend.service.StudentPerformanceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +46,8 @@ public class AcademicIntelligenceController {
     private final ClassroomPaperParserService paperParserService;
     private final StudentPerformanceService studentPerformanceService;
     private final HierarchicalAnalyticsService hierarchicalAnalyticsService;
+    private final AcademicRiskService academicRiskService;
+    private final RagTutorService ragTutorService;
 
     /**
      * Download dynamic blank Excel template (.xlsx) for any IA (1, 2, or 3) containing ONLY
@@ -333,4 +342,88 @@ public class AcademicIntelligenceController {
         ClassroomAnalyticsSummaryDTO summary = hierarchicalAnalyticsService.getClassroomAnalyticsSummary(classroomId);
         return ResponseEntity.ok(summary);
     }
+
+    /**
+     * Feature 4: Python ML Risk Prediction & SHAP Explainable AI (XAI) Report for a specific student.
+     */
+    @GetMapping("/risk-xai/student/{usn}")
+    public ResponseEntity<StudentRiskXaiResponse> getStudentRiskXai(
+            @PathVariable("classroomId") String classroomId,
+            @PathVariable("usn") String usn
+    ) {
+        StudentRiskXaiResponse response = academicRiskService.evaluateStudentRisk(classroomId, usn);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Feature 4: Python ML Risk Prediction & SHAP XAI for authenticated student.
+     */
+    @GetMapping("/risk-xai/my-performance")
+    public ResponseEntity<StudentRiskXaiResponse> getMyRiskXai(
+            @PathVariable("classroomId") String classroomId,
+            @AuthenticationPrincipal UserDetails userDetails,
+            Principal principal
+    ) {
+        String studentEmail = userDetails != null ? userDetails.getUsername() : (principal != null ? principal.getName() : null);
+        if (studentEmail == null || studentEmail.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User must be authenticated");
+        }
+        StudentRiskXaiResponse response = academicRiskService.evaluateMyRisk(classroomId, studentEmail);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Feature 4: Classroom At-Risk Ranking Watchlist with SHAP primary drivers.
+     */
+    @GetMapping("/risk-xai/watchlist")
+    public ResponseEntity<ClassroomRiskWatchlistResponse> getClassroomRiskWatchlist(
+            @PathVariable("classroomId") String classroomId
+    ) {
+        ClassroomRiskWatchlistResponse response = academicRiskService.evaluateClassroomWatchlist(classroomId);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Feature 5: Upload and index module notes PDF (Modules 1 to 5) into the RAG vector store.
+     */
+    @PostMapping("/notes/upload")
+    public ResponseEntity<Map<String, Object>> uploadModuleNotes(
+            @PathVariable("classroomId") String classroomId,
+            @RequestParam("moduleNumber") int moduleNumber,
+            @RequestParam("file") MultipartFile file
+    ) {
+        log.info("Received request to upload Module {} notes for classroom {}", moduleNumber, classroomId);
+        Map<String, Object> result = ragTutorService.uploadModuleNotes(classroomId, moduleNumber, file);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Feature 5: Interactive Grounded RAG Study Tutor Chat.
+     */
+    @PostMapping("/tutor/chat")
+    public ResponseEntity<RagTutorChatResponse> chatWithTutor(
+            @PathVariable("classroomId") String classroomId,
+            @RequestBody RagTutorChatRequest request
+    ) {
+        if (request.getClassroomId() == null || request.getClassroomId().isBlank()) {
+            request.setClassroomId(classroomId);
+        }
+        log.info("Student asking RAG Tutor in classroom {}: query='{}', focusTopic='{}', focusModule={}",
+                classroomId, request.getQuery(), request.getFocusTopic(), request.getFocusModule());
+        RagTutorChatResponse response = ragTutorService.chatWithTutor(classroomId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Feature 5: Get status of uploaded/indexed notes across modules 1 to 5.
+     */
+    @GetMapping("/notes/status")
+    public ResponseEntity<ModuleNotesStatusResponse> getNotesStatus(
+            @PathVariable("classroomId") String classroomId
+    ) {
+        ModuleNotesStatusResponse status = ragTutorService.getModuleNotesStatus(classroomId);
+        return ResponseEntity.ok(status);
+    }
 }
+
+

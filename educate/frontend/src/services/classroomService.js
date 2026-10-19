@@ -250,3 +250,61 @@ export const getClassroomAnalyticsSummary = async (classroomId) => {
   return response.data;
 };
 
+// ============================================================================
+// ACADEMIC INTELLIGENCE - PYTHON ML RISK PREDICTION & SHAP XAI ENGINE
+// ============================================================================
+export const getStudentRiskXai = async (classroomId, usn) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/risk-xai/student/${encodeURIComponent(usn)}`
+  );
+  return response.data;
+};
+
+export const getMyRiskXai = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/risk-xai/my-performance`
+  );
+  return response.data;
+};
+
+export const getClassroomRiskWatchlist = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/risk-xai/watchlist`
+  );
+  return response.data;
+};
+
+// ============================================================================
+// ACADEMIC INTELLIGENCE - MODULE 1–5 NOTES RAG STUDY TUTOR
+// ============================================================================
+export const uploadModuleNotes = async (classroomId, moduleNumber, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/notes/upload?moduleNumber=${moduleNumber}`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+  return response.data;
+};
+
+export const askRagTutor = async (classroomId, payload) => {
+  const response = await API.post(
+    `/classrooms/${classroomId}/intelligence/tutor/chat`,
+    payload
+  );
+  return response.data;
+};
+
+export const getModuleNotesStatus = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/notes/status`
+  );
+  return response.data;
+};
+
+

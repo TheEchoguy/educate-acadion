@@ -3,6 +3,8 @@ import {
   getMyPerformance,
   getMyFourLevelAnalytics,
 } from "../../services/classroomService";
+import StudentRiskXaiCoach from "../../components/classroom/StudentRiskXaiCoach";
+import StudentRagTutorModal from "../../components/classroom/StudentRagTutorModal";
 import "./StudentPerformanceView.css";
 
 const StudentPerformanceView = ({ classroomId }) => {
@@ -13,6 +15,12 @@ const StudentPerformanceView = ({ classroomId }) => {
   const [topicFilter, setTopicFilter] = useState("ALL"); // ALL | WEAK | STRONG
   const [selectedIa, setSelectedIa] = useState(1);
   const [targetGrade, setTargetGrade] = useState("PASS"); // PASS | GRADE_A | GRADE_S
+  const [tutorModal, setTutorModal] = useState({
+    isOpen: false,
+    focusTopic: null,
+    focusModule: null,
+    assessmentName: "IA-1",
+  });
 
   useEffect(() => {
     let active = true;
@@ -231,6 +239,12 @@ const StudentPerformanceView = ({ classroomId }) => {
         </div>
       )}
 
+      {/* FEATURE 4: SHAP EXPLAINABLE AI (XAI) RISK & DIAGNOSTIC COACH */}
+      <StudentRiskXaiCoach
+        classroomId={classroomId}
+        studentUsn={studentUsn !== "Not Verified" ? studentUsn : null}
+      />
+
       {/* LEVEL 3: SUBJECT STANDING & SEE MARKS NEEDED CALCULATOR */}
       <div className="sp-section">
         <div className="sp-section-header">
@@ -383,6 +397,20 @@ const StudentPerformanceView = ({ classroomId }) => {
                       ⚠️ {modInfo.weakTopicsCount} weak
                     </span>
                   )}
+                  <button
+                    type="button"
+                    className="sp-mod-tutor-btn"
+                    onClick={() =>
+                      setTutorModal({
+                        isOpen: true,
+                        focusTopic: `Module ${modNum} Core Concepts`,
+                        focusModule: modNum,
+                        assessmentName: "Course Notes",
+                      })
+                    }
+                  >
+                    📖 Study Notes
+                  </button>
                 </div>
               </div>
             );
@@ -451,6 +479,20 @@ const StudentPerformanceView = ({ classroomId }) => {
                     </span>
                   </div>
                   <div className="sp-weak-advice">💡 {item.recommendation}</div>
+                  <button
+                    type="button"
+                    className="sp-weak-tutor-btn"
+                    onClick={() =>
+                      setTutorModal({
+                        isOpen: true,
+                        focusTopic: item.topicName,
+                        focusModule: item.moduleNumber,
+                        assessmentName: `IA-${item.iaNumber || 1}`,
+                      })
+                    }
+                  >
+                    🤖 Study with AI Tutor
+                  </button>
                 </div>
               ))}
             </div>
@@ -514,6 +556,21 @@ const StudentPerformanceView = ({ classroomId }) => {
                       💡 {topic.recommendation}
                     </div>
                   )}
+
+                  <button
+                    type="button"
+                    className="sp-topic-tutor-btn"
+                    onClick={() =>
+                      setTutorModal({
+                        isOpen: true,
+                        focusTopic: topic.topicName,
+                        focusModule: topic.moduleNumber,
+                        assessmentName: `IA-${topic.iaNumber || 1}`,
+                      })
+                    }
+                  >
+                    🤖 Study with AI Tutor
+                  </button>
                 </div>
               );
             })}
@@ -614,6 +671,24 @@ const StudentPerformanceView = ({ classroomId }) => {
             ) : null;
           })()}
         </div>
+      )}
+
+      {/* 6. INTERACTIVE RAG STUDY TUTOR DRAWER / MODAL */}
+      {tutorModal.isOpen && (
+        <StudentRagTutorModal
+          classroomId={classroomId}
+          focusTopic={tutorModal.focusTopic}
+          focusModule={tutorModal.focusModule}
+          assessmentName={tutorModal.assessmentName}
+          onClose={() =>
+            setTutorModal({
+              isOpen: false,
+              focusTopic: null,
+              focusModule: null,
+              assessmentName: "IA-1",
+            })
+          }
+        />
       )}
     </div>
   );

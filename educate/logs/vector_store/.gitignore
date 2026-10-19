@@ -1,0 +1,4 @@
+# Ignore per-classroom local vector indices
+*
+!.gitignore
+!.gitkeep

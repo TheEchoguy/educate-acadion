@@ -18,9 +18,11 @@ import {
 } from "../../services/classroomService";
 import "./IaMarksUploadSection.css";
 import TeacherClassAnalyticsView from "./TeacherClassAnalyticsView";
+import TeacherRiskWatchlistView from "./TeacherRiskWatchlistView";
+import TeacherNotesManager from "./TeacherNotesManager";
 
 const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [] }) => {
-  const [activeStep, setActiveStep] = useState(1); // 1: Blueprint, 2: Excel Ingestion / Manual Grid, 3: 4-Level Analytics
+  const [activeStep, setActiveStep] = useState(1); // 1: Blueprint, 2: Excel Ingestion / Manual Grid, 3: 4-Level Analytics, 4: AI Risk Watchlist, 5: Module Notes RAG
   const [entryMode, setEntryMode] = useState("excel"); // 'excel' | 'manual'
   const [manualMarks, setManualMarks] = useState({}); // { [usn]: { [code]: value } }
   const [isSavingManual, setIsSavingManual] = useState(false);
@@ -682,7 +684,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
         </div>
       )}
 
-      {/* 3-STEP WORKFLOW NAVIGATOR */}
+      {/* 4-STEP WORKFLOW NAVIGATOR */}
       <div className="ia-steps-nav">
         <button
           type="button"
@@ -690,7 +692,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
           onClick={() => setActiveStep(1)}
         >
           <span className="step-number">1</span>
-          <span>Step 1: Exam Question Paper & Question Blueprint</span>
+          <span>Step 1: Exam Blueprint</span>
         </button>
         <button
           type="button"
@@ -698,7 +700,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
           onClick={() => setActiveStep(2)}
         >
           <span className="step-number">2</span>
-          <span>Step 2: Excel Template & Marks Ingestion</span>
+          <span>Step 2: Marks Ingestion</span>
         </button>
         <button
           type="button"
@@ -706,7 +708,23 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
           onClick={() => setActiveStep(3)}
         >
           <span className="step-number">3</span>
-          <span>Step 3: 🎯 4-Level Class Analytics & Heatmap</span>
+          <span>Step 3: 🎯 4-Level Analytics</span>
+        </button>
+        <button
+          type="button"
+          className={`ia-step-btn ${activeStep === 4 ? "active" : ""}`}
+          onClick={() => setActiveStep(4)}
+        >
+          <span className="step-number">4</span>
+          <span>Step 4: 🚨 AI Risk Watchlist & XAI</span>
+        </button>
+        <button
+          type="button"
+          className={`ia-step-btn ${activeStep === 5 ? "active" : ""}`}
+          onClick={() => setActiveStep(5)}
+        >
+          <span className="step-number">5</span>
+          <span>Step 5: 📚 Module Notes & RAG Setup</span>
         </button>
       </div>
 
@@ -1547,6 +1565,21 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
         <TeacherClassAnalyticsView
           classroomId={classroomId}
           classroomName={classroomName}
+        />
+      )}
+
+      {/* STEP 4: PYTHON ML RISK PREDICTION & SHAP XAI WATCHLIST */}
+      {activeStep === 4 && (
+        <TeacherRiskWatchlistView
+          classroomId={classroomId}
+          classroomName={classroomName}
+        />
+      )}
+
+      {/* STEP 5: MODULE 1-5 COURSE NOTES RAG INGESTION & STUDY TUTOR */}
+      {activeStep === 5 && (
+        <TeacherNotesManager
+          classroomId={classroomId}
         />
       )}
 
