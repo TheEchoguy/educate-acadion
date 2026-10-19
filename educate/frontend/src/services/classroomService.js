@@ -250,3 +250,27 @@ export const getClassroomAnalyticsSummary = async (classroomId) => {
   return response.data;
 };
 
+// ============================================================================
+// ACADEMIC INTELLIGENCE - PYTHON ML RISK PREDICTION & SHAP XAI ENGINE
+// ============================================================================
+export const getStudentRiskXai = async (classroomId, usn) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/risk-xai/student/${encodeURIComponent(usn)}`
+  );
+  return response.data;
+};
+
+export const getMyRiskXai = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/risk-xai/my-performance`
+  );
+  return response.data;
+};
+
+export const getClassroomRiskWatchlist = async (classroomId) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/intelligence/risk-xai/watchlist`
+  );
+  return response.data;
+};
+

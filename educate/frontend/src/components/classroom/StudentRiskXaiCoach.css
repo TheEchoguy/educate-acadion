@@ -1,0 +1,440 @@
+/* ==========================================================================
+   STUDENT RISK XAI COACH STYLES
+   ========================================================================== */
+
+.xai-coach-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.85) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+.xai-coach-card.theme-high {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: linear-gradient(135deg, rgba(45, 15, 20, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+}
+
+.xai-coach-card.theme-med {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: linear-gradient(135deg, rgba(45, 30, 15, 0.75) 0%, rgba(15, 23, 42, 0.9) 100%);
+}
+
+.xai-coach-card.theme-safe {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, rgba(15, 35, 30, 0.75) 0%, rgba(15, 23, 42, 0.9) 100%);
+}
+
+.xai-loading-box,
+.xai-empty-box {
+  padding: 40px 24px;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  color: #94a3b8;
+}
+
+.xai-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: xai-spin 0.8s linear infinite;
+  margin: 0 auto 12px auto;
+}
+
+@keyframes xai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.xai-empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* 1. HERO ROW */
+.xai-hero-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.xai-hero-left {
+  flex: 1;
+  min-width: 280px;
+}
+
+.xai-engine-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #818cf8;
+}
+
+.xai-source-chip {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  color: #c7d2fe;
+}
+
+.xai-status-title {
+  margin: 0 0 6px 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.xai-coach-card.theme-high .xai-status-title {
+  color: #fca5a5;
+}
+
+.xai-coach-card.theme-med .xai-status-title {
+  color: #fde68a;
+}
+
+.xai-coach-card.theme-safe .xai-status-title {
+  color: #a7f3d0;
+}
+
+.xai-status-sub {
+  margin: 0 0 14px 0;
+  font-size: 0.88rem;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.xai-prob-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.xai-prob-chip {
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.xai-prob-chip.safe {
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.xai-prob-chip.med {
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.xai-prob-chip.high {
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* GAUGE BOX */
+.xai-gauge-box {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 16px 20px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.xai-gauge-lbl {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+}
+
+.xai-gauge-score-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.xai-gauge-score {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.xai-coach-card.theme-high .xai-gauge-score {
+  color: #f87171;
+}
+
+.xai-coach-card.theme-med .xai-gauge-score {
+  color: #fbbf24;
+}
+
+.xai-coach-card.theme-safe .xai-gauge-score {
+  color: #34d399;
+}
+
+.xai-gauge-max {
+  font-size: 0.95rem;
+  color: #64748b;
+}
+
+.xai-gauge-bar-bg {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.xai-gauge-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+.xai-gauge-bar-fill.theme-high {
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+}
+
+.xai-gauge-bar-fill.theme-med {
+  background: linear-gradient(90deg, #10b981, #f59e0b);
+}
+
+.xai-gauge-bar-fill.theme-safe {
+  background: linear-gradient(90deg, #38bdf8, #10b981);
+}
+
+.xai-gauge-status {
+  font-size: 0.76rem;
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+/* 2. SHAP ATTRIBUTIONS LIST */
+.xai-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.xai-section-title {
+  margin: 0 0 4px 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.xai-section-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+
+.xai-attributions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.xai-attr-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  transition: all 0.15s ease;
+}
+
+@media (max-width: 768px) {
+  .xai-attr-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.xai-attr-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.xai-attr-name-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  gap: 8px;
+}
+
+.xai-attr-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.xai-attr-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.badge-risk {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.badge-shield {
+  background: rgba(16, 185, 129, 0.2);
+  color: #a7f3d0;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.xai-attr-desc {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.xai-attr-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.xai-attr-bar-bg {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.xai-attr-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.bar-risk {
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+}
+
+.bar-shield {
+  background: linear-gradient(90deg, #059669, #34d399);
+}
+
+.xai-attr-pct {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  min-width: 44px;
+  text-align: right;
+}
+
+/* 3. CHECKLIST PLAN */
+.xai-plan-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.xai-plan-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.xai-plan-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.xai-plan-item.completed {
+  opacity: 0.65;
+  background: rgba(16, 185, 129, 0.05);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.xai-checkbox {
+  margin-top: 3px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.xai-step-text {
+  font-size: 0.88rem;
+  color: #e2e8f0;
+  line-height: 1.45;
+}
+
+.xai-plan-item.completed .xai-step-text {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+/* 4. TEACHER NOTE */
+.xai-teacher-note {
+  display: flex;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 12px;
+  align-items: flex-start;
+}
+
+.xai-note-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.xai-note-body strong {
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #a5b4fc;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.xai-note-body p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #e0e7ff;
+  line-height: 1.4;
+}

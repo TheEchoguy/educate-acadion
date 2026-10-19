@@ -8,7 +8,7 @@ import os
 import io
 import json
 import httpx
-from typing import Optional
+from typing import Optional, List
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -16,8 +16,9 @@ import uvicorn
 
 from ai_extractor import extract_questions_with_ai, MODEL_NAME
 from pdf_reader import extract_text_from_pdf_bytes, extract_text_from_pdf_file, extract_text_from_image_bytes
+from ml_risk_xai import analyze_student_risk
 
-app = FastAPI(title="Acadion AI Paper Parser Microservice", version="1.0.0")
+app = FastAPI(title="Acadion AI Paper Parser & ML XAI Microservice", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +34,17 @@ class TextParseRequest(BaseModel):
 class FilePathParseRequest(BaseModel):
     file_path: str
 
+class StudentRiskPredictionRequest(BaseModel):
+    studentId: Optional[str] = None
+    usn: Optional[str] = None
+    name: Optional[str] = None
+    cieScaledPct: Optional[float] = 75.0
+    weakTopicsCount: Optional[int] = 0
+    moduleMasteryAvg: Optional[float] = 70.0
+    choiceSkipRatio: Optional[float] = 0.0
+    attendancePct: Optional[float] = 85.0
+    weakTopics: Optional[List[str]] = []
+
 @app.get("/")
 @app.get("/health")
 def health():
@@ -42,6 +54,33 @@ def health():
         "model": MODEL_NAME,
         "port": 5000
     }
+
+@app.post("/ml/predict-student-risk")
+def predict_student_risk_endpoint(req: StudentRiskPredictionRequest):
+    """
+    Evaluates student academic failure risk using Random Forest & SHAP TreeExplainer.
+    Returns predicted risk class, probabilities, feature attribution percentages, and targeted actions.
+    """
+    try:
+        features = {
+            "cieScaledPct": req.cieScaledPct,
+            "weakTopicsCount": req.weakTopicsCount,
+            "moduleMasteryAvg": req.moduleMasteryAvg,
+            "choiceSkipRatio": req.choiceSkipRatio,
+            "attendancePct": req.attendancePct
+        }
+        weak_topics = req.weakTopics or []
+        xai_result = analyze_student_risk(features, weak_topics)
+        
+        # Attach student metadata
+        xai_result["studentId"] = req.studentId
+        xai_result["usn"] = req.usn
+        xai_result["name"] = req.name
+
+        return xai_result
+    except Exception as e:
+        print(f"[ML Prediction Error]: {e}")
+        raise HTTPException(status_code=500, detail=f"ML Risk Prediction failed: {str(e)}")
 
 @app.post("/api/ai/parse-text")
 def parse_text_endpoint(req: TextParseRequest):

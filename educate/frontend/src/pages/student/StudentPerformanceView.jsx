@@ -3,6 +3,7 @@ import {
   getMyPerformance,
   getMyFourLevelAnalytics,
 } from "../../services/classroomService";
+import StudentRiskXaiCoach from "../../components/classroom/StudentRiskXaiCoach";
 import "./StudentPerformanceView.css";
 
 const StudentPerformanceView = ({ classroomId }) => {
@@ -230,6 +231,12 @@ const StudentPerformanceView = ({ classroomId }) => {
           </div>
         </div>
       )}
+
+      {/* FEATURE 4: SHAP EXPLAINABLE AI (XAI) RISK & DIAGNOSTIC COACH */}
+      <StudentRiskXaiCoach
+        classroomId={classroomId}
+        studentUsn={studentUsn !== "Not Verified" ? studentUsn : null}
+      />
 
       {/* LEVEL 3: SUBJECT STANDING & SEE MARKS NEEDED CALCULATOR */}
       <div className="sp-section">

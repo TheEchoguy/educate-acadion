@@ -14,7 +14,7 @@ MODEL_NAME = os.getenv("AI_MODEL_NAME", "openrouter/free")
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
-    api_key=OPENROUTER_KEY,
+    api_key=OPENROUTER_KEY if OPENROUTER_KEY else "dummy-openrouter-key",
 )
 
 

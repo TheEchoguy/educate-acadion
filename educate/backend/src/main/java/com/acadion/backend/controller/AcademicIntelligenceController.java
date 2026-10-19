@@ -1,13 +1,16 @@
 package com.acadion.backend.controller;
 
 import com.acadion.backend.dto.intelligence.ClassroomAnalyticsSummaryDTO;
+import com.acadion.backend.dto.intelligence.ClassroomRiskWatchlistResponse;
 import com.acadion.backend.dto.intelligence.IaIngestionSummary;
 import com.acadion.backend.dto.intelligence.ManualMarksRecordRequest;
 import com.acadion.backend.dto.intelligence.StudentFourLevelAnalyticsDTO;
 import com.acadion.backend.dto.intelligence.StudentIaBreakdownResponse;
 import com.acadion.backend.dto.intelligence.StudentPerformanceResponse;
+import com.acadion.backend.dto.intelligence.StudentRiskXaiResponse;
 import com.acadion.backend.entity.IaQuestionBlueprint;
 import com.acadion.backend.entity.StudentIaMarksRecord;
+import com.acadion.backend.service.AcademicRiskService;
 import com.acadion.backend.service.ClassroomPaperParserService;
 import com.acadion.backend.service.HierarchicalAnalyticsService;
 import com.acadion.backend.service.IaMarksIngestionService;
@@ -39,6 +42,7 @@ public class AcademicIntelligenceController {
     private final ClassroomPaperParserService paperParserService;
     private final StudentPerformanceService studentPerformanceService;
     private final HierarchicalAnalyticsService hierarchicalAnalyticsService;
+    private final AcademicRiskService academicRiskService;
 
     /**
      * Download dynamic blank Excel template (.xlsx) for any IA (1, 2, or 3) containing ONLY
@@ -333,4 +337,45 @@ public class AcademicIntelligenceController {
         ClassroomAnalyticsSummaryDTO summary = hierarchicalAnalyticsService.getClassroomAnalyticsSummary(classroomId);
         return ResponseEntity.ok(summary);
     }
+
+    /**
+     * Feature 4: Python ML Risk Prediction & SHAP Explainable AI (XAI) Report for a specific student.
+     */
+    @GetMapping("/risk-xai/student/{usn}")
+    public ResponseEntity<StudentRiskXaiResponse> getStudentRiskXai(
+            @PathVariable("classroomId") String classroomId,
+            @PathVariable("usn") String usn
+    ) {
+        StudentRiskXaiResponse response = academicRiskService.evaluateStudentRisk(classroomId, usn);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Feature 4: Python ML Risk Prediction & SHAP XAI for authenticated student.
+     */
+    @GetMapping("/risk-xai/my-performance")
+    public ResponseEntity<StudentRiskXaiResponse> getMyRiskXai(
+            @PathVariable("classroomId") String classroomId,
+            @AuthenticationPrincipal UserDetails userDetails,
+            Principal principal
+    ) {
+        String studentEmail = userDetails != null ? userDetails.getUsername() : (principal != null ? principal.getName() : null);
+        if (studentEmail == null || studentEmail.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User must be authenticated");
+        }
+        StudentRiskXaiResponse response = academicRiskService.evaluateMyRisk(classroomId, studentEmail);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Feature 4: Classroom At-Risk Ranking Watchlist with SHAP primary drivers.
+     */
+    @GetMapping("/risk-xai/watchlist")
+    public ResponseEntity<ClassroomRiskWatchlistResponse> getClassroomRiskWatchlist(
+            @PathVariable("classroomId") String classroomId
+    ) {
+        ClassroomRiskWatchlistResponse response = academicRiskService.evaluateClassroomWatchlist(classroomId);
+        return ResponseEntity.ok(response);
+    }
 }
+
