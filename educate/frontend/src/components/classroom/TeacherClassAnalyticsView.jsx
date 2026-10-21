@@ -279,28 +279,6 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
     setDrilldownError(null);
   };
 
-  if (loading) {
-    return (
-      <div className="tca-loading-container">
-        <div className="tca-spinner" />
-        <p>Crunching class-wide 4-level performance analytics...</p>
-      </div>
-    );
-  }
-
-  if (error || !summary) {
-    return (
-      <div className="tca-empty-card">
-        <div className="tca-empty-icon">📊</div>
-        <h3>Class Analytics Not Available</h3>
-        <p>
-          {error ||
-            "Please upload question paper blueprints and student IA marks to generate whole-class diagnostic analytics."}
-        </p>
-      </div>
-    );
-  }
-
   const {
     enrolledStudentsCount = 0,
     evaluatedStudentsCount = 0,
@@ -309,7 +287,7 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
     studentDistribution = {},
     lowestPerformingTopics = [],
     studentSummaries = [],
-  } = summary;
+  } = summary || {};
 
   const {
     strongCount = 0,
@@ -317,34 +295,38 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
     needsSupportCount = 0,
     classAverageIa = 0,
     classAverageCie = 0,
-  } = studentDistribution;
+  } = studentDistribution || {};
 
   const totalEvaluated = Math.max(1, evaluatedStudentsCount);
   const strongPct = Math.round((strongCount / totalEvaluated) * 100);
   const modPct = Math.round((moderateCount / totalEvaluated) * 100);
   const weakPct = Math.round((needsSupportCount / totalEvaluated) * 100);
 
-  // Filter topics
-  const filteredTopics = topicHeatmap.filter((t) => {
-    if (topicFilter === "WEAK") return t.classAveragePercentage < 50;
-    if (topicFilter === "STRONG") return t.classAveragePercentage >= 75;
-    return true;
-  });
+  // Filter topics memoized
+  const filteredTopics = useMemo(() => {
+    return (topicHeatmap || []).filter((t) => {
+      if (topicFilter === "WEAK") return t.classAveragePercentage < 50;
+      if (topicFilter === "STRONG") return t.classAveragePercentage >= 75;
+      return true;
+    });
+  }, [topicHeatmap, topicFilter]);
 
-  // Filter students
-  const filteredStudents = studentSummaries.filter((st) => {
-    const q = searchQuery.toLowerCase().trim();
-    const matchQuery =
-      !q ||
-      (st.usn && st.usn.toLowerCase().includes(q)) ||
-      (st.studentName && st.studentName.toLowerCase().includes(q)) ||
-      (st.weakestTopic && st.weakestTopic.toLowerCase().includes(q));
+  // Filter students memoized
+  const filteredStudents = useMemo(() => {
+    return (studentSummaries || []).filter((st) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchQuery =
+        !q ||
+        (st.usn && st.usn.toLowerCase().includes(q)) ||
+        (st.studentName && st.studentName.toLowerCase().includes(q)) ||
+        (st.weakestTopic && st.weakestTopic.toLowerCase().includes(q));
 
-    const matchStatus =
-      statusFilter === "ALL" || st.overallStatus === statusFilter;
+      const matchStatus =
+        statusFilter === "ALL" || st.overallStatus === statusFilter;
 
-    return matchQuery && matchStatus;
-  });
+      return matchQuery && matchStatus;
+    });
+  }, [studentSummaries, searchQuery, statusFilter]);
 
   // Question-level interactive analytics derivation (Q1, Q2, Q3, Q4)
   const questionsData = useMemo(() => {
@@ -465,6 +447,28 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
       totalValue: "0",
     };
   }, [selectedQuestionView, questionsData, currentQuestionData]);
+
+  if (loading) {
+    return (
+      <div className="tca-loading-container">
+        <div className="tca-spinner" />
+        <p>Crunching class-wide 4-level performance analytics...</p>
+      </div>
+    );
+  }
+
+  if (error || !summary) {
+    return (
+      <div className="tca-empty-card">
+        <div className="tca-empty-icon">📊</div>
+        <h3>Class Analytics Not Available</h3>
+        <p>
+          {error ||
+            "Please upload question paper blueprints and student IA marks to generate whole-class diagnostic analytics."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="tca-container">
