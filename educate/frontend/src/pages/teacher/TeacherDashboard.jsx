@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getTeacherOverview } from "../../services/syllabusService";
+import FloatingChatbotWidget from "../../components/classroom/FloatingChatbotWidget";
 import "./TeacherDashboard.css";
 
 import imgPapers from "@media/images/topics/teacher_papers.jpg";
@@ -99,6 +100,22 @@ function TeacherDashboard() {
       ],
       actionText: "Open Marks Entry",
     },
+    {
+      id: "ppt_generator",
+      title: "AI PPT Generator",
+      tag: "SLIDE DECK & OUTLINE GENERATOR",
+      badgeColor: "purple",
+      icon: "📊",
+      path: "/teacher/ppt-generator",
+      image: imgPapers,
+      description: "Convert lecture notes into multi-part widescreen PowerPoint presentations with AI topic extraction, figure detection, and interactive visual editing.",
+      features: [
+        "Full Notes Upload & Topic Discovery",
+        "Multi-Part Series & Figure Extraction",
+        "Visual Slide Canvas Editor & Export",
+      ],
+      actionText: "Launch PPT Generator",
+    },
   ];
 
   // Automatic slow transition between modules every 6 seconds
@@ -152,10 +169,20 @@ function TeacherDashboard() {
         <div className="topic-showcase-banner">
           <div
             className="showcase-reel-track"
-            style={{ transform: `translateX(-${activeModuleSlide * 25}%)` }}
+            style={{
+              width: `${teacherModules.length * 100}%`,
+              transform: `translateX(-${(activeModuleSlide * 100) / teacherModules.length}%)`,
+            }}
           >
             {teacherModules.map((mod) => (
-              <div key={mod.id} className="showcase-reel-item">
+              <div
+                key={mod.id}
+                className="showcase-reel-item"
+                style={{
+                  width: `${100 / teacherModules.length}%`,
+                  flex: `0 0 ${100 / teacherModules.length}%`,
+                }}
+              >
                 <div
                   className="topic-photo-slide active-zoom"
                   style={{ backgroundImage: `url(${mod.image})` }}
@@ -280,6 +307,20 @@ function TeacherDashboard() {
             <div className="card-footer-meta">
               <span>• Offline IA</span>
               <span>• Export CSV</span>
+            </div>
+          </div>
+
+          {/* Card 5: AI PPT Generator */}
+          <div className="clean-grid-card border-purple" onClick={() => navigate("/teacher/ppt-generator")}>
+            <div className="card-top-bar">
+              <div className="card-badge purple">PPT GENERATOR</div>
+              <span className="card-arrow">→</span>
+            </div>
+            <h3>📊 AI PPT Generator</h3>
+            <p>Upload lecture notes, discover topics, edit slides in real-time, and download presentations.</p>
+            <div className="card-footer-meta">
+              <span>• Multi-Part Series</span>
+              <span>• Visual Editor</span>
             </div>
           </div>
         </div>
@@ -430,6 +471,9 @@ function TeacherDashboard() {
           )}
         </div>
       </div>
+
+      {/* Floating Chatbot Launch Widget */}
+      <FloatingChatbotWidget targetPath="/teacher/tutor" />
     </div>
   );
 }

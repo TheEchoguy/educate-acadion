@@ -37,8 +37,11 @@ import SyllabusTrackingWorkspacePage from "../pages/teacher/SyllabusTrackingWork
 import SyllabusSchedulingWorkspacePage from "../pages/teacher/SyllabusSchedulingWorkspacePage";
 import EvaluationSchemeWorkspacePage from "../pages/teacher/EvaluationSchemeWorkspacePage";
 import IaMarksWorkspacePage from "../pages/teacher/IaMarksWorkspacePage";
+import TeacherPptGenerator from "../pages/teacher/TeacherPptGenerator";
 import StudentClassrooms from "../pages/student/StudentClassrooms";
 import StudentClassroomWorkspace from "../pages/student/StudentClassroomWorkspace";
+import ChatTutorPage from "../pages/student/ChatTutorPage";
+import ErrorBoundary from "../components/common/ErrorBoundary";
 
 function AppRoutes() {
   return (
@@ -80,6 +83,7 @@ function AppRoutes() {
       <Route path="/teacher/classrooms/:id/evaluation-scheme" element={<EvaluationSchemeWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/ia-marks" element={<IaMarksWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/intelligence" element={<IaMarksWorkspacePage />} />
+      <Route path="/teacher/ppt-generator" element={<TeacherPptGenerator />} />
 
       <Route path="/student/dashboard" element={<StudentDashboard />} />
       <Route path="/student/classrooms" element={<StudentClassrooms />} />
@@ -90,6 +94,30 @@ function AppRoutes() {
       <Route path="/student/results" element={<MyResults />} />
       <Route path="/student/performance" element={<StudentPerformance />} />
       <Route path="/student/practice" element={<PracticePapers />} />
+      <Route
+        path="/student/tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
+      <Route
+        path="/teacher/tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
+      <Route
+        path="/tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
     </Routes>
   );
 }

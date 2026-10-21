@@ -4,6 +4,7 @@ import Navbar from "../../components/Navbar";
 import toast from "react-hot-toast";
 import { getStudentClassrooms, joinClassroom } from "../../services/classroomService";
 import { getMyProfile } from "../../services/profileService";
+import FloatingChatbotWidget from "../../components/classroom/FloatingChatbotWidget";
 import "./StudentDashboard.css";
 
 import imgExams from "@media/images/topics/topic_exams.jpg";
@@ -18,7 +19,6 @@ function StudentDashboard() {
 
   // Classroom Live Integration
   const [enrolledClassrooms, setEnrolledClassrooms] = useState([]);
-  const [loadingClassrooms, setLoadingClassrooms] = useState(false);
   const [joinCodeInput, setJoinCodeInput] = useState("");
   const [joiningClassroom, setJoiningClassroom] = useState(false);
 
@@ -103,34 +103,58 @@ function StudentDashboard() {
       ],
       actionText: "Analyze Performance Trends",
     },
+    {
+      id: "tutor",
+      title: "AI Study Tutor (RAG Agent)",
+      tag: "GROUNDED ON MODULE 1–5 NOTES",
+      badgeColor: "blue",
+      icon: "🤖",
+      path: "/student/tutor",
+      image: imgPractice,
+      description: "Chat with your 24/7 Academic Study Tutor grounded strictly on VTU course notes with verifiable section citations.",
+      features: [
+        "Module 1–5 Scoped Semantic Search",
+        "Exam Questions & 4-Tier Answer Framework",
+        "Zero-Hallucination Textbook Grounding",
+      ],
+      actionText: "Launch AI Study Tutor",
+    },
   ];
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const storedEmail = sessionStorage.getItem("email") || localStorage.getItem("email");
-        const storedUsn = sessionStorage.getItem("usn") || localStorage.getItem("usn");
-        const data = await getMyProfile(storedEmail, storedUsn);
-        if (data) setProfile(data);
-      } catch (err) {
-        console.log("Could not load student profile", err);
-      }
-    };
-    fetchProfile();
-    loadClassrooms();
-  }, []);
 
   const loadClassrooms = async () => {
     try {
-      setLoadingClassrooms(true);
       const data = await getStudentClassrooms();
       setEnrolledClassrooms(data || []);
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoadingClassrooms(false);
     }
   };
+
+  useEffect(() => {
+    let ignore = false;
+    const initData = async () => {
+      try {
+        const storedEmail = sessionStorage.getItem("email") || localStorage.getItem("email");
+        const storedUsn = sessionStorage.getItem("usn") || localStorage.getItem("usn");
+        const data = await getMyProfile(storedEmail, storedUsn);
+        if (!ignore && data) setProfile(data);
+      } catch (err) {
+        console.log("Could not load student profile", err);
+      }
+
+      try {
+        const classrooms = await getStudentClassrooms();
+        if (!ignore && classrooms) setEnrolledClassrooms(classrooms);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    initData();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const handleJoinClassroom = async (e) => {
     e.preventDefault();
@@ -258,10 +282,20 @@ function StudentDashboard() {
         <div className="topic-showcase-banner">
           <div
             className="showcase-reel-track"
-            style={{ transform: `translateX(-${activeModuleSlide * 25}%)` }}
+            style={{
+              width: `${studentModules.length * 100}%`,
+              transform: `translateX(-${(activeModuleSlide * 100) / studentModules.length}%)`,
+            }}
           >
             {studentModules.map((mod) => (
-              <div key={mod.id} className="showcase-reel-item">
+              <div
+                key={mod.id}
+                className="showcase-reel-item"
+                style={{
+                  width: `${100 / studentModules.length}%`,
+                  flex: `0 0 ${100 / studentModules.length}%`,
+                }}
+              >
                 <div
                   className="topic-photo-slide active-zoom"
                   style={{ backgroundImage: `url(${mod.image})` }}
@@ -388,8 +422,41 @@ function StudentDashboard() {
               <span>• Risk Prediction</span>
             </div>
           </div>
+
+          {/* Card 5: AI Study Tutor (RAG Agent) */}
+          <div
+            className="clean-grid-card border-blue"
+            style={{
+              borderColor: "rgba(56, 189, 248, 0.4)",
+              background: "linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%)",
+            }}
+            onClick={() => navigate("/student/tutor")}
+          >
+            <div className="card-top-bar">
+              <div
+                className="card-badge blue"
+                style={{
+                  background: "rgba(6, 182, 212, 0.2)",
+                  color: "#38bdf8",
+                  border: "1px solid rgba(56, 189, 248, 0.4)",
+                }}
+              >
+                RAG AGENT 2.0
+              </div>
+              <span className="card-arrow" style={{ color: "#38bdf8" }}>→</span>
+            </div>
+            <h3>🤖 AI Study Tutor</h3>
+            <p>24/7 syllabus tutor strictly grounded on VTU Module 1–5 notes with verified citations.</p>
+            <div className="card-footer-meta">
+              <span>• Module 1–5 Grounded</span>
+              <span>• Zero Hallucination</span>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Floating Chatbot Launch Widget */}
+      <FloatingChatbotWidget targetPath="/student/tutor" />
     </div>
   );
 }

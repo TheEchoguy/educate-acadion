@@ -10,8 +10,15 @@ frontend/.env
 # Logs & Python cache
 *.log
 logs/__pycache__/
+logs/.env
+*.env
 !logs/*.py
 !logs/requirements.txt
 
 media-assets/
 
+# PPT Generator Service
+services/ppt-generator-api/.env
+services/ppt-generator-api/.venv/
+services/ppt-generator-api/**/__pycache__/
+services/ppt-generator-api/output/

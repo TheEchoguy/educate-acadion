@@ -133,6 +133,13 @@ export const uploadIaMarks = async (classroomId, formData, iaNumber) => {
   return response.data;
 };
 
+export const resetIaMarks = async (classroomId, iaNumber = 1) => {
+  const response = await API.delete(
+    `/classrooms/${classroomId}/intelligence/reset-ia-marks?iaNumber=${iaNumber}`
+  );
+  return response.data;
+};
+
 export const downloadMasterTemplate = async (classroomId) => {
   const response = await API.get(
     `/classrooms/${classroomId}/intelligence/download-master-template`,

@@ -20,6 +20,8 @@ import TeacherSyllabusSchedulingSection from "../../components/syllabus/TeacherS
 import EvaluationSchemeConfig from "../../components/classroom/EvaluationSchemeConfig";
 import IaMarksUploadSection from "../../components/classroom/IaMarksUploadSection";
 import ClassroomHeader from "../../components/classroom/ClassroomHeader";
+import AiContentStudioSection from "../../components/classroom/AiContentStudioSection";
+import RagStudyTutorSection from "../../components/classroom/RagStudyTutorSection";
 
 function ClassroomWorkspace() {
   const { id } = useParams();
@@ -66,6 +68,10 @@ function ClassroomWorkspace() {
     activeSection = "scheduling";
   } else if (sParam === "scheme" || tParam === "scheme") {
     activeSection = "scheme";
+  } else if (sParam === "studio" || sParam === "ai-studio" || tParam === "studio") {
+    activeSection = "studio";
+  } else if (sParam === "tutor" || sParam === "rag" || tParam === "tutor") {
+    activeSection = "tutor";
   } else if (sParam === "iamarks" || sParam === "intelligence" || tParam === "iamarks") {
     activeSection = "management";
   } else if (sParam === "syllabus" || tParam === "syllabus") {
@@ -476,6 +482,32 @@ function ClassroomWorkspace() {
                 <span className="section-label">IA Split-Up Marks</span>
                 <span className="section-stage-badge">Feature 2</span>
               </button>
+
+              <button
+                type="button"
+                className={`top-section-btn ${activeSection === "studio" ? "active" : ""}`}
+                onClick={() => handleSectionChange("studio")}
+              >
+                <span className="section-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                  </svg>
+                </span>
+                <span className="section-label">AI Content Studio</span>
+                <span className="section-stage-badge studio-badge-accent">Objective 2</span>
+              </button>
+
+              <button
+                type="button"
+                className={`top-section-btn ${activeSection === "tutor" ? "active" : ""}`}
+                onClick={() => handleSectionChange("tutor")}
+              >
+                <span className="section-icon">🤖</span>
+                <span className="section-label">AI Study Tutor</span>
+                <span className="section-stage-badge" style={{ background: "rgba(6, 182, 212, 0.2)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.4)" }}>RAG Agent</span>
+              </button>
             </div>
 
             {/* SECTION 1: CLASSROOM MANAGEMENT */}
@@ -837,6 +869,20 @@ function ClassroomWorkspace() {
             {activeSection === "scheme" && (
               <div className="tab-panel-container" style={{ padding: "28px" }}>
                 <EvaluationSchemeConfig classroomId={id} isTeacher={true} />
+              </div>
+            )}
+
+            {/* SECTION 5: AI ACADEMIC CONTENT STUDIO (OBJECTIVE 2) */}
+            {activeSection === "studio" && (
+              <div className="tab-panel-container" style={{ padding: "20px" }}>
+                <AiContentStudioSection classroomId={id} isTeacher={true} />
+              </div>
+            )}
+
+            {/* SECTION 6: AI STUDY TUTOR (RAG AGENT) */}
+            {activeSection === "tutor" && (
+              <div className="tab-panel-container" style={{ padding: "20px" }}>
+                <RagStudyTutorSection classroomId={id} classroomName={classroom?.name} isTeacher={true} />
               </div>
             )}
           </>

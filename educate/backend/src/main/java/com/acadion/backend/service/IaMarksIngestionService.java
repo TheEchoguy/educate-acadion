@@ -269,7 +269,7 @@ public class IaMarksIngestionService {
             }
             row10.getCell(totalCol).setCellValue("40");
 
-            // POPULATE ENROLLED STUDENTS
+            // POPULATE ENROLLED STUDENTS & PRE-POPULATE ANY SAVED MARKS FOR THIS IA
             List<Classroom.EnrolledStudent> students = classroom.getEnrolledStudents();
             if (students == null) students = new ArrayList<>();
 
@@ -279,6 +279,15 @@ public class IaMarksIngestionService {
             List<Classroom.EnrolledStudent> exportList = new ArrayList<>(students);
             if (!hasJohn) exportList.add(Classroom.EnrolledStudent.builder().usn("1DB21CS001").name("John Doe").build());
             if (!hasSanthu) exportList.add(Classroom.EnrolledStudent.builder().usn("1DB23CS192").name("Santhosh").build());
+
+            // Map existing marks for this IA
+            List<StudentIaMarksRecord> existingIaMarks = iaMarksRecordRepository.findByClassroomIdAndIaNumber(classroomId, iaNumber);
+            Map<String, StudentIaMarksRecord> existingMarksMap = new HashMap<>();
+            for (StudentIaMarksRecord r : existingIaMarks) {
+                if (r.getUsn() != null) {
+                    existingMarksMap.put(r.getUsn().trim().toUpperCase(), r);
+                }
+            }
 
             int rowIndex = 11;
             int slNo = 1;
@@ -291,17 +300,28 @@ public class IaMarksIngestionService {
                 slCell.setCellValue(slNo++);
                 slCell.setCellStyle(dataStyle);
 
+                String cleanUsn = st.getUsn() != null ? st.getUsn().trim().toUpperCase() : "N/A";
                 Cell usnCell = row.createCell(1);
-                usnCell.setCellValue(st.getUsn() != null ? st.getUsn() : "N/A");
+                usnCell.setCellValue(cleanUsn);
                 usnCell.setCellStyle(dataStyle);
 
                 Cell nameCell = row.createCell(2);
                 nameCell.setCellValue(st.getName() != null ? st.getName() : "Student Candidate");
                 nameCell.setCellStyle(nameStyle);
 
+                StudentIaMarksRecord savedRecord = existingMarksMap.get(cleanUsn);
+                Map<String, Double> qMarks = savedRecord != null ? savedRecord.getQuestionMarks() : null;
+
                 for (int m = 0; m < questions.size(); m++) {
                     Cell markCell = row.createCell(startCol + m);
                     markCell.setCellStyle(dataStyle);
+                    if (qMarks != null) {
+                        String code = questions.get(m).getCode();
+                        Double val = qMarks.get(code);
+                        if (val != null) {
+                            markCell.setCellValue(val);
+                        }
+                    }
                 }
 
                 int excelRow = rowIndex;
@@ -1573,6 +1593,30 @@ public class IaMarksIngestionService {
         }
 
         return status;
+    }
+
+    /**
+     * Reset and wipe all recorded marks for a specific IA test (or all IAs if iaNumber == 0).
+     */
+    public Map<String, Object> resetIaMarks(String classroomId, int iaNumber) {
+        List<StudentIaMarksRecord> records = iaMarksRecordRepository.findByClassroomId(classroomId);
+        int deletedCount = 0;
+        for (StudentIaMarksRecord r : records) {
+            if (iaNumber == 0 || r.getIaNumber() == iaNumber) {
+                iaMarksRecordRepository.delete(r);
+                deletedCount++;
+            }
+        }
+
+        log.info("Reset marks for classroom {}, IA={}: {} records deleted", classroomId, iaNumber, deletedCount);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("classroomId", classroomId);
+        response.put("iaNumber", iaNumber);
+        response.put("deletedCount", deletedCount);
+        response.put("message", "Successfully reset " + (iaNumber == 0 ? "all IA" : "IA-" + iaNumber) + " marks (" + deletedCount + " records removed).");
+        return response;
     }
 
     private boolean isUsn(String s) {
