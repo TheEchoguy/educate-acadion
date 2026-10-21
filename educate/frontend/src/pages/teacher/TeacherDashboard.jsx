@@ -462,6 +462,26 @@ function TeacherDashboard() {
               <span>• Live Review &amp; Publish</span>
             </div>
           </div>
+
+          {/* Tool Card 4: AI Theory Assignment Generator */}
+          <div
+            className="standalone-tool-card border-cyan"
+            onClick={() => navigate("/teacher/assignment-generator")}
+          >
+            <div className="tool-card-head">
+              <span className="tool-badge cyan">THEORY ASSIGNMENTS</span>
+              <span className="tool-arrow">→</span>
+            </div>
+            <h3>📑 AI Theory Assignment Generator</h3>
+            <p>
+              Upload lecture notes, configure question counts and flexible marks distributions, generate grounded descriptive theory assignments, and download or publish.
+            </p>
+            <div className="tool-meta-row">
+              <span>• Notes-Grounded AI Questions</span>
+              <span>• Flexible Marks Distribution</span>
+              <span>• PDF Export &amp; Publishing</span>
+            </div>
+          </div>
         </div>
 
         {/* CREATE CLASSROOM MODAL */}

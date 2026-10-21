@@ -9,7 +9,7 @@
 }
 
 .dashboard-container {
-  max-width: 1240px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 32px 24px 80px 24px;
 }
@@ -772,21 +772,25 @@
 /* ========================================================================= */
 .standalone-tools-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 22px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  align-items: stretch;
 }
 
 .standalone-tool-card {
   background: rgba(15, 23, 42, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
-  padding: 26px;
+  padding: 22px 20px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   transition: all 0.25s ease;
+  height: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .standalone-tool-card:hover {
@@ -808,6 +812,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
 }
 
 .tool-badge {
@@ -816,6 +821,7 @@
   letter-spacing: 0.05em;
   padding: 4px 10px;
   border-radius: 10px;
+  white-space: nowrap;
 }
 
 .tool-badge.purple {
@@ -834,6 +840,7 @@
   color: #64748b;
   font-size: 1.2rem;
   transition: transform 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
 }
 
 .standalone-tool-card:hover .tool-arrow {
@@ -842,27 +849,47 @@
 }
 
 .standalone-tool-card h3 {
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   font-weight: 800;
   color: #ffffff;
   margin: 0;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .standalone-tool-card p {
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   color: #94a3b8;
-  line-height: 1.55;
+  line-height: 1.5;
   margin: 0;
+  flex: 1;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .tool-meta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 0.78rem;
+  gap: 8px 10px;
+  font-size: 0.76rem;
   color: #64748b;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 14px;
+  padding-top: 12px;
+}
+
+@media (max-width: 1080px) {
+  .standalone-tools-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .standalone-tools-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
 }
 
 /* ========================================================================= */
