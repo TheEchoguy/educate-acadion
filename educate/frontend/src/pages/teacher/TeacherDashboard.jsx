@@ -115,6 +115,22 @@ function TeacherDashboard() {
       ],
       actionText: "Launch PPT Generator",
     },
+    {
+      id: "quiz_generator",
+      title: "AI MCQ Quiz Generator",
+      tag: "AI QUESTION GENERATOR & PUBLISHER",
+      badgeColor: "purple",
+      icon: "🎯",
+      path: "/teacher/quiz-generator",
+      image: imgPapers,
+      description: "Generate academic MCQ quizzes from topics or lecture notes using OpenRouter AI, review & edit questions, and publish directly for student practice.",
+      features: [
+        "Topic & Document Notes Generation",
+        "Interactive Option & Key Editor",
+        "End-to-End Publishing & Student Scoring",
+      ],
+      actionText: "Launch Quiz Generator",
+    },
   ];
 
   // Automatic slow transition between modules every 6 seconds
@@ -320,6 +336,20 @@ function TeacherDashboard() {
             <div className="card-footer-meta">
               <span>• Multi-Part Series</span>
               <span>• Visual Editor</span>
+            </div>
+          </div>
+
+          {/* Card 6: AI MCQ Quiz Generator */}
+          <div className="clean-grid-card border-purple" onClick={() => navigate("/teacher/quiz-generator")}>
+            <div className="card-top-bar">
+              <div className="card-badge purple">MCQ QUIZ GENERATOR</div>
+              <span className="card-arrow">→</span>
+            </div>
+            <h3>🎯 AI MCQ Quiz Generator</h3>
+            <p>Generate academic quizzes from topics or notes with OpenRouter AI, review &amp; publish for student practice.</p>
+            <div className="card-footer-meta">
+              <span>• Topic &amp; Notes AI</span>
+              <span>• Live Review &amp; Publish</span>
             </div>
           </div>
         </div>

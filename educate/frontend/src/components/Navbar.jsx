@@ -88,6 +88,12 @@ function Navbar() {
                   >
                     PPT Generator
                   </button>
+                  <button
+                    className={`nav-pill-btn ${location.pathname.startsWith("/teacher/quiz-generator") ? "active" : ""}`}
+                    onClick={() => navigate("/teacher/quiz-generator")}
+                  >
+                    Quiz Generator
+                  </button>
                 </>
               )}
             </div>

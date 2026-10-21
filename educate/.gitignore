@@ -6,6 +6,9 @@ backend/storage/
 
 # Frontend environment file
 frontend/.env
+backend/.env
+backend/start_backend.ps1
+*.env
 
 # Logs & Python cache
 *.log

@@ -19,8 +19,8 @@ import "./EvaluateResponses.css";
 function EvaluateResponses() {
   const navigate = useNavigate();
 
-  // Extract Teacher Email from localStorage or Token
-  const token = localStorage.getItem("token") || "";
+  // Extract Teacher Email from sessionStorage, localStorage or Token
+  const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
   let decodedEmail = "";
   let decodedName = "";
   let decodedRole = "";
@@ -33,11 +33,11 @@ function EvaluateResponses() {
     } catch (e) {}
   }
 
-  const teacherEmail = localStorage.getItem("email") || decodedEmail;
-  const teacherName = localStorage.getItem("name") || decodedName || "Faculty Member";
+  const teacherEmail = sessionStorage.getItem("email") || localStorage.getItem("email") || decodedEmail;
+  const teacherName = sessionStorage.getItem("name") || localStorage.getItem("name") || decodedName || "Faculty Member";
 
   const [isVerified, setIsVerified] = useState(() => {
-    const persisted = localStorage.getItem(`teacher_verified_${teacherEmail}`);
+    const persisted = localStorage.getItem(`teacher_verified_${teacherEmail}`) || sessionStorage.getItem(`teacher_verified_${teacherEmail}`);
     const sessionVal = sessionStorage.getItem("teacher_verified_subject");
     return persisted === "true" || Boolean(sessionVal);
   });
@@ -53,7 +53,7 @@ function EvaluateResponses() {
     sessionStorage.getItem("teacher_verified_subject") || ""
   );
   const [verifySemester, setVerifySemester] = useState(
-    sessionStorage.getItem("teacher_verified_semester") || "6"
+    sessionStorage.getItem("teacher_verified_semester") || "ALL"
   );
   const [verifyLoading, setVerifyLoading] = useState(false);
 
@@ -63,7 +63,7 @@ function EvaluateResponses() {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL, PENDING, EVALUATED
-  const [selectedSemester, setSelectedSemester] = useState(verifySemester || "ALL");
+  const [selectedSemester, setSelectedSemester] = useState("ALL");
   const [selectedSubject, setSelectedSubject] = useState(verifySubject || "ALL");
 
   // Active Evaluation Modal State
