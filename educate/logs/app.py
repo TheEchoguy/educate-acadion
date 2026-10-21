@@ -12,8 +12,11 @@ import requests
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import uvicorn
+from dotenv import load_dotenv
+
+# Ensure .env is explicitly loaded
+load_dotenv()
 
 from ai_extractor import extract_questions_with_ai, extract_blueprint_with_ai, MODEL_NAME
 from pdf_reader import extract_text_from_pdf_bytes, extract_text_from_pdf_file, extract_text_from_image_bytes
@@ -85,13 +88,8 @@ def rag_health():
         try:
             from google import genai
             from google.genai import types
-            client = genai.Client(api_key=gemini_key.strip())
-            candidate_models = list(dict.fromkeys([
-                os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
-                "gemini-3.8-flash",
-                "gemini-2.5-flash",
-                "gemini-2.0-flash"
-            ]))
+            client = genai.Client(api_key=gemini_key.strip(), http_options={"timeout": 4.0})
+            candidate_models = [os.getenv("GEMINI_MODEL", "gemini-3.8-flash")]
             
             gemini_ok = False
             last_err = None
@@ -154,11 +152,12 @@ def rag_health():
             )
             if resp.status_code == 200:
                 data = resp.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                msg = data.get("choices", [{}])[0].get("message", {})
+                content = msg.get("content") or ""
                 results["providers"]["openrouter"] = {
                     "status": "AVAILABLE",
                     "model": openrouter_model,
-                    "response": content.strip(),
+                    "response": str(content).strip(),
                     "error": None
                 }
             else:

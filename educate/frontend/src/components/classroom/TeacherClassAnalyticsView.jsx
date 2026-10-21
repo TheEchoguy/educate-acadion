@@ -1,9 +1,216 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   getClassroomAnalyticsSummary,
   getStudentFourLevelAnalytics,
 } from "../../services/classroomService";
 import "./TeacherClassAnalyticsView.css";
+
+/**
+ * Interactive SVG Donut / Pie Chart with hover highlights, central stat, and colored legend.
+ */
+const InteractiveDonutChart = ({ data, totalLabel, totalValue, size = 180 }) => {
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+
+  const total = data.reduce((acc, d) => acc + (d.value || 0), 0);
+  const strokeWidth = 32;
+  const radius = (size - strokeWidth) / 2;
+  const center = size / 2;
+
+  let cumulativeAngle = -90; // Start at 12 o'clock
+
+  const slices = data.map((d, idx) => {
+    const value = d.value || 0;
+    const percentage = total > 0 ? (value / total) * 100 : 0;
+    const angle = total > 0 ? (value / total) * 360 : 0;
+    const startAngle = cumulativeAngle;
+    const endAngle = cumulativeAngle + angle;
+    cumulativeAngle += angle;
+
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+    const x1 = center + radius * Math.cos(startRad);
+    const y1 = center + radius * Math.sin(startRad);
+    const x2 = center + radius * Math.cos(endRad);
+    const y2 = center + radius * Math.sin(endRad);
+    const largeArc = angle > 180 ? 1 : 0;
+
+    const pathData =
+      angle >= 359.99
+        ? `M ${center} ${center - radius} A ${radius} ${radius} 0 1 1 ${center - 0.001} ${center - radius}`
+        : `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
+
+    return {
+      ...d,
+      pathData,
+      percentage: Number(percentage.toFixed(1)),
+      index: idx,
+    };
+  });
+
+  return (
+    <div className="tca-donut-chart-wrapper">
+      <div className="tca-donut-svg-container" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          {total === 0 && (
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="rgba(255, 255, 255, 0.08)"
+              strokeWidth={strokeWidth}
+            />
+          )}
+
+          {slices.map((slice, idx) => {
+            if (slice.value <= 0) return null;
+            const isHovered = hoveredIndex === idx;
+
+            return (
+              <path
+                key={idx}
+                d={slice.pathData}
+                fill="none"
+                stroke={slice.color}
+                strokeWidth={isHovered ? strokeWidth + 6 : strokeWidth}
+                strokeLinecap="round"
+                className="tca-donut-slice"
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                style={{
+                  transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                  cursor: "pointer",
+                  filter: isHovered ? `drop-shadow(0 0 8px ${slice.color})` : "none",
+                }}
+              />
+            );
+          })}
+
+          <text
+            x={center}
+            y={center - 4}
+            textAnchor="middle"
+            className="tca-donut-center-val"
+          >
+            {hoveredIndex !== null && slices[hoveredIndex]
+              ? `${slices[hoveredIndex].percentage}%`
+              : totalValue}
+          </text>
+          <text
+            x={center}
+            y={center + 14}
+            textAnchor="middle"
+            className="tca-donut-center-lbl"
+          >
+            {hoveredIndex !== null && slices[hoveredIndex]
+              ? `${slices[hoveredIndex].label} (${slices[hoveredIndex].value})`
+              : totalLabel}
+          </text>
+        </svg>
+      </div>
+
+      <div className="tca-donut-legend">
+        {data.map((item, idx) => {
+          const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+          const isHovered = hoveredIndex === idx;
+          return (
+            <div
+              key={idx}
+              className={`tca-legend-row ${isHovered ? "legend-hovered" : ""}`}
+              onMouseEnter={() => setHoveredIndex(idx)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            >
+              <span
+                className="tca-legend-dot"
+                style={{ backgroundColor: item.color }}
+              />
+              <span className="tca-legend-name">{item.label}</span>
+              <strong className="tca-legend-val">{item.value}</strong>
+              <span className="tca-legend-pct">({pct}%)</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Sub-Question Line Indicator displaying average score among attempted students
+ * across 3 color-divided performance threshold ranges (Low <40%, Med 40-75%, High ≥75%).
+ */
+const SubQuestionLineIndicator = ({ subData, label }) => {
+  if (!subData) return null;
+  const avg = subData.averageScore || 0;
+  const max = subData.maxMarks || 10.0;
+  const pct = Math.min(100, Math.max(0, (avg / max) * 100));
+
+  let statusColor = "#10b981";
+  if (pct < 40) {
+    statusColor = "#ef4444";
+  } else if (pct < 75) {
+    statusColor = "#f59e0b";
+  }
+
+  return (
+    <div className="tca-line-indicator-card">
+      <div className="tca-line-indicator-head">
+        <div className="tca-subq-badge-wrap">
+          <span className="tca-subq-pill">{label || subData.code}</span>
+          <span className="tca-subq-topic" title={subData.topicName}>
+            {subData.topicName}
+          </span>
+        </div>
+        <div
+          className="tca-subq-score-badge"
+          style={{ borderColor: `${statusColor}66`, color: statusColor }}
+        >
+          Avg: <strong>{avg.toFixed(1)}</strong> / {max.toFixed(0)} M ({pct.toFixed(0)}%)
+        </div>
+      </div>
+
+      {/* Tri-color threshold bar (Low 40%, Med 35%, High 25%) */}
+      <div className="tca-threshold-bar-container">
+        <div className="tca-threshold-track">
+          <div className="tca-threshold-zone zone-low" title="Low Range: 0 - 4.0 Marks (0-40%)" />
+          <div className="tca-threshold-zone zone-med" title="Medium Range: 4.0 - 7.5 Marks (40-75%)" />
+          <div className="tca-threshold-zone zone-high" title="High Range: 7.5 - 10.0 Marks (75-100%)" />
+        </div>
+
+        {/* Dynamic needle pointer marker */}
+        <div
+          className="tca-threshold-needle"
+          style={{ left: `${pct}%`, borderColor: statusColor }}
+        >
+          <div className="tca-needle-pin" style={{ backgroundColor: statusColor }} />
+          <div className="tca-needle-tooltip" style={{ color: statusColor }}>
+            {avg.toFixed(1)}M
+          </div>
+        </div>
+
+        <div className="tca-threshold-labels">
+          <span>0M (Low)</span>
+          <span>4M (Med)</span>
+          <span>7.5M (High)</span>
+          <span>10M</span>
+        </div>
+      </div>
+
+      <div className="tca-line-indicator-meta">
+        <span>
+          Attempted: <strong>{subData.attemptedCount || 0}</strong> students
+        </span>
+        <span>
+          Weak (&lt;50%):{" "}
+          <strong style={{ color: subData.weakCount > 0 ? "#f87171" : "#34d399" }}>
+            {subData.weakCount || 0}
+          </strong>{" "}
+          students
+        </span>
+      </div>
+    </div>
+  );
+};
 
 const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
   const [summary, setSummary] = useState(null);
@@ -12,6 +219,7 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [topicFilter, setTopicFilter] = useState("ALL"); // ALL | WEAK | STRONG
+  const [selectedQuestionView, setSelectedQuestionView] = useState("Overall"); // "Overall" | "Q1" | "Q2" | "Q3" | "Q4"
 
   // Drilldown Modal State
   const [selectedStudentUsn, setSelectedStudentUsn] = useState(null);
@@ -138,6 +346,126 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
     return matchQuery && matchStatus;
   });
 
+  // Question-level interactive analytics derivation (Q1, Q2, Q3, Q4)
+  const questionsData = useMemo(() => {
+    if (summary?.questionList && summary.questionList.length > 0) {
+      return summary.questionList;
+    }
+    if (summary?.questionAnalytics && Object.keys(summary.questionAnalytics).length > 0) {
+      return ["Q1", "Q2", "Q3", "Q4"]
+        .map((qId) => summary.questionAnalytics[qId])
+        .filter(Boolean);
+    }
+    // Fallback derivation from topicHeatmap
+    const qMap = {};
+    ["Q1", "Q2", "Q3", "Q4"].forEach((qId, idx) => {
+      const num = qId.substring(1);
+      const mod = idx < 2 ? 1 : 2;
+      const subA = (summary?.topicHeatmap || []).find((t) => t.code && t.code.toLowerCase().startsWith(num + "a"));
+      const subB = (summary?.topicHeatmap || []).find((t) => t.code && t.code.toLowerCase().startsWith(num + "b"));
+      const attemptsA = subA?.studentsAttemptedCount || 0;
+      const attemptsB = subB?.studentsAttemptedCount || 0;
+      const totalAttempts = Math.max(attemptsA, attemptsB);
+      const weakA = subA?.weakStudentsCount || 0;
+      const weakB = subB?.weakStudentsCount || 0;
+      const avgA = subA?.classAveragePercentage ? (subA.classAveragePercentage / 10.0) : 0;
+      const avgB = subB?.classAveragePercentage ? (subB.classAveragePercentage / 10.0) : 0;
+      const avgScore = avgA + avgB;
+      const avgPct = (avgScore / 20.0) * 100.0;
+      const totalWeak = Math.max(weakA, weakB);
+
+      qMap[qId] = {
+        questionNumber: qId,
+        moduleNumber: mod,
+        attemptedCount: totalAttempts,
+        weakCount: totalWeak,
+        averageScore: Number(avgScore.toFixed(1)),
+        averagePercentage: Number(avgPct.toFixed(1)),
+        status: avgPct >= 75 ? "STRONG" : avgPct >= 50 ? "MODERATE" : "WEAK",
+        scoreBrackets: {
+          "< 10 Marks (<50%)": totalWeak,
+          "10-14 Marks (50-74%)": Math.max(0, Math.round(totalAttempts * 0.4)),
+          "15-20 Marks (≥75%)": Math.max(0, totalAttempts - totalWeak - Math.round(totalAttempts * 0.4)),
+        },
+        subQuestionA: {
+          code: num + "a",
+          topicName: subA?.topicName || `Question ${num}a Core Topic`,
+          averageScore: Number(avgA.toFixed(1)),
+          maxMarks: 10.0,
+          attemptedCount: attemptsA,
+          weakCount: weakA,
+          lowThreshold: 4.0,
+          mediumThreshold: 7.5,
+          highThreshold: 10.0,
+        },
+        subQuestionB: {
+          code: num + "b",
+          topicName: subB?.topicName || `Question ${num}b Advanced Topic`,
+          averageScore: Number(avgB.toFixed(1)),
+          maxMarks: 10.0,
+          attemptedCount: attemptsB,
+          weakCount: weakB,
+          lowThreshold: 4.0,
+          mediumThreshold: 7.5,
+          highThreshold: 10.0,
+        },
+      };
+    });
+    return Object.values(qMap);
+  }, [summary]);
+
+  const currentQuestionData = useMemo(() => {
+    if (selectedQuestionView === "Overall") return null;
+    return questionsData.find((q) => q.questionNumber === selectedQuestionView) || null;
+  }, [questionsData, selectedQuestionView]);
+
+  const pieChartConfig = useMemo(() => {
+    if (selectedQuestionView === "Overall") {
+      const colors = {
+        Q1: "#38bdf8",
+        Q2: "#818cf8",
+        Q3: "#f59e0b",
+        Q4: "#10b981",
+      };
+      const slices = questionsData.map((q) => ({
+        label: q.questionNumber,
+        value: q.attemptedCount || 0,
+        color: colors[q.questionNumber] || "#94a3b8",
+      }));
+      const totalAttempts = slices.reduce((acc, s) => acc + s.value, 0);
+      return {
+        slices,
+        totalLabel: "Total Attempts",
+        totalValue: totalAttempts.toString(),
+      };
+    }
+
+    if (currentQuestionData) {
+      const brackets = currentQuestionData.scoreBrackets || {};
+      const lowVal = brackets["< 10 Marks (<50%)"] ?? brackets["< 10 Marks"] ?? currentQuestionData.weakCount ?? 0;
+      const medVal = brackets["10-14 Marks (50-74%)"] ?? brackets["10 - 14 Marks"] ?? 0;
+      const highVal = brackets["15-20 Marks (≥75%)"] ?? brackets["15 - 20 Marks"] ?? 0;
+
+      const slices = [
+        { label: "<10 Marks (<50% Weak)", value: lowVal, color: "#ef4444" },
+        { label: "10-14 Marks (50-74% Mod)", value: medVal, color: "#f59e0b" },
+        { label: "15-20 Marks (≥75% Strong)", value: highVal, color: "#10b981" },
+      ];
+
+      return {
+        slices,
+        totalLabel: `${currentQuestionData.questionNumber} Avg`,
+        totalValue: `${currentQuestionData.averageScore?.toFixed(1) || 0}/20`,
+      };
+    }
+
+    return {
+      slices: [],
+      totalLabel: "N/A",
+      totalValue: "0",
+    };
+  }, [selectedQuestionView, questionsData, currentQuestionData]);
+
   return (
     <div className="tca-container">
       {/* 1. TOP HERO STATS & DISTRIBUTION */}
@@ -241,103 +569,118 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
         </div>
       )}
 
-      {/* 2. CARD 1: CLASS TOPIC PERFORMANCE HEATMAP */}
+      {/* 2. CARD 1: DIAGNOSTIC QUESTION HEATMAP & INTERACTIVE PERFORMANCE DISTRIBUTION */}
       <div className="tca-section-card">
         <div className="tca-card-header">
           <div>
             <h3 className="tca-card-title">
-              🔥 Card 1: Universal Topic Performance Heatmap
+              🔥 Card 1: Diagnostic Question Heatmap & Performance Distribution
             </h3>
             <p className="tca-card-subtitle">
-              Ranked from weakest to strongest. Helps identify specific concepts where students struggle the most.
+              Mutual-exclusion module question evaluation (Q1/Q2 for Module 1, Q3/Q4 for Module 2) with atomic score distribution.
             </p>
-          </div>
-          <div className="tca-filter-group">
-            <button
-              type="button"
-              className={`tca-tab-btn ${topicFilter === "ALL" ? "active" : ""}`}
-              onClick={() => setTopicFilter("ALL")}
-            >
-              All Topics ({topicHeatmap.length})
-            </button>
-            <button
-              type="button"
-              className={`tca-tab-btn ${topicFilter === "WEAK" ? "active" : ""}`}
-              onClick={() => setTopicFilter("WEAK")}
-            >
-              Weak Areas &lt;50%
-            </button>
-            <button
-              type="button"
-              className={`tca-tab-btn ${topicFilter === "STRONG" ? "active" : ""}`}
-              onClick={() => setTopicFilter("STRONG")}
-            >
-              Strong ≥75%
-            </button>
           </div>
         </div>
 
-        {filteredTopics.length === 0 ? (
-          <div className="tca-empty-small">
-            No topics matching the selected filter.
+        <div className="tca-analytics-split-layout">
+          {/* LEFT: COMPACT HEATMAP */}
+          <div className="tca-compact-heatmap-col">
+            <div className="tca-col-header">
+              <span className="tca-col-title">Diagnostic Heatmap</span>
+              <span className="tca-col-hint">Click box to inspect</span>
+            </div>
+
+            <div className="tca-compact-heatmap-grid">
+              {questionsData.map((q) => {
+                const isSelected = selectedQuestionView === q.questionNumber;
+                const weakCount = q.weakCount || 0;
+                let heatClass = "heat-strong";
+                if (q.attemptedCount === 0) {
+                  heatClass = "heat-unattempted";
+                } else if (weakCount > 0 && ((weakCount / q.attemptedCount) >= 0.4 || q.averagePercentage < 50)) {
+                  heatClass = "heat-weak";
+                } else if (weakCount > 0 || q.averagePercentage < 75) {
+                  heatClass = "heat-mod";
+                }
+
+                return (
+                  <button
+                    key={q.questionNumber}
+                    type="button"
+                    className={`tca-compact-heat-box ${heatClass} ${isSelected ? "selected-box" : ""}`}
+                    onClick={() => setSelectedQuestionView(q.questionNumber)}
+                    title={`Question ${q.questionNumber}: ${weakCount} student(s) scored <50% (${q.attemptedCount} attempted)`}
+                  >
+                    <span className="tca-box-qnum">{q.questionNumber}</span>
+                    <span className="tca-box-count">{weakCount}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="tca-heatmap-legend-mini">
+              <span className="tca-legend-tag"><span className="dot dot-green" /> &lt;20% weak</span>
+              <span className="tca-legend-tag"><span className="dot dot-amber" /> 20–40% weak</span>
+              <span className="tca-legend-tag"><span className="dot dot-red" /> &gt;40% weak</span>
+            </div>
           </div>
-        ) : (
-          <div className="tca-heatmap-grid">
-            {filteredTopics.map((topic, idx) => {
-              const pct = topic.classAveragePercentage;
-              const isWeak = pct < 50;
-              const isMod = pct >= 50 && pct < 75;
-              const barClass = isWeak ? "bar-weak" : isMod ? "bar-mod" : "bar-strong";
-              const badgeClass = isWeak
-                ? "badge-weak"
-                : isMod
-                ? "badge-mod"
-                : "badge-strong";
 
-              return (
-                <div key={idx} className={`tca-heatmap-item ${isWeak ? "item-weak" : ""}`}>
-                  <div className="tca-item-top">
-                    <span className="tca-item-code">Q{topic.code.toUpperCase()}</span>
-                    <span className="tca-item-module">Module {topic.moduleNumber}</span>
-                    {topic.co && <span className="tca-item-co">{topic.co}</span>}
-                    <span className={`tca-item-status ${badgeClass}`}>
-                      {topic.status}
-                    </span>
-                  </div>
+          {/* RIGHT: INTERACTIVE ANALYTICS & PIE CHARTS */}
+          <div className="tca-interactive-analytics-col">
+            <div className="tca-col-header-right">
+              <span className="tca-col-title">
+                {selectedQuestionView === "Overall"
+                  ? "Overall Question Attempt Distribution"
+                  : `${selectedQuestionView} Score Distribution & Sub-Question Metrics`}
+              </span>
+              <div className="tca-dropdown-wrap">
+                <label htmlFor="q-view-select" className="tca-dropdown-label">Question:</label>
+                <select
+                  id="q-view-select"
+                  className="tca-dropdown-select"
+                  value={selectedQuestionView}
+                  onChange={(e) => setSelectedQuestionView(e.target.value)}
+                >
+                  <option value="Overall">Overall</option>
+                  <option value="Q1">Q1</option>
+                  <option value="Q2">Q2</option>
+                  <option value="Q3">Q3</option>
+                  <option value="Q4">Q4</option>
+                </select>
+              </div>
+            </div>
 
-                  <div className="tca-item-title" title={topic.topicName}>
-                    {topic.topicName}
-                  </div>
+            <InteractiveDonutChart
+              data={pieChartConfig.slices}
+              totalLabel={pieChartConfig.totalLabel}
+              totalValue={pieChartConfig.totalValue}
+              size={180}
+            />
 
-                  <div className="tca-item-bar-row">
-                    <div className="tca-item-bar-bg">
-                      <div
-                        className={`tca-item-bar-fill ${barClass}`}
-                        style={{ width: `${Math.min(100, Math.max(5, pct))}%` }}
-                      />
-                    </div>
-                    <span className="tca-item-pct">{pct.toFixed(1)}%</span>
-                  </div>
-
-                  <div className="tca-item-footer">
-                    <span>
-                      Attempted: <strong>{topic.studentsAttemptedCount}</strong>
-                    </span>
-                    {topic.weakStudentsCount > 0 ? (
-                      <span className="tca-weak-count">
-                        ⚠️ <strong>{topic.weakStudentsCount}</strong> scored &lt;50%
-                      </span>
-                    ) : (
-                      <span className="tca-success-count">
-                        ✅ 0 weak students
-                      </span>
-                    )}
-                  </div>
+            {selectedQuestionView !== "Overall" && currentQuestionData ? (
+              <div className="tca-line-indicators-wrap">
+                <div className="tca-line-indicators-title">
+                  <span>📊 Sub-Question Average Score Indicators (Strictly Attempted Students)</span>
                 </div>
-              );
-            })}
+                <SubQuestionLineIndicator
+                  subData={currentQuestionData.subQuestionA}
+                  label={`${currentQuestionData.questionNumber.substring(1)}a`}
+                />
+                <SubQuestionLineIndicator
+                  subData={currentQuestionData.subQuestionB}
+                  label={`${currentQuestionData.questionNumber.substring(1)}b`}
+                />
+              </div>
+            ) : (
+              <div className="tca-overall-guidance-card">
+                <span>💡</span>
+                <span>
+                  Select <strong>Q1</strong>, <strong>Q2</strong>, <strong>Q3</strong>, or <strong>Q4</strong> from the dropdown or click a heatmap box to inspect individual 20-mark score distributions and sub-question (a/b) average line indicators.
+                </span>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* 3. CARD 2: MODULES 1–5 MASTERY PROGRESS */}

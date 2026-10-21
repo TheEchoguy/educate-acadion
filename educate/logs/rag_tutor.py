@@ -629,18 +629,12 @@ STUDENT QUESTION: {query}"""
     gemini_key = api_key or os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
     if gemini_key:
         clean_key = gemini_key.strip()
-        GEMINI_MODELS = [
-            os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
-            "gemini-3.8-flash",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash"
-        ]
-        candidate_models = list(dict.fromkeys(GEMINI_MODELS))
+        candidate_models = [os.getenv("GEMINI_MODEL", "gemini-3.8-flash")]
 
         try:
             from google import genai
             from google.genai import types
-            client = genai.Client(api_key=clean_key)
+            client = genai.Client(api_key=clean_key, http_options={"timeout": 6.0})
             config = types.GenerateContentConfig(temperature=0.2)
 
             for model_name in candidate_models:
@@ -662,25 +656,47 @@ STUDENT QUESTION: {query}"""
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
     if openrouter_key:
         try:
+            import re
             openrouter_model = os.getenv("AI_OPENROUTER_MODEL", "google/gemini-3.8-flash")
+            max_tokens = int(os.getenv("OPENROUTER_MAX_TOKENS", 1000))
+            
+            headers = {
+                "Authorization": f"Bearer {openrouter_key.strip()}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://acadion.edu",
+                "X-Title": "Acadion RAG Study Tutor"
+            }
+            
+            payload = {
+                "model": openrouter_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.2,
+                "max_tokens": max_tokens
+            }
+            
             resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {openrouter_key.strip()}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://acadion.edu",
-                    "X-Title": "Acadion RAG Study Tutor"
-                },
-                json={
-                    "model": openrouter_model,
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.2,
-                    "max_tokens": 2048
-                },
+                headers=headers,
+                json=payload,
                 timeout=40
             )
+            
+            # If 402 Payment Required due to max_tokens exceeding affordable balance, dynamically retry
+            if resp.status_code == 402:
+                err_text = resp.text
+                print(f"[RAG Tutor OpenRouter 402 Token Limit Warning]: {err_text}")
+                afford_match = re.search(r"can only afford (\d+)", err_text)
+                if afford_match:
+                    affordable_tokens = max(100, int(afford_match.group(1)) - 50)
+                    print(f"[RAG Tutor OpenRouter]: Retrying with affordable max_tokens={affordable_tokens}")
+                    payload["max_tokens"] = affordable_tokens
+                    resp = requests.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=40
+                    )
+            
             if resp.status_code == 200:
                 data = resp.json()
                 content = data.get("choices", [{}])[0].get("message", {}).get("content", "")

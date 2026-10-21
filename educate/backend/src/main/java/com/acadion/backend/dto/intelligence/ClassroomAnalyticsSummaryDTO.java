@@ -32,8 +32,45 @@ public class ClassroomAnalyticsSummaryDTO {
     // Lowest performing topics (Class Weak Diagnostic Areas)
     private List<String> lowestPerformingTopics;
 
+    // Question-level interactive analytics (Q1, Q2, Q3, Q4)
+    private Map<String, QuestionAnalytics> questionAnalytics;
+    private List<QuestionAnalytics> questionList;
+
     // Student summary list for table display
     private List<StudentClassSummaryItem> studentSummaries;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class QuestionAnalytics {
+        private String questionNumber;   // "Q1", "Q2", "Q3", "Q4"
+        private int moduleNumber;        // 1 or 2
+        private int attemptedCount;      // Number of students who attempted
+        private int weakCount;           // Number of students who scored < 50% (<10/20)
+        private double averageScore;     // Average marks out of 20 among those who attempted
+        private double averagePercentage;// Average percentage among those who attempted
+        private String status;           // "STRONG" (>=75%), "MODERATE" (50-74%), "WEAK" (<50%)
+        private Map<String, Integer> scoreBrackets; // e.g. {"<10 Marks (<50%)": 4, "10-14 Marks (50-74%)": 12, "15-20 Marks (≥75%)": 24}
+        private SubQuestionAnalytics subQuestionA;  // e.g. "1a"
+        private SubQuestionAnalytics subQuestionB;  // e.g. "1b"
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SubQuestionAnalytics {
+        private String code;             // "1a", "2a", etc.
+        private String topicName;
+        private double averageScore;     // Average marks among attempted students
+        private double maxMarks;         // Usually 10.0
+        private int attemptedCount;
+        private int weakCount;
+        private double lowThreshold;     // 4.0 (<40% Low)
+        private double mediumThreshold;  // 7.5 (40-75% Medium)
+        private double highThreshold;    // 10.0 (>=75% High)
+    }
 
     @Data
     @Builder
