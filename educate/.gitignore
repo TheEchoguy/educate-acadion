@@ -15,3 +15,8 @@ logs/__pycache__/
 
 media-assets/
 
+# PPT Generator Service
+services/ppt-generator-api/.env
+services/ppt-generator-api/.venv/
+services/ppt-generator-api/**/__pycache__/
+services/ppt-generator-api/output/

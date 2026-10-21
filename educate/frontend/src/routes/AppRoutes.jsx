@@ -37,6 +37,7 @@ import SyllabusTrackingWorkspacePage from "../pages/teacher/SyllabusTrackingWork
 import SyllabusSchedulingWorkspacePage from "../pages/teacher/SyllabusSchedulingWorkspacePage";
 import EvaluationSchemeWorkspacePage from "../pages/teacher/EvaluationSchemeWorkspacePage";
 import IaMarksWorkspacePage from "../pages/teacher/IaMarksWorkspacePage";
+import TeacherPptGenerator from "../pages/teacher/TeacherPptGenerator";
 import StudentClassrooms from "../pages/student/StudentClassrooms";
 import StudentClassroomWorkspace from "../pages/student/StudentClassroomWorkspace";
 
@@ -80,6 +81,7 @@ function AppRoutes() {
       <Route path="/teacher/classrooms/:id/evaluation-scheme" element={<EvaluationSchemeWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/ia-marks" element={<IaMarksWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/intelligence" element={<IaMarksWorkspacePage />} />
+      <Route path="/teacher/ppt-generator" element={<TeacherPptGenerator />} />
 
       <Route path="/student/dashboard" element={<StudentDashboard />} />
       <Route path="/student/classrooms" element={<StudentClassrooms />} />
