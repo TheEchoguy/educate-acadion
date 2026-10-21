@@ -18,12 +18,9 @@ import {
   resetIaMarks,
 } from "../../services/classroomService";
 import "./IaMarksUploadSection.css";
-import TeacherClassAnalyticsView from "./TeacherClassAnalyticsView";
-import TeacherRiskWatchlistView from "./TeacherRiskWatchlistView";
-import TeacherNotesManager from "./TeacherNotesManager";
 
 const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [] }) => {
-  const [activeStep, setActiveStep] = useState(1); // 1: Blueprint, 2: Excel Ingestion / Manual Grid, 3: 4-Level Analytics, 4: AI Risk Watchlist, 5: Module Notes RAG
+  const [activeStep, setActiveStep] = useState(1); // 1: Blueprint, 2: Excel Ingestion / Manual Grid
   const [entryMode, setEntryMode] = useState("excel"); // 'excel' | 'manual'
   const [manualMarks, setManualMarks] = useState({}); // { [usn]: { [code]: value } }
   const [isSavingManual, setIsSavingManual] = useState(false);
@@ -130,9 +127,13 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
     const grouped = {};
     const cleanList = [];
     for (const q of bp.questions) {
-      const qn = String(q.questionNumber || "").trim();
+      let qn = String(q.questionNumber || "").trim();
+      let sub = String(q.subQuestion || "").toLowerCase().trim();
+      if ((!qn || !sub) && q.code && q.code.length >= 2) {
+        if (!qn) qn = q.code[0];
+        if (!sub) sub = q.code.slice(1).toLowerCase();
+      }
       if (!["1", "2", "3", "4"].includes(qn)) continue;
-      const sub = String(q.subQuestion || "").toLowerCase().trim();
       if (!["a", "b", "c", "d"].includes(sub)) continue;
       if (!grouped[qn]) grouped[qn] = new Set();
       if (grouped[qn].has(sub) || grouped[qn].size >= 4) continue;
@@ -145,6 +146,26 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
         maxMarks: q.maxMarks > 0 ? q.maxMarks : 10.0,
       });
     }
+
+    // Ensure all 8 sub-questions (1a, 1b, 2a, 2b, 3a, 3b, 4a, 4b) are present across all 4 boxes
+    const defaultCodes = ["1a", "1b", "2a", "2b", "3a", "3b", "4a", "4b"];
+    const existingCodeSet = new Set(cleanList.map((c) => c.code.toLowerCase()));
+    for (const defCode of defaultCodes) {
+      if (!existingCodeSet.has(defCode)) {
+        const dQn = defCode[0];
+        const dSub = defCode[1];
+        cleanList.push({
+          code: defCode,
+          questionNumber: dQn,
+          subQuestion: dSub,
+          maxMarks: 10.0,
+          part: ["1", "2"].includes(dQn) ? "PART-A" : "PART-B",
+          choiceGroup: ["1", "2"].includes(dQn) ? "Q1_OR_Q2" : "Q3_OR_Q4",
+          topicName: `Topic for ${defCode.toUpperCase()}`,
+        });
+      }
+    }
+
     cleanList.sort((a, b) => a.code.localeCompare(b.code));
     return { ...bp, questions: cleanList };
   };
@@ -288,7 +309,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
       if (q.code === code) {
         return {
           ...q,
-          [field]: field === "maxMarks" ? parseFloat(value) || 0 : value,
+          [field]: field === "maxMarks" ? (value === "" ? "" : parseFloat(value) || 0) : value,
         };
       }
       return q;
@@ -408,7 +429,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
       setBlueprint(sanitizeBlueprint(res));
       setFeedback({
         type: "success",
-        message: `✅ Blueprint Confirmed & Locked for IA-${selectedIa}${applyToAll ? " (Applied to IA-1, IA-2, and IA-3)" : ""}! Downloadable Excel blank templates and the marks parser are now dynamically synchronized to these exact question columns.`,
+        message: `✅ Blueprint & curriculum topics confirmed and saved for IA-${selectedIa}${applyToAll ? " (Applied to IA-1, IA-2, and IA-3)" : ""}! Topics are persisted to MongoDB and ground Level 1 Mastery, SHAP XAI attribution, and the RAG Study Tutor.`,
       });
     } catch (err) {
       console.error("Confirm blueprint error:", err);
@@ -754,7 +775,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
         </div>
       )}
 
-      {/* 4-STEP WORKFLOW NAVIGATOR */}
+      {/* 2-STEP DATA INGESTION WORKFLOW NAVIGATOR */}
       <div className="ia-steps-nav">
         <button
           type="button"
@@ -771,30 +792,6 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
         >
           <span className="step-number">2</span>
           <span>Step 2: Marks Ingestion</span>
-        </button>
-        <button
-          type="button"
-          className={`ia-step-btn ${activeStep === 3 ? "active" : ""}`}
-          onClick={() => setActiveStep(3)}
-        >
-          <span className="step-number">3</span>
-          <span>Step 3: 🎯 4-Level Analytics</span>
-        </button>
-        <button
-          type="button"
-          className={`ia-step-btn ${activeStep === 4 ? "active" : ""}`}
-          onClick={() => setActiveStep(4)}
-        >
-          <span className="step-number">4</span>
-          <span>Step 4: 🚨 AI Risk Watchlist & XAI</span>
-        </button>
-        <button
-          type="button"
-          className={`ia-step-btn ${activeStep === 5 ? "active" : ""}`}
-          onClick={() => setActiveStep(5)}
-        >
-          <span className="step-number">5</span>
-          <span>Step 5: 📚 Module Notes & RAG Setup</span>
         </button>
       </div>
 
@@ -1082,14 +1079,14 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
                 className="btn-confirm-lock"
                 onClick={handleConfirmAndLockBlueprint}
                 disabled={isConfirmingBlueprint || isSavingBlueprint || !blueprint}
-                title="Confirm and lock this question blueprint. Dynamically generates Excel template columns and updates the ingestion parser."
+                title="Save blueprint and confirm curriculum topics to MongoDB"
               >
                 {isConfirmingBlueprint ? (
                   <>
-                    <span className="ia-spinner" /> Locking Blueprint...
+                    <span className="ia-spinner" /> Saving & Confirming Topics...
                   </>
                 ) : (
-                  <>✅ Confirm & Lock Blueprint</>
+                  <>💾 Save Blueprint & Confirm Topics</>
                 )}
               </button>
 
@@ -1730,29 +1727,6 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
           </>
         )}
       </div>
-
-      {/* STEP 3: 4-LEVEL HIERARCHICAL ANALYTICS & DIAGNOSTIC HEATMAP */}
-      {activeStep === 3 && (
-        <TeacherClassAnalyticsView
-          classroomId={classroomId}
-          classroomName={classroomName}
-        />
-      )}
-
-      {/* STEP 4: PYTHON ML RISK PREDICTION & SHAP XAI WATCHLIST */}
-      {activeStep === 4 && (
-        <TeacherRiskWatchlistView
-          classroomId={classroomId}
-          classroomName={classroomName}
-        />
-      )}
-
-      {/* STEP 5: MODULE 1-5 COURSE NOTES RAG INGESTION & STUDY TUTOR */}
-      {activeStep === 5 && (
-        <TeacherNotesManager
-          classroomId={classroomId}
-        />
-      )}
 
       {/* Inspect Student Modal */}
       {inspectStudentUsn && (

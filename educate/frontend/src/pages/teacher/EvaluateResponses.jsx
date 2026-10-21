@@ -37,26 +37,13 @@ function EvaluateResponses() {
   const teacherEmail = localStorage.getItem("email") || decodedEmail;
   const teacherName = localStorage.getItem("name") || decodedName || "Faculty Member";
 
-  const [isVerified, setIsVerified] = useState(() => {
-    const persisted = localStorage.getItem(`teacher_verified_${teacherEmail}`);
-    const sessionVal = sessionStorage.getItem("teacher_verified_subject");
-    return persisted === "true" || Boolean(sessionVal);
-  });
+  // Open Assessment Evaluation: Direct access without password/PIN verification
+  const [isVerified, setIsVerified] = useState(true);
 
   // Teacher Profile & Authorized Subjects from Backend
   const [teacherProfile, setTeacherProfile] = useState(null);
   const [authorizedSubjects, setAuthorizedSubjects] = useState([]);
   const [profileLoading, setProfileLoading] = useState(true);
-
-  // Verification Form State
-  const [verifyPassword, setVerifyPassword] = useState("");
-  const [verifySubject, setVerifySubject] = useState(
-    location.state?.subject || sessionStorage.getItem("teacher_verified_subject") || ""
-  );
-  const [verifySemester, setVerifySemester] = useState(
-    location.state?.semester || sessionStorage.getItem("teacher_verified_semester") || "6"
-  );
-  const [verifyLoading, setVerifyLoading] = useState(false);
 
   // Main Data States
   const [papers, setPapers] = useState([]);
@@ -64,8 +51,8 @@ function EvaluateResponses() {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL, PENDING, EVALUATED
-  const [selectedSemester, setSelectedSemester] = useState(location.state?.semester || verifySemester || "ALL");
-  const [selectedSubject, setSelectedSubject] = useState(location.state?.subject || verifySubject || "ALL");
+  const [selectedSemester, setSelectedSemester] = useState(location.state?.semester || "ALL");
+  const [selectedSubject, setSelectedSubject] = useState(location.state?.subject || "ALL");
 
   // Active Evaluation Modal State
   const [activeModalResponse, setActiveModalResponse] = useState(null);
@@ -90,14 +77,8 @@ function EvaluateResponses() {
   useEffect(() => {
     fetchTeacherSubjects();
     fetchPapers();
-  }, [teacherEmail]);
-
-  // Fetch responses when verified
-  useEffect(() => {
-    if (isVerified) {
-      fetchEnrichedResponses();
-    }
-  }, [isVerified, selectedSemester, selectedSubject]);
+    fetchEnrichedResponses();
+  }, [teacherEmail, selectedSemester, selectedSubject]);
 
   const fetchTeacherSubjects = async () => {
     if (!teacherEmail) {
@@ -110,8 +91,8 @@ function EvaluateResponses() {
       setTeacherProfile(data);
       const subs = data.assignedSubjects || [];
       setAuthorizedSubjects(subs);
-      if (subs.length > 0 && !verifySubject) {
-        setVerifySubject(subs[0]);
+      if (subs.length > 0 && selectedSubject === "ALL") {
+        // Keep ALL or preset
       }
     } catch (err) {
       console.error("Failed to load teacher subjects:", err);
@@ -157,50 +138,54 @@ function EvaluateResponses() {
     }
   };
 
-  // Handle Teacher Identity & Subject Verification
-  const handleTeacherVerify = async (e) => {
-    e.preventDefault();
-    if (!verifyPassword) {
-      toast.error("Please enter your teacher account password");
-      return;
+  // Helper: Auto-evaluate MCQ correctness
+  const checkIsMcqCorrect = (question, studentAns) => {
+    if (!question || !studentAns) return false;
+    const correct = (question.correctAnswer || "").trim().toUpperCase();
+    const student = (studentAns || "").trim().toUpperCase();
+    if (!correct || !student) return false;
+
+    // Exact direct match
+    if (student === correct) return true;
+
+    // Letter prefix match: e.g. "A" vs "A) ..." or "Option A"
+    if (correct.length === 1) {
+      if (
+        student.startsWith(correct + ")") ||
+        student.startsWith(correct + ".") ||
+        student.startsWith(correct + " ") ||
+        student === correct ||
+        student.includes(`OPTION ${correct}`) ||
+        student.startsWith(`(${correct})`)
+      ) {
+        return true;
+      }
     }
 
-    if (!verifySubject) {
-      toast.error("Please select the authorized subject you are evaluating");
-      return;
+    if (
+      student.length === 1 &&
+      (correct.startsWith(student + ")") ||
+        correct.startsWith(student + ".") ||
+        correct.startsWith(student + " ") ||
+        correct.includes(`OPTION ${student}`) ||
+        correct.startsWith(`(${student})`))
+    ) {
+      return true;
     }
 
-    try {
-      setVerifyLoading(true);
-      const payload = {
-        email: teacherEmail,
-        password: verifyPassword,
-        subject: verifySubject,
-        semester: Number(verifySemester) || null,
-      };
-
-      const res = await verifyTeacherAccess(payload);
-      toast.success(res.message || "Teacher verified successfully!");
-
-      sessionStorage.setItem("teacher_verified_subject", verifySubject);
-      sessionStorage.setItem("teacher_verified_semester", verifySemester);
-      localStorage.setItem(`teacher_verified_${teacherEmail}`, "true");
-      setSelectedSubject(verifySubject);
-      setSelectedSemester(verifySemester);
-      setIsVerified(true);
-    } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Verification Failed";
-      toast.error(msg);
-    } finally {
-      setVerifyLoading(false);
+    // Check options array matching
+    if (question.options && question.options.length > 0) {
+      const letters = ["A", "B", "C", "D", "E"];
+      const correctIdx = letters.indexOf(correct);
+      if (correctIdx >= 0 && question.options[correctIdx]) {
+        const optionText = question.options[correctIdx].trim().toUpperCase();
+        if (student === optionText || student.includes(optionText) || optionText.includes(student)) {
+          return true;
+        }
+      }
     }
-  };
 
-  const handleResetVerification = () => {
-    sessionStorage.removeItem("teacher_verified_subject");
-    sessionStorage.removeItem("teacher_verified_semester");
-    setIsVerified(false);
-    setVerifyPassword("");
+    return false;
   };
 
   // Open Question Evaluation Modal for a student
@@ -221,9 +206,34 @@ function EvaluateResponses() {
     try {
       const paperData = await getPaperById(resp.paperId);
       setActivePaperDetails(paperData);
+
+      // Auto-evaluate MCQ questions
+      if (resp.responses && paperData?.questions) {
+        resp.responses.forEach((ans) => {
+          const matchingQ = paperData.questions.find(
+            (q) => q.questionId?.toLowerCase() === ans.questionId?.toLowerCase()
+          );
+          const isMcq =
+            (ans.questionType || matchingQ?.type || matchingQ?.questionType || "").toUpperCase() === "MCQ" ||
+            (matchingQ?.options && matchingQ.options.length > 0);
+
+          if (isMcq && matchingQ) {
+            const maxM = ans.maxMarks || matchingQ.marks || 1;
+            const isCorrect = checkIsMcqCorrect(matchingQ, ans.answer);
+            marksObj[ans.questionId] = isCorrect ? maxM : 0;
+            if (!feedbackObj[ans.questionId] || feedbackObj[ans.questionId].includes("Auto-Evaluated")) {
+              feedbackObj[ans.questionId] = isCorrect
+                ? "✓ Auto-Evaluated: Correct Option"
+                : `✗ Auto-Evaluated: Incorrect. Correct: ${matchingQ.correctAnswer || "Option Key"}`;
+            }
+          }
+        });
+      }
     } catch (err) {
       setActivePaperDetails(null);
     }
+    setModalMarks(marksObj);
+    setModalFeedbacks(feedbackObj);
   };
 
   const handleSaveQuestionScore = async (questionId) => {
@@ -406,133 +416,7 @@ function EvaluateResponses() {
     });
   }, [responses, searchQuery, statusFilter]);
 
-  // If not yet verified, render Teacher Security Gate
-  if (!isVerified) {
-    const isTeacher = teacherProfile?.role === "TEACHER" || decodedRole === "TEACHER";
-    const hasSubjects = authorizedSubjects.length > 0;
-
-    return (
-      <div className="eval-page">
-        <div className="eval-top-bar">
-          <button className="back-btn" onClick={() => navigate("/teacher/dashboard")}>
-            ← Back To Dashboard
-          </button>
-        </div>
-
-        <div className="eval-verify-container">
-          <div className="eval-verify-card">
-            <div className="verify-icon-box">🔒</div>
-            <h1>Teacher Security & Subject Verification</h1>
-            <p>
-              Please confirm your faculty identity and select your authorized teaching subject to unlock student response evaluation.
-            </p>
-
-            <div className="teacher-info-banner">
-              <div className="teacher-info-row">
-                <span className="teacher-label">Faculty Member</span>
-                <strong>{teacherProfile?.name || teacherName}</strong>
-              </div>
-              <div className="teacher-info-row">
-                <span className="teacher-label">Account Email</span>
-                <code className="teacher-email-tag">{teacherProfile?.email || teacherEmail || "Faculty Account"}</code>
-              </div>
-              {teacherProfile?.employeeId && (
-                <div className="teacher-info-row">
-                  <span className="teacher-label">Employee ID</span>
-                  <span className="emp-tag">{teacherProfile.employeeId}</span>
-                </div>
-              )}
-            </div>
-
-            {profileLoading ? (
-              <div className="loading-profile-msg">Checking faculty subject allocations...</div>
-            ) : isTeacher && !hasSubjects ? (
-              <div className="no-allocated-subjects-box">
-                <div className="warning-icon">⚠️</div>
-                <h3>No Teaching Subjects Allocated</h3>
-                <p>
-                  You have not been assigned any teaching subjects by the administrator yet.
-                  Please contact the college administrator to allocate your subjects.
-                </p>
-                <button
-                  type="button"
-                  className="recheck-btn"
-                  onClick={fetchTeacherSubjects}
-                >
-                  ↻ Recheck Allocation
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleTeacherVerify} className="verify-form">
-                <div className="verify-input-group">
-                  <label>
-                    Authorized Teaching Subject *{" "}
-                    <span className="auth-note">
-                      ({authorizedSubjects.length} Allocated by Admin)
-                    </span>
-                  </label>
-                  <select
-                    value={verifySubject}
-                    onChange={(e) => setVerifySubject(e.target.value)}
-                    required
-                  >
-                    <option value="">-- Select Your Teaching Subject --</option>
-                    {authorizedSubjects.map((sub, idx) => (
-                      <option key={idx} value={sub}>
-                        {sub}
-                      </option>
-                    ))}
-                    {!isTeacher && (
-                      <>
-                        <option value="Indian Knowledge System">Indian Knowledge System</option>
-                        <option value="Internet of Things">Internet of Things</option>
-                        <option value="Renewable Energy Resources">Renewable Energy Resources</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                <div className="verify-input-group">
-                  <label>Student Semester *</label>
-                  <select
-                    value={verifySemester}
-                    onChange={(e) => setVerifySemester(e.target.value)}
-                    required
-                  >
-                    <option value="1">Semester 1 (1st Year)</option>
-                    <option value="2">Semester 2 (1st Year)</option>
-                    <option value="3">Semester 3 (2nd Year)</option>
-                    <option value="4">Semester 4 (2nd Year)</option>
-                    <option value="5">Semester 5 (3rd Year)</option>
-                    <option value="6">Semester 6 (3rd Year)</option>
-                    <option value="7">Semester 7 (4th Year)</option>
-                    <option value="8">Semester 8 (4th Year)</option>
-                  </select>
-                </div>
-
-                <div className="verify-input-group">
-                  <label>Security Password Confirmation *</label>
-                  <input
-                    type="password"
-                    placeholder="Enter your account password"
-                    required
-                    value={verifyPassword}
-                    onChange={(e) => setVerifyPassword(e.target.value)}
-                  />
-                </div>
-
-                <button type="submit" className="verify-submit-btn" disabled={verifyLoading}>
-                  {verifyLoading ? "Verifying Credentials..." : "✓ Verify & Unlock Evaluations"}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Verified Evaluation Dashboard Workspace
+  // Evaluation Dashboard Workspace
   return (
     <div className="eval-page">
       {/* Top Bar Navigation */}
@@ -547,9 +431,6 @@ function EvaluateResponses() {
             Faculty: <strong>{teacherName}</strong> | Subject: <strong>{selectedSubject || "All"}</strong> | Sem:{" "}
             <strong>{selectedSemester || "All"}</strong>
           </span>
-          <button className="reverify-link-btn" onClick={handleResetVerification}>
-            Change Subject
-          </button>
         </div>
       </div>
 
@@ -832,11 +713,28 @@ function EvaluateResponses() {
                     (q) => q.questionId?.toLowerCase() === ans.questionId?.toLowerCase()
                   );
 
+                  const qType = (ans.questionType || matchingQ?.type || matchingQ?.questionType || "").toUpperCase();
+                  const isMcq = qType === "MCQ" || (matchingQ?.options && matchingQ.options.length > 0);
+                  const qMaxMarks = ans.maxMarks || matchingQ?.marks || (isMcq ? 1 : 5);
+                  const isCorrect = isMcq ? checkIsMcqCorrect(matchingQ, ans.answer) : null;
+                  const rubricText = matchingQ?.rubric || matchingQ?.modelAnswer || matchingQ?.markingScheme || matchingQ?.explanation;
+
                   return (
                     <div className="question-eval-card" key={idx}>
                       <div className="q-eval-head">
                         <div className="q-head-tags">
                           <span className="q-tag-id">{ans.questionId}</span>
+                          <span className={`q-type-badge ${isMcq ? "badge-mcq" : "badge-theory"}`} style={{
+                            fontSize: "0.74rem",
+                            fontWeight: 700,
+                            padding: "2px 8px",
+                            borderRadius: 6,
+                            background: isMcq ? "rgba(56, 189, 248, 0.15)" : "rgba(168, 85, 247, 0.15)",
+                            color: isMcq ? "#38bdf8" : "#c084fc",
+                            border: `1px solid ${isMcq ? "rgba(56, 189, 248, 0.3)" : "rgba(168, 85, 247, 0.3)"}`
+                          }}>
+                            {isMcq ? "MCQ (AUTO)" : "THEORY / DESCRIPTIVE"}
+                          </span>
                           {matchingQ?.section && (
                             <span className="q-section-tag">{matchingQ.section}</span>
                           )}
@@ -847,7 +745,7 @@ function EvaluateResponses() {
                           )}
                         </div>
                         <span className="q-max-marks">
-                          Max: {ans.maxMarks || matchingQ?.marks || 5} Marks
+                          Max: {qMaxMarks} Marks
                         </span>
                       </div>
 
@@ -867,6 +765,58 @@ function EvaluateResponses() {
                         </div>
                       )}
 
+                      {/* MCQ Auto-Evaluation Block */}
+                      {isMcq && (
+                        <div className="mcq-auto-eval-panel" style={{
+                          background: isCorrect ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
+                          border: `1px solid ${isCorrect ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                          borderRadius: 10,
+                          padding: "12px 16px",
+                          margin: "10px 0"
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                            <span style={{ fontWeight: 800, color: isCorrect ? "#34d399" : "#f87171", fontSize: "0.9rem" }}>
+                              {isCorrect ? `✓ Auto-Evaluated: Full Marks Awarded (${qMaxMarks}/${qMaxMarks} M)` : `✗ Auto-Evaluated: Incorrect Answer (0/${qMaxMarks} M)`}
+                            </span>
+                            <span style={{ fontSize: "0.82rem", color: "#94a3b8" }}>
+                              Stored Correct Answer: <strong style={{ color: "#34d399" }}>{matchingQ?.correctAnswer || "Key Not Set"}</strong>
+                            </span>
+                          </div>
+
+                          {/* MCQ Options Display */}
+                          {matchingQ?.options && matchingQ.options.length > 0 && (
+                            <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+                              {matchingQ.options.map((opt, oIdx) => {
+                                const optLetter = String.fromCharCode(65 + oIdx);
+                                const isKey = matchingQ.correctAnswer?.toUpperCase().includes(optLetter);
+                                const isSelected = (ans.answer || "").toUpperCase().includes(optLetter);
+
+                                return (
+                                  <div
+                                    key={oIdx}
+                                    style={{
+                                      padding: "6px 10px",
+                                      borderRadius: 6,
+                                      fontSize: "0.84rem",
+                                      background: isKey ? "rgba(16, 185, 129, 0.15)" : isSelected ? "rgba(239, 68, 68, 0.15)" : "rgba(255, 255, 255, 0.03)",
+                                      border: isKey ? "1px solid rgba(16, 185, 129, 0.35)" : isSelected ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid rgba(255, 255, 255, 0.06)",
+                                      color: isKey ? "#34d399" : isSelected ? "#fca5a5" : "#cbd5e1",
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "center"
+                                    }}
+                                  >
+                                    <span><strong>{optLetter}.</strong> {opt}</span>
+                                    {isKey && <span style={{ fontWeight: 700, fontSize: "0.76rem" }}>✓ Correct Key</span>}
+                                    {isSelected && !isKey && <span style={{ fontWeight: 700, fontSize: "0.76rem" }}>✗ Student Selection</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Student Submitted Answer */}
                       <div className="student-answer-display">
                         <label>Student's Submitted Answer:</label>
@@ -875,6 +825,24 @@ function EvaluateResponses() {
                         </div>
                       </div>
 
+                      {/* Theory Rubric Display */}
+                      {!isMcq && (
+                        <div className="theory-rubric-card" style={{
+                          background: "rgba(99, 102, 241, 0.08)",
+                          border: "1px solid rgba(99, 102, 241, 0.25)",
+                          borderRadius: 10,
+                          padding: "10px 14px",
+                          margin: "10px 0"
+                        }}>
+                          <strong style={{ display: "block", color: "#818cf8", fontSize: "0.82rem", marginBottom: 4 }}>
+                            📋 Model Answer / Evaluation Rubric:
+                          </strong>
+                          <p style={{ margin: 0, color: "#e0e7ff", fontSize: "0.88rem", lineHeight: 1.5 }}>
+                            {rubricText || "Evaluate answer based on key technical principles, architecture correctness, clarity, and conceptual depth."}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Marks Input & Feedback */}
                       <div className="scoring-controls-grid">
                         <div className="score-input-field">
@@ -882,7 +850,7 @@ function EvaluateResponses() {
                           <input
                             type="number"
                             min="0"
-                            max={ans.maxMarks || matchingQ?.marks || 10}
+                            max={qMaxMarks}
                             step="0.5"
                             value={modalMarks[ans.questionId] ?? ans.marksObtained ?? 0}
                             onChange={(e) =>
@@ -898,7 +866,7 @@ function EvaluateResponses() {
                           <label>Teacher Qualitative Feedback</label>
                           <input
                             type="text"
-                            placeholder="e.g. Good explanation, neat architecture diagram, or needs more detail..."
+                            placeholder={isMcq ? "MCQ auto-evaluation note..." : "e.g. Good derivation, clear architecture, needs more details on step 3..."}
                             value={modalFeedbacks[ans.questionId] ?? ans.feedback ?? ""}
                             onChange={(e) =>
                               setModalFeedbacks({
@@ -915,7 +883,7 @@ function EvaluateResponses() {
                           disabled={savingKey === `${activeModalResponse.id}-${ans.questionId}`}
                           onClick={() => handleSaveQuestionScore(ans.questionId)}
                         >
-                          {savingKey === `${activeModalResponse.id}-${ans.questionId}` ? "Saving..." : "Save Q Score"}
+                          {savingKey === `${activeModalResponse.id}-${ans.questionId}` ? "Saving..." : "Save Grade"}
                         </button>
                       </div>
                     </div>

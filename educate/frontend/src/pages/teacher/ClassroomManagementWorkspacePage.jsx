@@ -13,7 +13,7 @@ import {
   regenerateJoinCode,
 } from "../../services/classroomService";
 import ClassroomHeader from "../../components/classroom/ClassroomHeader";
-import IaMarksUploadSection from "../../components/classroom/IaMarksUploadSection";
+import EvaluationSchemeConfig from "../../components/classroom/EvaluationSchemeConfig";
 import "./ClassroomWorkspace.css";
 
 export default function ClassroomManagementWorkspacePage() {
@@ -25,14 +25,14 @@ export default function ClassroomManagementWorkspacePage() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Subtab: "members" | "import" | "iamarks"
+  // Subtab: "members" | "import" | "scheme"
   const urlSubtab = searchParams.get("subtab") || searchParams.get("tab");
   const [managementTab, setManagementTab] = useState(
-    urlSubtab && ["members", "import", "iamarks"].includes(urlSubtab) ? urlSubtab : "members"
+    urlSubtab && ["members", "import", "scheme"].includes(urlSubtab) ? urlSubtab : "members"
   );
 
   useEffect(() => {
-    if (urlSubtab && ["members", "import", "iamarks"].includes(urlSubtab)) {
+    if (urlSubtab && ["members", "import", "scheme"].includes(urlSubtab)) {
       setManagementTab(urlSubtab);
     }
   }, [urlSubtab]);
@@ -275,7 +275,7 @@ export default function ClassroomManagementWorkspacePage() {
               classroom={classroom}
               backLabel="← Back to Workspace Selection"
               onBack={() => navigate(`/teacher/classrooms/${id}/workspaces`)}
-              workspaceTitle="Classroom Management"
+              workspaceTitle="Classroom Hub"
               onRegenerateCode={handleRegenerate}
               regenerating={regenerating}
               showJoinCode={true}
@@ -300,10 +300,10 @@ export default function ClassroomManagementWorkspacePage() {
                 </button>
                 <button
                   type="button"
-                  className={`subtab-btn ${managementTab === "iamarks" ? "active" : ""}`}
-                  onClick={() => handleSubTabChange("iamarks")}
+                  className={`subtab-btn ${managementTab === "scheme" ? "active" : ""}`}
+                  onClick={() => handleSubTabChange("scheme")}
                 >
-                  📊 IA Split-Up Marks
+                  ⚖️ Evaluation Scheme Configuration
                 </button>
               </div>
 
@@ -548,13 +548,11 @@ export default function ClassroomManagementWorkspacePage() {
                 </div>
               )}
 
-              {/* SUBTAB 3: IA SPLIT-UP MARKS */}
-              {managementTab === "iamarks" && (
-                <IaMarksUploadSection
-                  classroomId={id}
-                  classroomName={classroom?.name}
-                  enrolledStudents={activeMembers}
-                />
+              {/* SUBTAB 3: EVALUATION SCHEME CONFIGURATION */}
+              {managementTab === "scheme" && (
+                <div style={{ padding: "8px 0" }}>
+                  <EvaluationSchemeConfig classroomId={id} isTeacher={true} />
+                </div>
               )}
             </div>
           </>

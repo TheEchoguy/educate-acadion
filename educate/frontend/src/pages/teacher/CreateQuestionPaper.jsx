@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { createQuestionPaper } from "../../services/paperService";
 import "./CreateQuestionPaper.css";
 
 function CreateQuestionPaper() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -41,6 +42,73 @@ function CreateQuestionPaper() {
       },
     ],
   });
+
+  // Pre-fill from uploaded or parsed paper state
+  useEffect(() => {
+    if (location.state?.parsedPaper || location.state?.paper) {
+      const incoming = location.state.parsedPaper || location.state.paper;
+      const incomingQuestions = incoming.questions || [];
+      const hasMcq =
+        incoming.paperFormat === "MCQ" ||
+        incoming.paperCategory === "QUIZ" ||
+        incomingQuestions.some(
+          (q) => q.questionType === "MCQ" || (q.options && q.options.length >= 2)
+        );
+
+      const isQuiz = hasMcq;
+      const normalizedCategory = isQuiz ? "QUIZ" : (incoming.paperCategory || "ASSESSMENT");
+
+      const mappedQuestions = incomingQuestions.map((q, idx) => {
+        let opts = ["", "", "", ""];
+        if (Array.isArray(q.options)) {
+          if (q.options.length > 0 && typeof q.options[0] === "object" && q.options[0] !== null) {
+            opts = q.options.map((o) => o.text || "");
+          } else {
+            opts = q.options.map((o) => String(o).replace(/^[A-Da-d][\)\.\:\s]+/, "").trim());
+          }
+          while (opts.length < 4) opts.push("");
+        }
+
+        const qType = isQuiz || q.questionType === "MCQ" || (q.options && q.options.length >= 2) ? "MCQ" : "THEORY";
+        const correct = (q.correctOption || q.correctAnswer || "A").toUpperCase();
+
+        return {
+          questionId: q.questionId || q.code || `Q${idx + 1}`,
+          parentQuestion: q.parentQuestion || `Q${idx + 1}`,
+          subQuestion: q.subQuestion || "",
+          text: q.prompt || q.text || "",
+          section: q.section || (q.module ? `MODULE-${q.module}` : `MODULE-${Math.ceil((idx + 1) / 2)}`),
+          groupName: q.groupName || (idx % 2 === 1 ? "GROUP-B" : "GROUP-A"),
+          optionalQuestion: Boolean(q.optionalQuestion),
+          optionalWith: q.optionalWith || "",
+          maxAttempt: q.maxAttempt || 1,
+          questionType: qType,
+          marks: q.marks != null ? Number(q.marks) : (qType === "MCQ" ? 1 : 10),
+          topic: q.topic || q.topicName || "General",
+          imageUrl: q.imageUrl || null,
+          options: opts,
+          correctAnswer: correct,
+          explanation: q.explanation || "",
+        };
+      });
+
+      setFormData((prev) => ({
+        ...prev,
+        paperId: incoming.paperId || incoming.subjectCode || prev.paperId,
+        subject: incoming.subject || prev.subject,
+        subjectCode: incoming.subjectCode || prev.subjectCode,
+        examName: incoming.examName || prev.examName,
+        semester: String(incoming.semester || prev.semester || "6"),
+        maxMarks: String(incoming.maxMarks || (isQuiz ? mappedQuestions.length : 40)),
+        durationMinutes: String(incoming.durationMinutes || (isQuiz ? "30" : "90")),
+        paperCategory: normalizedCategory,
+        examType: isQuiz ? "QUIZ" : prev.examType,
+        questions: mappedQuestions.length > 0 ? mappedQuestions : prev.questions,
+      }));
+
+      toast.success(isQuiz ? "Loaded MCQ Quiz questions into editor" : "Loaded Theory Assessment blueprint into editor");
+    }
+  }, [location.state]);
 
   const isMcqMode = formData.paperCategory === "QUIZ";
 
@@ -290,7 +358,7 @@ function CreateQuestionPaper() {
 
       await createQuestionPaper(payload);
       toast.success(`${isMcqMode ? "MCQ Quiz" : formData.paperCategory === "PRACTICE" ? "Practice Paper" : "Examination Paper"} created successfully!`);
-      navigate("/teacher/dashboard");
+      navigate("/teacher/papers");
     } catch (error) {
       console.error(error);
       toast.error(error.response?.data?.message || error.response?.data || "Failed to create question paper");
@@ -302,9 +370,14 @@ function CreateQuestionPaper() {
   return (
     <div className="create-paper-page">
       <div className="create-header-bar">
-        <button className="back-btn" onClick={() => navigate("/teacher/dashboard")}>
-          ← Back To Dashboard
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginBottom: "8px" }}>
+          <button className="back-btn" onClick={() => navigate("/teacher/dashboard")}>
+            ← Back To Dashboard
+          </button>
+          <button className="back-btn" onClick={() => navigate("/teacher/papers")}>
+            ← Back To Manage Papers
+          </button>
+        </div>
         <div className="header-info">
           <h1>Create Question Paper & Quiz</h1>
           <p>Design official examination papers, practice self-study sets, or objective MCQ quizzes.</p>

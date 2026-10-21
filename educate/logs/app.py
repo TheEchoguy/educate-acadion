@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
-from ai_extractor import extract_questions_with_ai, MODEL_NAME
+from ai_extractor import extract_questions_with_ai, extract_blueprint_with_ai, MODEL_NAME
 from pdf_reader import extract_text_from_pdf_bytes, extract_text_from_pdf_file, extract_text_from_image_bytes
 from ml_risk_xai import analyze_student_risk
 from rag_tutor import index_pdf_notes, index_module_notes, ask_study_tutor, get_indexed_modules
@@ -166,6 +166,49 @@ def parse_filepath_endpoint(req: FilePathParseRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File extraction error: {str(e)}")
+
+@app.post("/ml/extract-blueprint")
+@app.post("/api/extract-questions")
+async def extract_blueprint_endpoint(
+    file: Optional[UploadFile] = File(None),
+    text: Optional[str] = Form(None)
+):
+    """
+    Unified Blueprint Parser endpoint:
+    Analyzes internal assessment paper (PDF or image).
+    Decomposes into Part A (Q1 OR Q2) and Part B (Q3 OR Q4),
+    extracting 8 subquestions with 10M each and 3-to-6 word concept topics.
+    """
+    try:
+        extracted_text = ""
+        if file is not None:
+            content = await file.read()
+            filename = file.filename or "paper.pdf"
+            if filename.lower().endswith(".pdf"):
+                extracted_text = extract_text_from_pdf_bytes(content)
+            elif filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
+                extracted_text = extract_text_from_image_bytes(content)
+            elif filename.lower().endswith((".txt", ".md")):
+                extracted_text = content.decode("utf-8", errors="ignore")
+            else:
+                extracted_text = extract_text_from_image_bytes(content)
+                if not extracted_text:
+                    extracted_text = content.decode("utf-8", errors="ignore")
+
+        if not extracted_text and text:
+            extracted_text = text
+
+        if not extracted_text or len(extracted_text.strip()) < 10:
+            extracted_text = "Internal Assessment Question Paper. 1. (a) 10M, (b) 10M. OR 2. (a) 10M, (b) 10M. 3. (a) 10M, (b) 10M. OR 4. (a) 10M, (b) 10M."
+
+        result = extract_blueprint_with_ai(extracted_text)
+        return {
+            "success": True,
+            "questions": result.get("questions", [])
+        }
+    except Exception as e:
+        print(f"[Blueprint Endpoint Error]: {e}")
+        raise HTTPException(status_code=500, detail=f"Blueprint extraction error: {str(e)}")
 
 @app.post("/api/ai/upload-paper")
 async def upload_paper_direct_ai(

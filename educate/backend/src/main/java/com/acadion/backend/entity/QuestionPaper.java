@@ -124,6 +124,15 @@ public class QuestionPaper {
         // Correct Answer for MCQ (e.g. "A" or Option text)
         private String correctAnswer;
 
+        // "A" | "B" | "C" | "D"
+        private String correctOption;
+
+        // Solution prompt stem
+        private String prompt;
+
+        // Module number 1 to 5
+        private Integer module;
+
         // Explanation / Reference Solution
         private String explanation;
     }

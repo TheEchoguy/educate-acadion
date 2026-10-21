@@ -77,28 +77,10 @@ function Navbar() {
                     Dashboard
                   </button>
                   <button
-                    className={`nav-pill-btn ${location.pathname.startsWith("/teacher/papers") || location.pathname.startsWith("/teacher/manage-papers") ? "active" : ""}`}
-                    onClick={() => navigate("/teacher/papers")}
-                  >
-                    Papers & Studio
-                  </button>
-                  <button
                     className={`nav-pill-btn ${location.pathname.startsWith("/teacher/classrooms") ? "active" : ""}`}
                     onClick={() => navigate("/teacher/classrooms")}
                   >
-                    IA Marks & Classes
-                  </button>
-                  <button
-                    className={`nav-pill-btn ${location.pathname.startsWith("/teacher/analytics") ? "active" : ""}`}
-                    onClick={() => navigate("/teacher/analytics")}
-                  >
-                    Risk & Analytics
-                  </button>
-                  <button
-                    className={`nav-pill-btn ${location.pathname.startsWith("/teacher/ppt-generator") ? "active" : ""}`}
-                    onClick={() => navigate("/teacher/ppt-generator")}
-                  >
-                    AI PPT Studio
+                    Classrooms
                   </button>
                 </>
               )}

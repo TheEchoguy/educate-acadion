@@ -275,7 +275,18 @@ function ManagePapers() {
 
   // Helper to determine Question Part & Choice Group display
   const getQuestionMeta = (q, idx) => {
-    const rawId = (q.questionId || `Q${idx + 1}`).trim();
+    const rawId = (q.questionId || q.questionNumber || `Q${idx + 1}`).trim();
+    const isMcq = q.questionType === "MCQ" || (Array.isArray(q.options) && q.options.length >= 2);
+
+    if (isMcq) {
+      const cleanCode = rawId.startsWith("Q") ? rawId : `Q${rawId}`;
+      const part = q.section || `MODULE-${q.module || Math.ceil((idx + 1) / 4)}`;
+      const choiceGroup = q.correctOption ? `Ans: (${q.correctOption})` : (q.correctAnswer ? `Ans: (${q.correctAnswer})` : "MCQ");
+      const marksVal = q.marks != null ? `${q.marks}M` : "1M";
+      const topicVal = q.topic || `Module ${q.module || 1} Quiz Topic`;
+      return { cleanCode, part, choiceGroup, marksVal, topicVal, isMcq: true };
+    }
+
     // Match code like 1a, 1b, 2a, 2b, 3a, 4b
     const match = rawId.match(/([1-4])([a-d])?/i);
     const qNum = match ? match[1] : String(idx + 1);
@@ -301,7 +312,7 @@ function ManagePapers() {
     const marksVal = q.marks != null ? `${q.marks}M` : "10M";
     const topicVal = q.topic || `Module ${qNum} Core Concepts`;
 
-    return { cleanCode, part, choiceGroup, marksVal, topicVal };
+    return { cleanCode, part, choiceGroup, marksVal, topicVal, isMcq: false };
   };
 
   // Filtered Subject Paper Library
@@ -348,6 +359,12 @@ function ManagePapers() {
           </div>
 
           <div className="top-bar-actions">
+            <button
+              className="create-paper-action-btn"
+              onClick={() => navigate("/teacher/papers/create")}
+            >
+              ✍️ Create Question Paper
+            </button>
             <button
               className={`upload-toggle-btn ${showUploadPane ? "active" : ""}`}
               onClick={() => setShowUploadPane((prev) => !prev)}
@@ -705,6 +722,17 @@ function ManagePapers() {
               </div>
 
               <div className="modal-top-actions">
+                <button
+                  className="open-editor-action-btn"
+                  onClick={() =>
+                    navigate("/teacher/papers/create", {
+                      state: { parsedPaper: activeBlueprintPaper },
+                    })
+                  }
+                  title="Open and edit full question paper / quiz in the rich editor"
+                >
+                  📝 Open in Paper / Quiz Editor →
+                </button>
                 {blueprintEditing ? (
                   <button
                     className="save-blueprint-btn"
@@ -824,31 +852,92 @@ function ManagePapers() {
                           </span>
                         </div>
 
-                        {/* ACCORDION EXPANDED BODY (FULL QUESTION TEXT) */}
+                        {/* ACCORDION EXPANDED BODY (FULL QUESTION TEXT & MCQ OPTIONS) */}
                         {isExpanded && (
                           <div className="question-detail-expanded">
                             <div className="detail-meta-row">
                               <span className="label">Question Prompt:</span>
                               {q.bloomLevel && <span className="bloom-tag">Level: {q.bloomLevel}</span>}
                               {q.courseOutcome && <span className="co-tag">Outcome: {q.courseOutcome}</span>}
+                              {(q.questionType === "MCQ" || (Array.isArray(q.options) && q.options.length >= 2)) && (
+                                <span className="mcq-indicator-tag" style={{ background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
+                                  🎯 Objective MCQ
+                                </span>
+                              )}
                             </div>
 
                             {blueprintEditing ? (
                               <textarea
                                 className="prompt-editor-textarea"
                                 rows={3}
-                                value={q.text || ""}
+                                value={q.text || q.prompt || ""}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   setEditedQuestions((prev) => {
                                     const next = [...prev];
                                     next[idx].text = val;
+                                    next[idx].prompt = val;
                                     return next;
                                   });
                                 }}
                               />
                             ) : (
-                              <p className="prompt-display-text">{q.text || "(No question text recorded)"}</p>
+                              <p className="prompt-display-text">{q.text || q.prompt || "(No question text recorded)"}</p>
+                            )}
+
+                            {/* Render MCQ Options if question has options */}
+                            {(q.questionType === "MCQ" || (Array.isArray(q.options) && q.options.length >= 2)) && (
+                              <div className="blueprint-mcq-options-container" style={{ marginTop: 12 }}>
+                                <div style={{ fontSize: "0.78rem", color: "#94a3b8", marginBottom: 6, fontWeight: 600 }}>
+                                  MCQ Options:
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8 }}>
+                                  {q.options.map((opt, optIdx) => {
+                                    const optKey =
+                                      typeof opt === "object" && opt !== null
+                                        ? opt.key
+                                        : (String(opt).match(/^[A-Da-d]/) ? String(opt)[0].toUpperCase() : String.fromCharCode(65 + optIdx));
+                                    const optText =
+                                      typeof opt === "object" && opt !== null
+                                        ? opt.text
+                                        : String(opt).replace(/^[A-Da-d][\)\.\:\s]+/, "").trim();
+                                    const isCorrect = (q.correctOption || q.correctAnswer || "A").toUpperCase() === optKey;
+
+                                    return (
+                                      <div
+                                        key={optIdx}
+                                        style={{
+                                          padding: "8px 12px",
+                                          borderRadius: 8,
+                                          background: isCorrect ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.04)",
+                                          border: `1px solid ${isCorrect ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.08)"}`,
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 8,
+                                          fontSize: "0.82rem",
+                                        }}
+                                      >
+                                        <span style={{ fontWeight: 700, color: isCorrect ? "#34d399" : "#c084fc" }}>
+                                          {optKey})
+                                        </span>
+                                        <span style={{ color: isCorrect ? "#ecfdf5" : "#cbd5e1" }}>
+                                          {optText}
+                                        </span>
+                                        {isCorrect && (
+                                          <span style={{ marginLeft: "auto", fontSize: "0.7rem", color: "#34d399", fontWeight: 700 }}>
+                                            ✓ Answer
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                {q.explanation && (
+                                  <div style={{ marginTop: 8, fontSize: "0.78rem", color: "#38bdf8" }}>
+                                    💡 <em>Explanation:</em> {q.explanation}
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
