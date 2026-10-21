@@ -92,7 +92,7 @@ public class SyllabusAnalyticsService {
                     if (s.getEstimatedHours() != null && s.getEstimatedHours() > 0) {
                         completedHours += s.getEstimatedHours();
                     }
-                } else if (s.getStatus() == SyllabusStatus.IN_PROGRESS) {
+                } else if (s.getStatus() == SyllabusStatus.IN_PROGRESS || s.getStatus() == SyllabusStatus.PARTIALLY_COMPLETED) {
                     inProgressTopics++;
                 } else {
                     notStartedTopics++;
@@ -169,7 +169,7 @@ public class SyllabusAnalyticsService {
                 if (item.getEstimatedHours() != null && item.getEstimatedHours() > 0) {
                     completedHours += item.getEstimatedHours();
                 }
-            } else if (item.getStatus() == SyllabusStatus.IN_PROGRESS) {
+            } else if (item.getStatus() == SyllabusStatus.IN_PROGRESS || item.getStatus() == SyllabusStatus.PARTIALLY_COMPLETED) {
                 inProgressTopics++;
             } else {
                 notStartedTopics++;

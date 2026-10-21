@@ -243,6 +243,13 @@ public class SyllabusService {
         existing.setStatus(request.getStatus());
         existing.setUpdatedBy(teacher.getId());
         existing.setUpdatedAt(LocalDateTime.now());
+        if (request.getStatus() == SyllabusStatus.COMPLETED) {
+            if (existing.getActualCompletionDate() == null) {
+                existing.setActualCompletionDate(LocalDate.now());
+            }
+        } else {
+            existing.setActualCompletionDate(null);
+        }
 
         SyllabusItem updated = syllabusItemRepository.save(existing);
         log.info("Teacher {} updated status to {} for syllabus item '{}' in classroom {}",
@@ -389,8 +396,9 @@ public class SyllabusService {
 
         long totalTopics = syllabusItemRepository.countByClassroomId(classroomId);
         long completedTopics = syllabusItemRepository.countByClassroomIdAndStatus(classroomId, SyllabusStatus.COMPLETED);
-        long inProgressTopics = syllabusItemRepository.countByClassroomIdAndStatus(classroomId, SyllabusStatus.IN_PROGRESS);
-        long notStartedTopics = syllabusItemRepository.countByClassroomIdAndStatus(classroomId, SyllabusStatus.NOT_STARTED);
+        long inProgressTopics = syllabusItemRepository.countByClassroomIdAndStatus(classroomId, SyllabusStatus.IN_PROGRESS)
+                + syllabusItemRepository.countByClassroomIdAndStatus(classroomId, SyllabusStatus.PARTIALLY_COMPLETED);
+        long notStartedTopics = Math.max(0, totalTopics - completedTopics - inProgressTopics);
 
         double completionPercentage = 0.0;
         if (totalTopics > 0) {

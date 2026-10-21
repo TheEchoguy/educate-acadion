@@ -211,7 +211,7 @@ export default function StudentTeachingScheduleSection({ classroomId }) {
                         <span>↳ {s.subtopic}</span>
                         {s.subtopicSource && s.subtopicSource !== "OFFICIAL_SYLLABUS" && (
                           <span style={{ fontSize: "0.68rem", padding: "1px 6px", borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", color: "#60a5fa" }}>
-                            {s.subtopicSource === "AI_GENERATED" ? "AI Focus" : s.subtopicSource === "TEACHER_EDITED" ? "Teacher Focus" : "Learning Focus"}
+                            {s.subtopicSource === "AI_GENERATED" ? "AI Focus" : s.subtopicSource === "TEACHER_EDITED" ? "Teacher Focus" : s.subtopicSource === "TEACHER_REVIEW_SUGGESTION" ? "Suggested Focus" : "Learning Focus"}
                           </span>
                         )}
                       </div>

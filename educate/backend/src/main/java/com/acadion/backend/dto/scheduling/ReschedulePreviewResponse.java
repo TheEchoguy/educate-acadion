@@ -22,10 +22,30 @@ public class ReschedulePreviewResponse {
     private LocalDate proposedDate;
     private LocalTime proposedStartTime;
     private LocalTime proposedEndTime;
+    private String roomNumber;
+    private String proposedDayOfWeek;
     private String reason;
     private int affectedSubsequentSessionsCount;
     private String deadlineImpact;
     @Builder.Default
     private List<String> conflictWarnings = new ArrayList<>();
     private boolean isFeasible;
+    private boolean isOutsideTerm;
+    private boolean hasConflict;
+    @Builder.Default
+    private List<AffectedSessionDetail> affectedSessionsPreview = new ArrayList<>();
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AffectedSessionDetail {
+        private int sessionNumber;
+        private String topicTitle;
+        private LocalDate originalDate;
+        private LocalDate newDate;
+        private LocalTime newStartTime;
+        private LocalTime newEndTime;
+        private String reason;
+    }
 }

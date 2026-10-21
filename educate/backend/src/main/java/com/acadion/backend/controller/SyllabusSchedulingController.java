@@ -258,13 +258,25 @@ public class SyllabusSchedulingController {
     @GetMapping("/plans/active")
     public ResponseEntity<SchedulePlanResponse> getActivePlan(
             @PathVariable("classroomId") String classroomId,
+            @RequestParam(value = "planId", required = false) String planId,
             Principal principal
     ) {
         String email = getAuthenticatedEmail(principal);
-        SchedulePlanResponse plan = executionService.getActiveOrDraftPlan(classroomId, email);
+        SchedulePlanResponse plan = executionService.getActiveOrDraftPlan(classroomId, planId, email);
         if (plan == null) {
             return ResponseEntity.noContent().build();
         }
+        return ResponseEntity.ok(plan);
+    }
+
+    @GetMapping("/plans/{planId}")
+    public ResponseEntity<SchedulePlanResponse> getPlanById(
+            @PathVariable("classroomId") String classroomId,
+            @PathVariable("planId") String planId,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        SchedulePlanResponse plan = executionService.getPlanById(classroomId, planId, email);
         return ResponseEntity.ok(plan);
     }
 
@@ -321,10 +333,11 @@ public class SyllabusSchedulingController {
     public ResponseEntity<ReschedulePreviewResponse> previewReschedule(
             @PathVariable("classroomId") String classroomId,
             @PathVariable("sessionId") String sessionId,
+            @RequestBody(required = false) ReschedulePreviewRequest request,
             Principal principal
     ) {
         String email = getAuthenticatedEmail(principal);
-        ReschedulePreviewResponse preview = executionService.previewReschedule(classroomId, sessionId, email);
+        ReschedulePreviewResponse preview = executionService.previewReschedule(classroomId, sessionId, request, email);
         return ResponseEntity.ok(preview);
     }
 

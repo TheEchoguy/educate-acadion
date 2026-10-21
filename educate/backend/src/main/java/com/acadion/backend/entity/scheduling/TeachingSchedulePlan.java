@@ -47,6 +47,25 @@ public class TeachingSchedulePlan {
 
     private String feasibilityReport;
 
+    private Double requiredHours;
+
+    private Double allocatedHours;
+
+    private Double availableHours;
+
+    private Double remainingHours;
+
+    @Builder.Default
+    private int bufferSessionsCount = 0;
+
+    @Builder.Default
+    private int unscheduledTopicsCount = 0;
+
+    private Double unscheduledHours;
+
+    @Builder.Default
+    private java.util.List<String> diagnostics = new java.util.ArrayList<>();
+
     private LocalDateTime createdAt;
 
     private LocalDateTime approvedAt;

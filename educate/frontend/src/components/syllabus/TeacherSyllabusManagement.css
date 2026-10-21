@@ -349,6 +349,12 @@
   border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
+.tsm-badge-partially-completed {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
 .tsm-badge-completed {
   background: rgba(16, 185, 129, 0.15);
   color: #34d399;
@@ -1442,4 +1448,87 @@
 .tsm-form-input:focus {
   border-color: #a855f7;
 }
+
+/* ========================================================================= */
+/* SCOPED DARK THEME MODAL STYLING (OUTCOME, RESCHEDULE, AND ALLOCATION)    */
+/* ========================================================================= */
+
+.sched-modal-card {
+  background: #181528 !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8) !important;
+  color: #ffffff !important;
+  max-height: 88vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  width: 100% !important;
+}
+
+.sched-modal-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 18px 24px !important;
+  background: #1e1b2e !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+  border-top-left-radius: 18px !important;
+  border-top-right-radius: 18px !important;
+}
+
+.sched-modal-header h2 {
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+  color: #ffffff !important;
+}
+
+.sched-modal-header .modal-close-btn {
+  background: transparent !important;
+  border: none !important;
+  color: #94a3b8 !important;
+  font-size: 1.3rem !important;
+  cursor: pointer !important;
+  transition: color 0.2s ease !important;
+  padding: 4px !important;
+  line-height: 1 !important;
+}
+
+.sched-modal-header .modal-close-btn:hover {
+  color: #ffffff !important;
+}
+
+.sched-modal-body {
+  padding: 20px 24px !important;
+  overflow-y: auto !important;
+  flex: 1 1 auto !important;
+}
+
+.sched-modal-footer {
+  padding: 16px 24px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: #181528 !important;
+  display: flex !important;
+  gap: 10px !important;
+  justify-content: flex-end !important;
+  flex-shrink: 0 !important;
+  border-bottom-left-radius: 18px !important;
+  border-bottom-right-radius: 18px !important;
+}
+
+.tsm-overview-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .tsm-overview-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 

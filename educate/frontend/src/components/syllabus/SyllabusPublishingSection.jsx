@@ -94,9 +94,13 @@ export default function SyllabusPublishingSection({
                         <span className="tsm-badge tsm-badge-unscheduled">{ver.topicCount} topics</span>
                       </div>
 
-                      {ver.changeSummary && (
+                      {ver.changeSummary && !ver.changeSummary.toLowerCase().startsWith("describe what changed") ? (
                         <div className="tsm-version-summary">
                           &ldquo;{ver.changeSummary}&rdquo;
+                        </div>
+                      ) : (
+                        <div className="tsm-version-summary" style={{ fontStyle: "italic", color: "#64748b" }}>
+                          No description provided
                         </div>
                       )}
 

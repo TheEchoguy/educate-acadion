@@ -38,6 +38,9 @@ public class SyllabusItem {
     @Builder.Default
     private List<String> learningObjectives = new ArrayList<>();
 
+    @Builder.Default
+    private List<String> subtopics = new ArrayList<>();
+
     private String teachingNotes;
 
     private Double estimatedHours;
@@ -45,6 +48,13 @@ public class SyllabusItem {
     private LocalDate plannedStartDate;
 
     private LocalDate plannedCompletionDate;
+
+    private LocalDate actualCompletionDate;
+
+    private Double actualTeachingHours;
+
+    @Builder.Default
+    private List<String> linkedSessionIds = new ArrayList<>();
 
     @Builder.Default
     private List<LearningResource> learningResources = new ArrayList<>();
@@ -58,4 +68,13 @@ public class SyllabusItem {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    public LocalDate getPlannedTeachingDate() {
+        return plannedStartDate != null ? plannedStartDate : plannedCompletionDate;
+    }
+
+    public void setPlannedTeachingDate(LocalDate date) {
+        this.plannedStartDate = date;
+        this.plannedCompletionDate = date;
+    }
 }

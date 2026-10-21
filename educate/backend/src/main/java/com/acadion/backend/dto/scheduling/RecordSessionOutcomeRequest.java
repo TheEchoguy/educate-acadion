@@ -14,4 +14,5 @@ public class RecordSessionOutcomeRequest {
     private SessionStatus outcome;
     private String teacherNotes;
     private String portionsCovered;
+    private String remainingPortion;
 }
