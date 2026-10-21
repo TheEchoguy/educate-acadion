@@ -12,3 +12,7 @@ shap
 pandas
 joblib
 pymupdf
+pytesseract
+pillow
+httpx
+python-multipart

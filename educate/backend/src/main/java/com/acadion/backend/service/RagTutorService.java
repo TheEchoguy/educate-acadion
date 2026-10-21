@@ -37,7 +37,7 @@ public class RagTutorService {
     private static RestTemplate createTimeoutRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(8000);
-        factory.setReadTimeout(30000); // RAG embeddings or LLM calls can take up to 20s
+        factory.setReadTimeout(60000); // Increased to 60s for RAG hybrid retrieval and LLM generation
         return new RestTemplate(factory);
     }
 
@@ -128,9 +128,10 @@ public class RagTutorService {
                 Map<String, Object> resBody = response.getBody();
                 return parsePythonChatResponse(resBody, request);
             }
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            log.error("Python RAG chat failed with HTTP status {} and body: {}", e.getStatusCode(), e.getResponseBodyAsString());
         } catch (Exception e) {
-            log.warn("Python RAG service unavailable ({}), falling back to structured pedagogical tutor synthesis: {}",
-                    chatUrl, e.getMessage());
+            log.warn("Python RAG service unavailable ({}), error: {}", chatUrl, e.getMessage());
         }
 
         return generatePedagogicalFallbackResponse(subjectName, request);
@@ -145,21 +146,70 @@ public class RagTutorService {
             ResponseEntity<Map> response = restTemplate.getForEntity(statusUrl, Map.class);
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                Map<String, Object> modulesMap = (Map<String, Object>) body.get("modules");
-                int indexedCount = body.get("totalIndexedModules") instanceof Number ?
-                        ((Number) body.get("totalIndexedModules")).intValue() : 0;
+                Object rawModules = body.get("modules");
+                int indexedCount = 0;
+                int totalChunks = body.get("totalChunks") instanceof Number ?
+                        ((Number) body.get("totalChunks")).intValue() : 0;
 
                 Map<String, ModuleNotesStatusResponse.ModuleInfo> convertedModules = new HashMap<>();
-                if (modulesMap != null) {
+
+                if (rawModules instanceof java.util.List) {
+                    java.util.List<?> list = (java.util.List<?>) rawModules;
+                    for (Object item : list) {
+                        if (item instanceof Map) {
+                            Map<String, Object> m = (Map<String, Object>) item;
+                            int mNum = ((Number) m.getOrDefault("moduleNumber", 0)).intValue();
+                            boolean isIndexed = "READY".equalsIgnoreCase(String.valueOf(m.get("status"))) || Boolean.TRUE.equals(m.get("indexed"));
+                            String fName = m.get("fileName") != null ? String.valueOf(m.get("fileName")) : String.valueOf(m.getOrDefault("filename", ""));
+                            int chunks = 0;
+                            if (m.get("chunks") instanceof Number) {
+                                chunks = ((Number) m.get("chunks")).intValue();
+                            } else if (m.get("chunksCount") instanceof Number) {
+                                chunks = ((Number) m.get("chunksCount")).intValue();
+                            } else if (m.get("count") instanceof Number) {
+                                chunks = ((Number) m.get("count")).intValue();
+                            }
+                            if (isIndexed || chunks > 0) {
+                                indexedCount++;
+                                isIndexed = true;
+                            }
+
+                            convertedModules.put(String.valueOf(mNum), ModuleNotesStatusResponse.ModuleInfo.builder()
+                                    .moduleNumber(mNum)
+                                    .indexed(isIndexed)
+                                    .fileName(fName)
+                                    .chunksCount(chunks)
+                                    .indexedAt(String.valueOf(m.getOrDefault("indexedAt", "")))
+                                    .build());
+                        }
+                    }
+                } else if (rawModules instanceof Map) {
+                    Map<String, Object> modulesMap = (Map<String, Object>) rawModules;
                     for (Map.Entry<String, Object> entry : modulesMap.entrySet()) {
                         if (entry.getValue() instanceof Map) {
                             Map<String, Object> m = (Map<String, Object>) entry.getValue();
+                            int mNum = ((Number) m.getOrDefault("moduleNumber", Integer.parseInt(entry.getKey()))).intValue();
+                            boolean isIndexed = "READY".equalsIgnoreCase(String.valueOf(m.get("status"))) || Boolean.TRUE.equals(m.get("indexed"));
+                            String fName = m.get("fileName") != null ? String.valueOf(m.get("fileName")) : String.valueOf(m.getOrDefault("filename", ""));
+                            int chunks = 0;
+                            if (m.get("chunks") instanceof Number) {
+                                chunks = ((Number) m.get("chunks")).intValue();
+                            } else if (m.get("chunksCount") instanceof Number) {
+                                chunks = ((Number) m.get("chunksCount")).intValue();
+                            } else if (m.get("count") instanceof Number) {
+                                chunks = ((Number) m.get("count")).intValue();
+                            }
+                            if (isIndexed || chunks > 0) {
+                                indexedCount++;
+                                isIndexed = true;
+                            }
+
                             convertedModules.put(entry.getKey(), ModuleNotesStatusResponse.ModuleInfo.builder()
-                                    .moduleNumber(((Number) m.getOrDefault("moduleNumber", 0)).intValue())
-                                    .indexed(Boolean.TRUE.equals(m.get("indexed")))
-                                    .fileName((String) m.get("fileName"))
-                                    .chunksCount(((Number) m.getOrDefault("chunksCount", 0)).intValue())
-                                    .indexedAt((String) m.get("indexedAt"))
+                                    .moduleNumber(mNum)
+                                    .indexed(isIndexed)
+                                    .fileName(fName)
+                                    .chunksCount(chunks)
+                                    .indexedAt(String.valueOf(m.getOrDefault("indexedAt", "")))
                                     .build());
                         }
                     }
@@ -168,6 +218,7 @@ public class RagTutorService {
                 return ModuleNotesStatusResponse.builder()
                         .classroomId(classroomId)
                         .totalIndexedModules(indexedCount)
+                        .totalChunks(totalChunks)
                         .modules(convertedModules)
                         .build();
             }
@@ -194,9 +245,10 @@ public class RagTutorService {
     }
 
     private RagTutorChatResponse parsePythonChatResponse(Map<String, Object> resBody, RagTutorChatRequest request) {
-        String answer = (String) resBody.getOrDefault("answer", "Here is information regarding your query.");
-        String tip = (String) resBody.getOrDefault("recommendedRevisionTip", "Review the highlighted sections before your next test.");
-        String sourceMode = (String) resBody.getOrDefault("sourceMode", "grounded_rag");
+        String answer = resBody.get("answer") != null ? String.valueOf(resBody.get("answer")) : "Here is information regarding your query.";
+        String tip = resBody.get("recommendedRevisionTip") != null ? String.valueOf(resBody.get("recommendedRevisionTip")) : "Review the highlighted sections before your next test.";
+        String sourceMode = resBody.get("sourceMode") != null ? String.valueOf(resBody.get("sourceMode")) : "grounded_rag";
+        String generationMode = resBody.get("generationMode") != null ? String.valueOf(resBody.get("generationMode")) : "LLM";
 
         List<CitationSource> sources = new ArrayList<>();
         Object rawSources = resBody.get("sources");
@@ -204,11 +256,30 @@ public class RagTutorService {
             for (Object obj : (List<?>) rawSources) {
                 if (obj instanceof Map) {
                     Map<?, ?> sm = (Map<?, ?>) obj;
+                    Integer mod = sm.get("module") instanceof Number ? ((Number) sm.get("module")).intValue() : null;
+                    Integer page = sm.get("page") instanceof Number ? ((Number) sm.get("page")).intValue() : null;
+                    Integer pageStart = sm.get("page_start") instanceof Number ? ((Number) sm.get("page_start")).intValue() : page;
+                    Integer pageEnd = sm.get("page_end") instanceof Number ? ((Number) sm.get("page_end")).intValue() : page;
+                    String excerpt = sm.get("excerpt") != null ? String.valueOf(sm.get("excerpt")) :
+                            (sm.get("content") != null ? String.valueOf(sm.get("content")) : "");
+                    String source = sm.get("source") != null ? String.valueOf(sm.get("source")) :
+                            (sm.get("filename") != null ? String.valueOf(sm.get("filename")) : (mod != null ? "Module " + mod + " Notes" : "Course Notes"));
+                    String section = sm.get("section") != null ? String.valueOf(sm.get("section")) : "";
+                    String content = sm.get("content") != null ? String.valueOf(sm.get("content")) : excerpt;
+                    String chunkId = sm.get("chunk_id") != null ? String.valueOf(sm.get("chunk_id")) : null;
+                    Double sim = sm.get("similarity") instanceof Number ? ((Number) sm.get("similarity")).doubleValue() : null;
+
                     sources.add(CitationSource.builder()
-                            .module(sm.get("module") instanceof Number ? ((Number) sm.get("module")).intValue() : null)
-                            .page(sm.get("page") instanceof Number ? ((Number) sm.get("page")).intValue() : null)
-                            .source((String) sm.get("source"))
-                            .excerpt((String) sm.get("excerpt"))
+                            .module(mod)
+                            .page(page)
+                            .pageStart(pageStart)
+                            .pageEnd(pageEnd)
+                            .section(section)
+                            .source(source)
+                            .excerpt(excerpt)
+                            .content(content)
+                            .chunkId(chunkId)
+                            .similarity(sim)
                             .build());
                 }
             }
@@ -221,6 +292,7 @@ public class RagTutorService {
                 .focusModule(request.getFocusModule())
                 .focusTopic(request.getFocusTopic())
                 .sourceMode(sourceMode)
+                .generationMode(generationMode)
                 .build();
     }
 
@@ -264,6 +336,7 @@ public class RagTutorService {
                 .focusModule(modNum)
                 .focusTopic(topic)
                 .sourceMode("curriculum_fallback")
+                .generationMode("EXTRACTIVE_FALLBACK")
                 .build();
     }
 }

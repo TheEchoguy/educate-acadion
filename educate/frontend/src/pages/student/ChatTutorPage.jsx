@@ -7,6 +7,8 @@ import {
   askRagTutor,
   getModuleNotesStatus,
 } from "../../services/classroomService";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import "./ChatTutorPage.css";
 
 function ChatTutorPage() {
@@ -131,32 +133,61 @@ function ChatTutorPage() {
   // Convert modules structure (Map or Array) into guaranteed Array
   const getModulesArray = (status) => {
     const defaultModules = [
-      { moduleNumber: 1, name: "Introduction to IoT", filename: "IoT_Module1_Notes.pdf", chunks: 74, status: "READY" },
-      { moduleNumber: 2, name: "IoT Networking & Protocols", filename: "IoT_Module2_Notes.pdf", chunks: 86, status: "READY" },
-      { moduleNumber: 3, name: "Design & System Management (SNMP/NETCONF)", filename: "IoT_Module3_Notes.pdf", chunks: 68, status: "READY" },
-      { moduleNumber: 4, name: "Cloud & Data Analytics", filename: "IoT_Module4_Notes.pdf", chunks: 79, status: "READY" },
-      { moduleNumber: 5, name: "IoT Security & Case Studies", filename: "IoT_Module5_Notes.pdf", chunks: 75, status: "READY" },
+      { moduleNumber: 1, name: "Module 1: Introduction to IoT", filename: "iot mod1.pdf", chunks: 43, status: "READY" },
+      { moduleNumber: 2, name: "Module 2: IoT Networking & Protocols", filename: "iot mod2.pdf", chunks: 30, status: "READY" },
+      { moduleNumber: 3, name: "Module 3: Design & System Management", filename: "iot mod3.pdf", chunks: 48, status: "READY" },
+      { moduleNumber: 4, name: "Module 4: Cloud & Data Analytics", filename: "iot mod4.pdf", chunks: 31, status: "READY" },
+      { moduleNumber: 5, name: "Module 5: IoT Security & Case Studies", filename: "iot mod5.pdf", chunks: 35, status: "READY" },
     ];
 
     if (!status || !status.modules) {
       return defaultModules;
     }
 
+    const MODULE_TITLES = {
+      1: "Module 1: Introduction to IoT",
+      2: "Module 2: IoT Networking & Protocols",
+      3: "Module 3: Design & System Management",
+      4: "Module 4: Cloud & Data Analytics",
+      5: "Module 5: IoT Security & Case Studies",
+    };
+
+    const extractChunkCount = (val) => {
+      if (!val) return 0;
+      const c = val.chunksCount ?? val.chunks ?? val.chunkCount ?? val.total_chunks ?? val.count;
+      const num = typeof c === "number" ? c : parseInt(c, 10);
+      return Number.isFinite(num) ? num : 0;
+    };
+
     if (Array.isArray(status.modules)) {
-      return status.modules;
+      return status.modules.map((val, idx) => {
+        const mNum = val?.moduleNumber || (idx + 1);
+        const count = extractChunkCount(val);
+        const customName = val?.name && !val.name.startsWith("Module ") ? val.name : (MODULE_TITLES[mNum] || `Module ${mNum}`);
+        return {
+          moduleNumber: mNum,
+          name: customName,
+          filename: val?.fileName || val?.filename || `iot mod${mNum}.pdf`,
+          chunks: count,
+          status: val?.indexed || val?.status === "READY" || count > 0 ? "READY" : "NOT_INDEXED",
+        };
+      });
     }
 
     if (typeof status.modules === "object") {
       const arr = Object.entries(status.modules).map(([key, val]) => {
         const mNum = val?.moduleNumber || parseInt(key, 10) || 1;
+        const count = extractChunkCount(val);
+        const customName = val?.name && !val.name.startsWith("Module ") ? val.name : (MODULE_TITLES[mNum] || `Module ${mNum}`);
         return {
           moduleNumber: mNum,
-          name: val?.name || `Module ${mNum}`,
-          filename: val?.fileName || val?.filename || `IoT_Module${mNum}_Notes.pdf`,
-          chunks: val?.chunksCount || val?.chunks || 0,
-          status: val?.indexed || val?.status === "READY" ? "READY" : "NOT_INDEXED",
+          name: customName,
+          filename: val?.fileName || val?.filename || `iot mod${mNum}.pdf`,
+          chunks: count,
+          status: val?.indexed || val?.status === "READY" || count > 0 ? "READY" : "NOT_INDEXED",
         };
       });
+      arr.sort((a, b) => a.moduleNumber - b.moduleNumber);
       return arr.length > 0 ? arr : defaultModules;
     }
 
@@ -202,6 +233,8 @@ function ChatTutorPage() {
         id: "b_" + Date.now(),
         sender: "bot",
         text: res?.answer || "No relevant academic text found for this query in the ingested course notes.",
+        generationMode: res?.generationMode || "LLM",
+        sourceMode: res?.sourceMode || "grounded_rag",
         groundedModule: res?.groundedModule || (selectedModule ? `Module ${selectedModule}` : null),
         groundedSection: res?.groundedSection || "Curriculum VTU Notes",
         sources: Array.isArray(res?.sources) ? res.sources : [],
@@ -231,56 +264,14 @@ function ChatTutorPage() {
     }
   };
 
-  // Simple Markdown Formatter with bullet points and code block support
+  // Markdown Formatter with full Table, GFM, list, and code support
   const renderFormattedText = (rawText) => {
     if (!rawText) return null;
-
-    const lines = (rawText || "").split("\n");
-    return (lines || []).map((line, idx) => {
-      let trimmed = line.trim();
-      if (!trimmed) return <div key={idx} style={{ height: "8px" }} />;
-
-      if (trimmed.startsWith("### ")) {
-        return (
-          <h4 key={idx} style={{ color: "#38bdf8", margin: "12px 0 6px 0", fontSize: "0.98rem", fontWeight: 700 }}>
-            {trimmed.replace("### ", "")}
-          </h4>
-        );
-      }
-      if (trimmed.startsWith("## ") || trimmed.startsWith("# ")) {
-        return (
-          <h3 key={idx} style={{ color: "#60a5fa", margin: "16px 0 8px 0", fontSize: "1.08rem", fontWeight: 800 }}>
-            {trimmed.replace(/^#+\s*/, "")}
-          </h3>
-        );
-      }
-
-      if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
-        const bulletText = trimmed.substring(2);
-        return (
-          <div key={idx} style={{ display: "flex", gap: "8px", marginLeft: "8px", marginBottom: "4px" }}>
-            <span style={{ color: "#38bdf8" }}>•</span>
-            <span>{parseInlineMarkdown(bulletText)}</span>
-          </div>
-        );
-      }
-
-      const numMatch = trimmed.match(/^([0-9]+\.)\s+(.*)/);
-      if (numMatch) {
-        return (
-          <div key={idx} style={{ display: "flex", gap: "8px", marginLeft: "8px", marginBottom: "4px" }}>
-            <span style={{ color: "#38bdf8", fontWeight: 700 }}>{numMatch[1]}</span>
-            <span>{parseInlineMarkdown(numMatch[2])}</span>
-          </div>
-        );
-      }
-
-      return (
-        <p key={idx} style={{ margin: "0 0 8px 0" }}>
-          {parseInlineMarkdown(line)}
-        </p>
-      );
-    });
+    return (
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {rawText}
+      </ReactMarkdown>
+    );
   };
 
   // Helper for **bold** and `code`
@@ -309,9 +300,9 @@ function ChatTutorPage() {
   const safeModulesList = getModulesArray(notesStatus);
 
   return (
-    <div className="chat-tutor-viewport">
+    <div className="chat-tutor-viewport h-screen max-h-screen overflow-hidden flex flex-col">
       {/* HEADER NAVBAR */}
-      <header className="chat-tutor-header">
+      <header className="chat-tutor-header flex-shrink-0">
         <div className="chat-tutor-header-left">
           <button
             type="button"
@@ -386,9 +377,9 @@ function ChatTutorPage() {
       </header>
 
       {/* BODY SPLIT: SIDEBAR + CHAT */}
-      <div className="chat-tutor-body">
+      <div className="chat-tutor-body flex-1 min-h-0 overflow-hidden flex">
         {/* LEFT SIDEBAR */}
-        <aside className="chat-tutor-sidebar">
+        <aside className="chat-tutor-sidebar flex-shrink-0 h-full overflow-y-auto">
           {/* Active Course Info */}
           <div>
             <div className="sidebar-section-title">
@@ -443,7 +434,7 @@ function ChatTutorPage() {
             <div className="notes-status-card">
               {safeModulesList.map((mod, idx) => (
                 <div key={idx} className="notes-status-item">
-                  <span>✓ Module {mod.moduleNumber}: {mod.name}</span>
+                  <span>✓ {mod.name}</span>
                   <span className="chunk-count">{mod.chunks} chunks</span>
                 </div>
               ))}
@@ -475,8 +466,8 @@ function ChatTutorPage() {
         </aside>
 
         {/* MAIN CHAT CANVAS */}
-        <main className="chat-tutor-main">
-          <div className="chat-messages-scroll">
+        <main className="chat-tutor-main flex-1 min-h-0 h-full overflow-hidden flex flex-col">
+          <div className="chat-messages-scroll flex-1 min-h-0 overflow-y-auto">
             {safeMessages.length === 0 ? (
               <div className="chat-welcome-hero">
                 <div className="chat-welcome-icon">🎓</div>
@@ -526,6 +517,13 @@ function ChatTutorPage() {
                         <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
                       ) : (
                         <div className="bot-markdown-content">
+                          {msg.generationMode === "EXTRACTIVE_FALLBACK" && (
+                            <div className="extractive-fallback-banner">
+                              <span>⚠️</span>
+                              <span>AI answer unavailable - showing note excerpts</span>
+                            </div>
+                          )}
+
                           {renderFormattedText(msg.text)}
 
                           {/* Sources Accordion */}
@@ -547,9 +545,12 @@ function ChatTutorPage() {
                                   {msg.sources.map((src, sIdx) => (
                                     <div key={sIdx} className="chat-source-item">
                                       <div className="source-breadcrumb">
-                                        [Module {src.module || "?"} | Page: {src.page || "1"} | Chunk #{src.chunk_id || sIdx + 1}]
+                                        [Module {src.module || "?"} | Page: {src.page || "1"}{src.section ? ` | Section: ${src.section}` : ""}]
+                                        {src.source && <span className="source-file-tag"> • {src.source}</span>}
                                       </div>
-                                      <div>{src.content || src.text || JSON.stringify(src)}</div>
+                                      <div className="source-passage-text">
+                                        {src.excerpt || src.content || src.text || "Note passage"}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -581,8 +582,8 @@ function ChatTutorPage() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* BOTTOM INPUT DOCK */}
-          <div className="chat-tutor-dock">
+          {/* BOTTOM INPUT DOCK - PINNED AT BOTTOM */}
+          <div className="chat-tutor-dock flex-shrink-0 border-t border-slate-700/60">
             <div className="chat-dock-scope-badge">
               <span>🎯 Search Filter:</span>
               <strong>{selectedModule ? `Module ${selectedModule} Notes Exclusive` : "All Modules (1–5) Broad Semantic Search"}</strong>

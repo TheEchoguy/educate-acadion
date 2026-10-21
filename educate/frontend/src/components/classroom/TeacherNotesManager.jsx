@@ -140,8 +140,18 @@ const TeacherNotesManager = ({ classroomId }) => {
       {/* 2. MODULE CARDS (1 to 5) */}
       <div className="tnm-modules-grid">
         {[1, 2, 3, 4, 5].map((modNum) => {
-          const modInfo = statusData?.modules ? statusData.modules[String(modNum)] : null;
-          const isIndexed = modInfo && modInfo.indexed;
+          let modInfo = null;
+          if (statusData?.modules) {
+            if (Array.isArray(statusData.modules)) {
+              modInfo = statusData.modules.find(
+                (m) => m?.moduleNumber === modNum || m?.module_number === modNum || m?.module === modNum
+              );
+            } else if (typeof statusData.modules === "object") {
+              modInfo = statusData.modules[String(modNum)] || statusData.modules[modNum];
+            }
+          }
+          const chunkCount = modInfo?.chunksCount ?? modInfo?.chunks ?? modInfo?.chunkCount ?? modInfo?.count ?? modInfo?.totalChunks ?? 0;
+          const isIndexed = Boolean(modInfo && (modInfo.indexed || modInfo.status === "READY" || chunkCount > 0));
           const isUploading = uploadingModule === modNum;
           const currentFile = selectedFiles[modNum];
 
@@ -170,13 +180,13 @@ const TeacherNotesManager = ({ classroomId }) => {
                   <div className="tnm-indexed-meta">
                     <div>
                       <strong>Source File: </strong>
-                      <span className="tnm-file-name">{modInfo.fileName || `iot mod${modNum}.pdf`}</span>
+                      <span className="tnm-file-name">{modInfo?.fileName || modInfo?.filename || `iot mod${modNum}.pdf`}</span>
                     </div>
                     <div>
                       <strong>Vector Chunks: </strong>
-                      <span>{modInfo.chunksCount || 0} chunks indexed</span>
+                      <span>{chunkCount} chunks indexed</span>
                     </div>
-                    {modInfo.indexedAt && (
+                    {modInfo?.indexedAt && (
                       <div style={{ color: "#64748b", fontSize: "0.75rem" }}>
                         Indexed: {new Date(modInfo.indexedAt).toLocaleDateString()}
                       </div>

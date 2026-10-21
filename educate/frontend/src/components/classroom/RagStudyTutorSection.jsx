@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { askRagTutor, getModuleNotesStatus } from "../../services/classroomService";
 import toast from "react-hot-toast";
@@ -22,6 +22,7 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
   const [moduleStatus, setModuleStatus] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [expandedSources, setExpandedSources] = useState({});
+  const conversationEndRef = useRef(null);
 
   useEffect(() => {
     if (classroomId) {
@@ -29,11 +30,15 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
     }
   }, [classroomId]);
 
+  useEffect(() => {
+    conversationEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [conversation, loading]);
+
   const loadNotesStatus = async () => {
     try {
       setLoadingStatus(true);
       const res = await getModuleNotesStatus(classroomId);
-      setModuleStatus(res?.modules || null);
+      setModuleStatus(res?.modules || res || null);
     } catch (err) {
       console.warn("Could not load module notes status:", err);
     } finally {
@@ -73,6 +78,7 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
         id: Date.now() + 1,
         sender: "tutor",
         answer: res.answer || "No response generated.",
+        generationMode: res.generationMode || "LLM",
         sources: res.sources || [],
         tip: res.recommendedRevisionTip,
         focusModule: res.focusModule,
@@ -111,6 +117,19 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
   const openFullscreenChat = () => {
     const url = `/student/tutor?classroomId=${classroomId}&module=${selectedModule || 2}`;
     navigate(url);
+  };
+
+  const getModuleInfo = (statusData, m) => {
+    if (!statusData) return null;
+    if (Array.isArray(statusData)) {
+      return statusData.find(
+        (item) => item?.moduleNumber === m || item?.module_number === m || item?.module === m || item?.id === m
+      );
+    }
+    if (typeof statusData === "object") {
+      return statusData[String(m)] || statusData[m] || null;
+    }
+    return null;
   };
 
   return (
@@ -156,9 +175,11 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
 
         <div className="module-cards-grid">
           {[1, 2, 3, 4, 5].map((m) => {
-            const modInfo = moduleStatus ? moduleStatus[String(m)] : null;
-            const isIndexed = modInfo?.indexed;
+            const modInfo = getModuleInfo(moduleStatus, m);
+            const chunkCount = modInfo?.chunksCount ?? modInfo?.chunks ?? modInfo?.chunkCount ?? modInfo?.count ?? modInfo?.totalChunks ?? 0;
+            const isIndexed = Boolean(modInfo?.indexed || modInfo?.status === "READY" || chunkCount > 0);
             const isSelected = selectedModule === m;
+            const fileName = modInfo?.fileName || modInfo?.filename || modInfo?.file_name || `iot mod${m}.pdf`;
 
             return (
               <div
@@ -173,11 +194,11 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
                   </span>
                 </div>
                 <div className="mod-details">
-                  <span className="mod-filename" title={modInfo?.filename || "Course Notes PDF"}>
-                    {modInfo?.filename || `iot mod${m}.pdf`}
+                  <span className="mod-filename" title={fileName}>
+                    {fileName}
                   </span>
                   <span className="mod-chunks">
-                    {isIndexed ? `${modInfo?.chunksCount || "Multi"} chunks indexed` : "Not uploaded yet"}
+                    {isIndexed ? `${chunkCount} chunks indexed` : "Not uploaded yet"}
                   </span>
                 </div>
               </div>
@@ -293,6 +314,11 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
                     </div>
 
                     <div className="tutor-answer-content">
+                      {msg.generationMode === "EXTRACTIVE_FALLBACK" && (
+                        <div style={{ background: "rgba(245, 158, 11, 0.15)", border: "1px solid rgba(245, 158, 11, 0.35)", borderRadius: "6px", padding: "6px 10px", marginBottom: "8px", color: "#fbbf24", fontSize: "0.82rem", fontWeight: 600 }}>
+                          ⚠️ AI answer unavailable - showing note excerpts
+                        </div>
+                      )}
                       <pre className="academic-markdown-view">{msg.answer}</pre>
                     </div>
 
@@ -321,7 +347,7 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
                                   <span className="src-page-pill">Page {src.page}</span>
                                   <span className="src-file-name">{src.source}</span>
                                 </div>
-                                <p className="src-snippet-text">{src.excerpt}</p>
+                                <p className="src-snippet-text">{src.excerpt || src.content || "Passage excerpt"}</p>
                               </div>
                             ))}
                           </div>
@@ -347,6 +373,7 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
                 </div>
               </div>
             )}
+            <div ref={conversationEndRef} />
           </div>
         )}
       </div>
