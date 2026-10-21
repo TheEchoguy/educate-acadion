@@ -8,6 +8,7 @@ import os
 import io
 import json
 import httpx
+import requests
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -61,6 +62,125 @@ def health():
         "model": MODEL_NAME,
         "port": 5000
     }
+
+@app.get("/rag/health")
+def rag_health():
+    """
+    Makes a tiny test call to each configured LLM provider (Gemini and OpenRouter)
+    and reports which one works and the exact error if not.
+    """
+    results = {
+        "status": "UP",
+        "providers": {}
+    }
+
+    # 1. Test Gemini
+    gemini_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+    if not gemini_key:
+        results["providers"]["gemini"] = {
+            "status": "NOT_CONFIGURED",
+            "error": "GEMINI_API_KEY environment variable is empty"
+        }
+    else:
+        try:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=gemini_key.strip())
+            candidate_models = list(dict.fromkeys([
+                os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+                "gemini-3.8-flash",
+                "gemini-2.5-flash",
+                "gemini-2.0-flash"
+            ]))
+            
+            gemini_ok = False
+            last_err = None
+            for m in candidate_models:
+                try:
+                    resp = client.models.generate_content(
+                        model=m,
+                        contents="Say hello in 3 words.",
+                        config=types.GenerateContentConfig(temperature=0.2)
+                    )
+                    if resp and resp.text:
+                        results["providers"]["gemini"] = {
+                            "status": "AVAILABLE",
+                            "model": m,
+                            "response": resp.text.strip(),
+                            "error": None
+                        }
+                        gemini_ok = True
+                        break
+                except Exception as m_err:
+                    last_err = str(m_err)
+            
+            if not gemini_ok:
+                results["providers"]["gemini"] = {
+                    "status": "ERROR",
+                    "models_tested": candidate_models,
+                    "error": last_err
+                }
+        except Exception as e:
+            results["providers"]["gemini"] = {
+                "status": "ERROR",
+                "error": str(e)
+            }
+
+    # 2. Test OpenRouter
+    openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
+    if not openrouter_key:
+        results["providers"]["openrouter"] = {
+            "status": "NOT_CONFIGURED",
+            "error": "OPENROUTER_API_KEY environment variable is empty"
+        }
+    else:
+        try:
+            openrouter_model = os.getenv("AI_OPENROUTER_MODEL", "google/gemini-3.8-flash")
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {openrouter_key.strip()}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://acadion.edu",
+                    "X-Title": "Acadion RAG Study Tutor"
+                },
+                json={
+                    "model": openrouter_model,
+                    "messages": [{"role": "user", "content": "Say hello in 3 words."}],
+                    "temperature": 0.2,
+                    "max_tokens": 64
+                },
+                timeout=15
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                results["providers"]["openrouter"] = {
+                    "status": "AVAILABLE",
+                    "model": openrouter_model,
+                    "response": content.strip(),
+                    "error": None
+                }
+            else:
+                results["providers"]["openrouter"] = {
+                    "status": "ERROR",
+                    "statusCode": resp.status_code,
+                    "error": resp.text
+                }
+        except Exception as e:
+            results["providers"]["openrouter"] = {
+                "status": "ERROR",
+                "error": str(e)
+            }
+
+    # Determine overall provider health
+    has_active_llm = any(
+        p.get("status") == "AVAILABLE" for p in results["providers"].values()
+    )
+    results["activeProviderAvailable"] = has_active_llm
+    results["mode"] = "LLM" if has_active_llm else "EXTRACTIVE_FALLBACK"
+
+    return results
 
 @app.post("/rag/upload-notes")
 async def rag_upload_notes_endpoint(
@@ -261,5 +381,4 @@ async def upload_paper_direct_ai(
 if __name__ == "__main__":
     print("==================================================")
     print(" Starting Acadion AI Microservice on Port 5000... ")
-    print("==================================================")
-    uvicorn.run(app, host="127.0.0.1", port=5000)
+    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)

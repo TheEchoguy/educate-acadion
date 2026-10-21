@@ -18,6 +18,7 @@ public class RagTutorChatResponse {
     private Integer focusModule;
     private String focusTopic;
     private String sourceMode;
+    private String generationMode;
 
     @Data
     @Builder
@@ -26,7 +27,13 @@ public class RagTutorChatResponse {
     public static class CitationSource {
         private Integer module;
         private Integer page;
+        private Integer pageStart;
+        private Integer pageEnd;
+        private String section;
         private String source;
         private String excerpt;
+        private String content;
+        private String chunkId;
+        private Double similarity;
     }
 }

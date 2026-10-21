@@ -7,6 +7,8 @@ import {
   askRagTutor,
   getModuleNotesStatus,
 } from "../../services/classroomService";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import "./ChatTutorPage.css";
 
 function ChatTutorPage() {
@@ -202,6 +204,8 @@ function ChatTutorPage() {
         id: "b_" + Date.now(),
         sender: "bot",
         text: res?.answer || "No relevant academic text found for this query in the ingested course notes.",
+        generationMode: res?.generationMode || "LLM",
+        sourceMode: res?.sourceMode || "grounded_rag",
         groundedModule: res?.groundedModule || (selectedModule ? `Module ${selectedModule}` : null),
         groundedSection: res?.groundedSection || "Curriculum VTU Notes",
         sources: Array.isArray(res?.sources) ? res.sources : [],
@@ -231,56 +235,14 @@ function ChatTutorPage() {
     }
   };
 
-  // Simple Markdown Formatter with bullet points and code block support
+  // Markdown Formatter with full Table, GFM, list, and code support
   const renderFormattedText = (rawText) => {
     if (!rawText) return null;
-
-    const lines = (rawText || "").split("\n");
-    return (lines || []).map((line, idx) => {
-      let trimmed = line.trim();
-      if (!trimmed) return <div key={idx} style={{ height: "8px" }} />;
-
-      if (trimmed.startsWith("### ")) {
-        return (
-          <h4 key={idx} style={{ color: "#38bdf8", margin: "12px 0 6px 0", fontSize: "0.98rem", fontWeight: 700 }}>
-            {trimmed.replace("### ", "")}
-          </h4>
-        );
-      }
-      if (trimmed.startsWith("## ") || trimmed.startsWith("# ")) {
-        return (
-          <h3 key={idx} style={{ color: "#60a5fa", margin: "16px 0 8px 0", fontSize: "1.08rem", fontWeight: 800 }}>
-            {trimmed.replace(/^#+\s*/, "")}
-          </h3>
-        );
-      }
-
-      if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
-        const bulletText = trimmed.substring(2);
-        return (
-          <div key={idx} style={{ display: "flex", gap: "8px", marginLeft: "8px", marginBottom: "4px" }}>
-            <span style={{ color: "#38bdf8" }}>•</span>
-            <span>{parseInlineMarkdown(bulletText)}</span>
-          </div>
-        );
-      }
-
-      const numMatch = trimmed.match(/^([0-9]+\.)\s+(.*)/);
-      if (numMatch) {
-        return (
-          <div key={idx} style={{ display: "flex", gap: "8px", marginLeft: "8px", marginBottom: "4px" }}>
-            <span style={{ color: "#38bdf8", fontWeight: 700 }}>{numMatch[1]}</span>
-            <span>{parseInlineMarkdown(numMatch[2])}</span>
-          </div>
-        );
-      }
-
-      return (
-        <p key={idx} style={{ margin: "0 0 8px 0" }}>
-          {parseInlineMarkdown(line)}
-        </p>
-      );
-    });
+    return (
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {rawText}
+      </ReactMarkdown>
+    );
   };
 
   // Helper for **bold** and `code`
@@ -526,6 +488,13 @@ function ChatTutorPage() {
                         <div style={{ whiteSpace: "pre-wrap" }}>{msg.text}</div>
                       ) : (
                         <div className="bot-markdown-content">
+                          {msg.generationMode === "EXTRACTIVE_FALLBACK" && (
+                            <div className="extractive-fallback-banner">
+                              <span>⚠️</span>
+                              <span>AI answer unavailable - showing note excerpts</span>
+                            </div>
+                          )}
+
                           {renderFormattedText(msg.text)}
 
                           {/* Sources Accordion */}
@@ -547,9 +516,12 @@ function ChatTutorPage() {
                                   {msg.sources.map((src, sIdx) => (
                                     <div key={sIdx} className="chat-source-item">
                                       <div className="source-breadcrumb">
-                                        [Module {src.module || "?"} | Page: {src.page || "1"} | Chunk #{src.chunk_id || sIdx + 1}]
+                                        [Module {src.module || "?"} | Page: {src.page || "1"}{src.section ? ` | Section: ${src.section}` : ""}]
+                                        {src.source && <span className="source-file-tag"> • {src.source}</span>}
                                       </div>
-                                      <div>{src.content || src.text || JSON.stringify(src)}</div>
+                                      <div className="source-passage-text">
+                                        {src.excerpt || src.content || src.text || "Note passage"}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>

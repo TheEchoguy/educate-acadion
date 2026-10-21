@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { askRagTutor } from "../../services/classroomService";
 import "./StudentRagTutorModal.css";
 
 // Lightweight safe Markdown renderer for rich structured tutor responses
 const renderMarkdown = (text) => {
   if (!text) return null;
+  return (
+    <div className="rag-markdown">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
 
   const lines = text.split("\n");
   const elements = [];
@@ -225,6 +234,7 @@ const StudentRagTutorModal = ({
       const tutorMessage = {
         sender: "tutor",
         text: response.answer || "I could not find specific notes matching your query.",
+        generationMode: response.generationMode || "LLM",
         sources: response.sources || [],
         revisionTip: response.recommendedRevisionTip || null,
         sourceMode: response.sourceMode || "grounded_rag",
@@ -303,6 +313,11 @@ const StudentRagTutorModal = ({
           {messages.map((msg, idx) => (
             <div key={idx} className={`rag-msg ${msg.sender}`}>
               <div className="rag-bubble">
+                {msg.generationMode === "EXTRACTIVE_FALLBACK" && (
+                  <div style={{ background: "rgba(245, 158, 11, 0.15)", border: "1px solid rgba(245, 158, 11, 0.35)", borderRadius: "6px", padding: "6px 10px", marginBottom: "8px", color: "#fbbf24", fontSize: "0.82rem", fontWeight: 600 }}>
+                    ⚠️ AI answer unavailable - showing note excerpts
+                  </div>
+                )}
                 {renderMarkdown(msg.text)}
 
                 {/* CITATION SOURCES PILLS */}
@@ -315,7 +330,7 @@ const StudentRagTutorModal = ({
                       {msg.sources.map((s, sIdx) => (
                         <div key={sIdx} className="rag-source-pill">
                           <span className="rag-source-loc">
-                            Source: Module {s.module || focusModule || "Notes"}, Page {s.page || 1}
+                            Source: Module {s.module || focusModule || "Notes"}, Page {s.page || 1}{s.section ? ` • ${s.section}` : ""}
                           </span>
                           {s.excerpt && (
                             <span className="rag-source-excerpt">

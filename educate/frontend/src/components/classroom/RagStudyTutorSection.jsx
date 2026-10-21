@@ -73,6 +73,7 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
         id: Date.now() + 1,
         sender: "tutor",
         answer: res.answer || "No response generated.",
+        generationMode: res.generationMode || "LLM",
         sources: res.sources || [],
         tip: res.recommendedRevisionTip,
         focusModule: res.focusModule,
@@ -293,6 +294,11 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
                     </div>
 
                     <div className="tutor-answer-content">
+                      {msg.generationMode === "EXTRACTIVE_FALLBACK" && (
+                        <div style={{ background: "rgba(245, 158, 11, 0.15)", border: "1px solid rgba(245, 158, 11, 0.35)", borderRadius: "6px", padding: "6px 10px", marginBottom: "8px", color: "#fbbf24", fontSize: "0.82rem", fontWeight: 600 }}>
+                          ⚠️ AI answer unavailable - showing note excerpts
+                        </div>
+                      )}
                       <pre className="academic-markdown-view">{msg.answer}</pre>
                     </div>
 
@@ -321,7 +327,7 @@ export default function RagStudyTutorSection({ classroomId, classroomName, isTea
                                   <span className="src-page-pill">Page {src.page}</span>
                                   <span className="src-file-name">{src.source}</span>
                                 </div>
-                                <p className="src-snippet-text">{src.excerpt}</p>
+                                <p className="src-snippet-text">{src.excerpt || src.content || "Passage excerpt"}</p>
                               </div>
                             ))}
                           </div>

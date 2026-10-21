@@ -37,7 +37,7 @@ public class RagTutorService {
     private static RestTemplate createTimeoutRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(8000);
-        factory.setReadTimeout(30000); // RAG embeddings or LLM calls can take up to 20s
+        factory.setReadTimeout(60000); // Increased to 60s for RAG hybrid retrieval and LLM generation
         return new RestTemplate(factory);
     }
 
@@ -128,9 +128,10 @@ public class RagTutorService {
                 Map<String, Object> resBody = response.getBody();
                 return parsePythonChatResponse(resBody, request);
             }
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            log.error("Python RAG chat failed with HTTP status {} and body: {}", e.getStatusCode(), e.getResponseBodyAsString());
         } catch (Exception e) {
-            log.warn("Python RAG service unavailable ({}), falling back to structured pedagogical tutor synthesis: {}",
-                    chatUrl, e.getMessage());
+            log.warn("Python RAG service unavailable ({}), error: {}", chatUrl, e.getMessage());
         }
 
         return generatePedagogicalFallbackResponse(subjectName, request);
@@ -194,9 +195,10 @@ public class RagTutorService {
     }
 
     private RagTutorChatResponse parsePythonChatResponse(Map<String, Object> resBody, RagTutorChatRequest request) {
-        String answer = (String) resBody.getOrDefault("answer", "Here is information regarding your query.");
-        String tip = (String) resBody.getOrDefault("recommendedRevisionTip", "Review the highlighted sections before your next test.");
-        String sourceMode = (String) resBody.getOrDefault("sourceMode", "grounded_rag");
+        String answer = resBody.get("answer") != null ? String.valueOf(resBody.get("answer")) : "Here is information regarding your query.";
+        String tip = resBody.get("recommendedRevisionTip") != null ? String.valueOf(resBody.get("recommendedRevisionTip")) : "Review the highlighted sections before your next test.";
+        String sourceMode = resBody.get("sourceMode") != null ? String.valueOf(resBody.get("sourceMode")) : "grounded_rag";
+        String generationMode = resBody.get("generationMode") != null ? String.valueOf(resBody.get("generationMode")) : "LLM";
 
         List<CitationSource> sources = new ArrayList<>();
         Object rawSources = resBody.get("sources");
@@ -204,11 +206,30 @@ public class RagTutorService {
             for (Object obj : (List<?>) rawSources) {
                 if (obj instanceof Map) {
                     Map<?, ?> sm = (Map<?, ?>) obj;
+                    Integer mod = sm.get("module") instanceof Number ? ((Number) sm.get("module")).intValue() : null;
+                    Integer page = sm.get("page") instanceof Number ? ((Number) sm.get("page")).intValue() : null;
+                    Integer pageStart = sm.get("page_start") instanceof Number ? ((Number) sm.get("page_start")).intValue() : page;
+                    Integer pageEnd = sm.get("page_end") instanceof Number ? ((Number) sm.get("page_end")).intValue() : page;
+                    String excerpt = sm.get("excerpt") != null ? String.valueOf(sm.get("excerpt")) :
+                            (sm.get("content") != null ? String.valueOf(sm.get("content")) : "");
+                    String source = sm.get("source") != null ? String.valueOf(sm.get("source")) :
+                            (sm.get("filename") != null ? String.valueOf(sm.get("filename")) : (mod != null ? "Module " + mod + " Notes" : "Course Notes"));
+                    String section = sm.get("section") != null ? String.valueOf(sm.get("section")) : "";
+                    String content = sm.get("content") != null ? String.valueOf(sm.get("content")) : excerpt;
+                    String chunkId = sm.get("chunk_id") != null ? String.valueOf(sm.get("chunk_id")) : null;
+                    Double sim = sm.get("similarity") instanceof Number ? ((Number) sm.get("similarity")).doubleValue() : null;
+
                     sources.add(CitationSource.builder()
-                            .module(sm.get("module") instanceof Number ? ((Number) sm.get("module")).intValue() : null)
-                            .page(sm.get("page") instanceof Number ? ((Number) sm.get("page")).intValue() : null)
-                            .source((String) sm.get("source"))
-                            .excerpt((String) sm.get("excerpt"))
+                            .module(mod)
+                            .page(page)
+                            .pageStart(pageStart)
+                            .pageEnd(pageEnd)
+                            .section(section)
+                            .source(source)
+                            .excerpt(excerpt)
+                            .content(content)
+                            .chunkId(chunkId)
+                            .similarity(sim)
                             .build());
                 }
             }
@@ -221,6 +242,7 @@ public class RagTutorService {
                 .focusModule(request.getFocusModule())
                 .focusTopic(request.getFocusTopic())
                 .sourceMode(sourceMode)
+                .generationMode(generationMode)
                 .build();
     }
 
@@ -264,6 +286,7 @@ public class RagTutorService {
                 .focusModule(modNum)
                 .focusTopic(topic)
                 .sourceMode("curriculum_fallback")
+                .generationMode("EXTRACTIVE_FALLBACK")
                 .build();
     }
 }
