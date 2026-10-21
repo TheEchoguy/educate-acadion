@@ -34,6 +34,7 @@ from app.models import (
     UnsupportedFileTypeError,
 )
 from app.ppt_generator import PPTGenerator
+from app.api import app
 
 
 def create_arg_parser() -> argparse.ArgumentParser:

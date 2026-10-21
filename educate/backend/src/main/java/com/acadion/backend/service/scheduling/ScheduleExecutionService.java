@@ -6,6 +6,7 @@ import com.acadion.backend.entity.User;
 import com.acadion.backend.entity.scheduling.*;
 import com.acadion.backend.repository.ClassroomRepository;
 import com.acadion.backend.repository.UserRepository;
+import com.acadion.backend.repository.SyllabusItemRepository;
 import com.acadion.backend.repository.scheduling.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ public class ScheduleExecutionService {
     private final AssessmentMilestoneRepository milestoneRepository;
     private final ClassroomRepository classroomRepository;
     private final UserRepository userRepository;
+    private final SyllabusItemRepository syllabusItemRepository;
     private final SyllabusSchedulingNotificationService notificationService;
     private final DeterministicScheduleGenerator generator;
 
@@ -51,11 +53,80 @@ public class ScheduleExecutionService {
         session.setStatus(request.getOutcome());
         session.setTeacherNotes(request.getTeacherNotes());
         session.setActualOutcomeDate(LocalDateTime.now());
+        if (request.getPortionsCovered() != null && !request.getPortionsCovered().isBlank()) {
+            session.setPortionsCovered(request.getPortionsCovered().trim());
+        }
+        if (request.getRemainingPortion() != null && !request.getRemainingPortion().isBlank()) {
+            session.setRemainingPortion(request.getRemainingPortion().trim());
+        }
+
+        TeachingSchedulePlan plan = planRepository.findById(session.getPlanId()).orElse(null);
+
+        // Carry-Forward Workflow for PARTIALLY_COMPLETED sessions
+        if (request.getOutcome() == SessionStatus.PARTIALLY_COMPLETED && plan != null) {
+            String remPortion = request.getRemainingPortion() != null && !request.getRemainingPortion().isBlank()
+                    ? request.getRemainingPortion().trim()
+                    : "Continuation of " + (session.getSubtopic() != null ? session.getSubtopic() : session.getTopicTitle());
+            session.setRemainingPortion(remPortion);
+
+            List<ScheduledSession> allSessions = sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc(plan.getId());
+            ScheduledSession nextSession = allSessions.stream()
+                    .filter(s -> s.getSessionNumber() > session.getSessionNumber() && s.getStatus() == SessionStatus.SCHEDULED)
+                    .findFirst()
+                    .orElse(null);
+
+            if (nextSession != null) {
+                session.setCarriedForwardToSessionNumber(nextSession.getSessionNumber());
+
+                // Move unfinished content to the immediately next scheduled class period
+                nextSession.setCarriedForwardFromSessionNumber(session.getSessionNumber());
+                nextSession.setCarriedForward(true);
+                nextSession.setTopicTitle(session.getTopicTitle());
+                nextSession.setTopicId(session.getTopicId());
+                nextSession.setModuleNumber(session.getModuleNumber());
+                nextSession.setModuleTitle(session.getModuleTitle());
+                nextSession.setSubtopic(String.format("[Carried forward from Session #%d]: %s", session.getSessionNumber(), remPortion));
+                nextSession.setMilestoneTag("Carried Forward");
+                sessionRepository.save(nextSession);
+
+                // Cascade subsequent sessions to maintain syllabus order without inventing extra timetable slots
+                List<TimetableSlot> slots = timetableSlotRepository.findByClassroomIdAndApprovedTrue(classroomId);
+                List<AcademicCalendarEvent> events = calendarEventRepository.findByClassroomIdAndApprovedTrue(classroomId);
+                Set<LocalDate> nonTeaching = buildNonTeachingDates(events);
+                Map<DayOfWeek, List<TimetableSlot>> slotMap = slots.stream().collect(Collectors.groupingBy(TimetableSlot::getDayOfWeek));
+
+                LocalDate nextSlotDate = nextSession.getSessionDate().plusDays(1);
+                boolean startCascade = false;
+                for (ScheduledSession s : allSessions) {
+                    if (s.getId().equals(nextSession.getId())) {
+                        startCascade = true;
+                        continue;
+                    }
+                    if (startCascade && s.getStatus() == SessionStatus.SCHEDULED && !s.isLocked()) {
+                        while (nonTeaching.contains(nextSlotDate) || !slotMap.containsKey(nextSlotDate.getDayOfWeek()) || slotMap.get(nextSlotDate.getDayOfWeek()).isEmpty()) {
+                            nextSlotDate = nextSlotDate.plusDays(1);
+                        }
+                        s.setSessionDate(nextSlotDate);
+                        s.setDayOfWeek(nextSlotDate.getDayOfWeek());
+                        TimetableSlot ts = slotMap.get(nextSlotDate.getDayOfWeek()).get(0);
+                        s.setStartTime(ts.getStartTime());
+                        s.setEndTime(ts.getEndTime());
+                        if (plan.getTermEndDate() != null && nextSlotDate.isAfter(plan.getTermEndDate())) {
+                            s.setMilestoneTag("⚠️ At Risk: Exceeds term deadline");
+                        }
+                        sessionRepository.save(s);
+                        nextSlotDate = nextSlotDate.plusDays(1);
+                    }
+                }
+            } else {
+                session.setTeacherNotes((session.getTeacherNotes() != null ? session.getTeacherNotes() + " | " : "") +
+                        "Notice: No subsequent scheduled period available in current term to carry forward remaining content. Compensatory period required.");
+            }
+        }
 
         ScheduledSession saved = sessionRepository.save(session);
 
         // Update plan statistics
-        TeachingSchedulePlan plan = planRepository.findById(session.getPlanId()).orElse(null);
         if (plan != null) {
             List<ScheduledSession> allSessions = sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc(plan.getId());
             int completed = (int) allSessions.stream().filter(s -> s.getStatus() == SessionStatus.COMPLETED).count();
@@ -65,6 +136,38 @@ public class ScheduleExecutionService {
             planRepository.save(plan);
         }
 
+        // Synchronize canonical topic-level progress in SyllabusItem
+        if (session.getTopicId() != null) {
+            syllabusItemRepository.findById(session.getTopicId()).ifPresent(topicItem -> {
+                List<ScheduledSession> topicSessions = sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc(session.getPlanId())
+                        .stream().filter(s -> session.getTopicId().equals(s.getTopicId())).toList();
+
+                if (request.getOutcome() == SessionStatus.COMPLETED) {
+                    boolean allDone = !topicSessions.isEmpty() && topicSessions.stream().allMatch(s -> s.getStatus() == SessionStatus.COMPLETED);
+                    if (allDone) {
+                        topicItem.setStatus(com.acadion.backend.entity.SyllabusStatus.COMPLETED);
+                        topicItem.setActualCompletionDate(LocalDate.now());
+                    } else {
+                        topicItem.setStatus(com.acadion.backend.entity.SyllabusStatus.IN_PROGRESS);
+                    }
+                } else if (request.getOutcome() == SessionStatus.PARTIALLY_COMPLETED) {
+                    topicItem.setStatus(com.acadion.backend.entity.SyllabusStatus.PARTIALLY_COMPLETED);
+                } else {
+                    boolean anyDone = topicSessions.stream().anyMatch(s -> s.getStatus() == SessionStatus.COMPLETED);
+                    boolean anyPart = topicSessions.stream().anyMatch(s -> s.getStatus() == SessionStatus.PARTIALLY_COMPLETED);
+                    if (anyPart) {
+                        topicItem.setStatus(com.acadion.backend.entity.SyllabusStatus.PARTIALLY_COMPLETED);
+                    } else if (anyDone) {
+                        topicItem.setStatus(com.acadion.backend.entity.SyllabusStatus.IN_PROGRESS);
+                    } else {
+                        topicItem.setStatus(com.acadion.backend.entity.SyllabusStatus.NOT_STARTED);
+                    }
+                }
+                topicItem.setUpdatedAt(LocalDateTime.now());
+                syllabusItemRepository.save(topicItem);
+            });
+        }
+
         log.info("Recorded outcome for session {} ({}): {} -> {}", sessionId, session.getTopicTitle(), previousStatus, request.getOutcome());
         return generator.toSessionDTO(saved);
     }
@@ -72,6 +175,15 @@ public class ScheduleExecutionService {
     public ReschedulePreviewResponse previewReschedule(
             String classroomId,
             String sessionId,
+            String teacherEmail
+    ) {
+        return previewReschedule(classroomId, sessionId, null, teacherEmail);
+    }
+
+    public ReschedulePreviewResponse previewReschedule(
+            String classroomId,
+            String sessionId,
+            ReschedulePreviewRequest request,
             String teacherEmail
     ) {
         verifyTeacherOwnership(classroomId, teacherEmail);
@@ -91,56 +203,146 @@ public class ScheduleExecutionService {
         Set<LocalDate> nonTeachingDates = buildNonTeachingDates(events);
         Map<DayOfWeek, List<TimetableSlot>> slotMap = slots.stream().collect(Collectors.groupingBy(TimetableSlot::getDayOfWeek));
 
-        // Dates that already have a session allocated
-        Set<LocalDate> occupiedDates = allSessions.stream()
-                .filter(s -> !s.getId().equals(sessionId) && s.getStatus() != SessionStatus.SKIPPED && s.getStatus() != SessionStatus.CANCELLED)
-                .map(ScheduledSession::getSessionDate)
-                .collect(Collectors.toSet());
-
-        // Find next valid candidate date after session date
-        LocalDate searchDate = session.getSessionDate().plusDays(1);
-        LocalDate proposedDate = null;
-        TimetableSlot proposedSlot = null;
-
+        // Find candidate default slot if request doesn't specify one
+        LocalDate autoDate = null;
+        TimetableSlot autoSlot = null;
+        LocalDate searchDate = session.getSessionDate() != null ? session.getSessionDate().plusDays(1) : LocalDate.now().plusDays(1);
         LocalDate searchLimit = plan.getTermEndDate() != null ? plan.getTermEndDate().plusWeeks(2) : searchDate.plusMonths(2);
 
-        while (proposedDate == null && !searchDate.isAfter(searchLimit)) {
+        while (autoDate == null && !searchDate.isAfter(searchLimit)) {
             if (!nonTeachingDates.contains(searchDate)) {
                 DayOfWeek dow = searchDate.getDayOfWeek();
                 if (slotMap.containsKey(dow) && !slotMap.get(dow).isEmpty()) {
-                    // Check if candidate date has available capacity
-                    proposedDate = searchDate;
-                    proposedSlot = slotMap.get(dow).get(0);
+                    autoDate = searchDate;
+                    autoSlot = slotMap.get(dow).get(0);
                 }
             }
             searchDate = searchDate.plusDays(1);
         }
 
-        if (proposedDate == null) {
-            proposedDate = session.getSessionDate().plusDays(7);
-            proposedSlot = !slots.isEmpty() ? slots.get(0) : TimetableSlot.builder().startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(11, 0)).dayOfWeek(DayOfWeek.MONDAY).build();
+        if (autoDate == null) {
+            autoDate = session.getSessionDate() != null ? session.getSessionDate().plusDays(7) : LocalDate.now().plusDays(7);
+            autoSlot = !slots.isEmpty() ? slots.get(0) : TimetableSlot.builder().startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(11, 0)).dayOfWeek(DayOfWeek.MONDAY).build();
         }
 
-        long subsequentCount = allSessions.stream()
-                .filter(s -> s.getSessionNumber() > session.getSessionNumber() && s.getStatus() == SessionStatus.SCHEDULED)
-                .count();
+        LocalDate proposedDate = (request != null && request.getTargetDate() != null) ? request.getTargetDate() : autoDate;
+        LocalTime proposedStartTime;
+        if (request != null && request.getTargetStartTime() != null) {
+            proposedStartTime = request.getTargetStartTime();
+        } else {
+            DayOfWeek pdow = proposedDate.getDayOfWeek();
+            if (slotMap.containsKey(pdow) && !slotMap.get(pdow).isEmpty()) {
+                proposedStartTime = slotMap.get(pdow).get(0).getStartTime();
+            } else {
+                proposedStartTime = autoSlot.getStartTime();
+            }
+        }
 
-        String deadlineImpact = "Session moves to " + proposedDate + ". Syllabus milestone targets remain intact with adequate buffers.";
-        for (AssessmentMilestone m : milestones) {
-            if (m.getStartDate() != null && proposedDate.isAfter(m.getStartDate().minusDays(1))) {
-                if (m.getTargetModules() != null && m.getTargetModules().contains(session.getModuleNumber())) {
-                    deadlineImpact = "Notice: Rescheduled date (" + proposedDate + ") is close to " + m.getName() + " (" + m.getStartDate() + "). Module review buffer will be reduced.";
-                    break;
+        LocalTime proposedEndTime;
+        if (request != null && request.getTargetEndTime() != null) {
+            proposedEndTime = request.getTargetEndTime();
+        } else if (request != null && request.getDurationMinutes() != null && request.getDurationMinutes() > 0) {
+            proposedEndTime = proposedStartTime.plusMinutes(request.getDurationMinutes());
+        } else {
+            DayOfWeek pdow = proposedDate.getDayOfWeek();
+            if (slotMap.containsKey(pdow) && !slotMap.get(pdow).isEmpty()) {
+                proposedEndTime = slotMap.get(pdow).get(0).getEndTime();
+            } else if (session.getDurationMinutes() > 0) {
+                proposedEndTime = proposedStartTime.plusMinutes(session.getDurationMinutes());
+            } else {
+                proposedEndTime = autoSlot.getEndTime();
+            }
+        }
+
+        String roomNumber = (request != null && request.getRoomNumber() != null && !request.getRoomNumber().isBlank())
+                ? request.getRoomNumber()
+                : (session.getRoomNumber() != null ? session.getRoomNumber() : "Main");
+
+        boolean shiftSubsequent = (request == null || request.isShiftSubsequentSessions());
+
+        // Validations
+        List<String> warnings = new ArrayList<>();
+        boolean isOutsideTerm = false;
+        if (plan.getTermStartDate() != null && proposedDate.isBefore(plan.getTermStartDate())) {
+            isOutsideTerm = true;
+            warnings.add("Proposed date " + proposedDate + " is before the term start (" + plan.getTermStartDate() + ").");
+        }
+        if (plan.getTermEndDate() != null && proposedDate.isAfter(plan.getTermEndDate())) {
+            isOutsideTerm = true;
+            warnings.add("Proposed date " + proposedDate + " is after the term end (" + plan.getTermEndDate() + ").");
+        }
+
+        boolean isNonTeaching = nonTeachingDates.contains(proposedDate);
+        if (isNonTeaching) {
+            warnings.add("Notice: Proposed date " + proposedDate + " falls on a designated holiday or non-teaching period.");
+        }
+
+        boolean hasSlot = slotMap.containsKey(proposedDate.getDayOfWeek()) && !slotMap.get(proposedDate.getDayOfWeek()).isEmpty();
+        if (!hasSlot) {
+            warnings.add("Warning: No regular approved timetable slot configured on " + proposedDate.getDayOfWeek() + ".");
+        }
+
+        boolean hasTimeConflict = allSessions.stream()
+                .filter(s -> !s.getId().equals(sessionId) && s.getSessionDate() != null && s.getSessionDate().equals(proposedDate)
+                        && s.getStatus() != SessionStatus.SKIPPED && s.getStatus() != SessionStatus.CANCELLED)
+                .anyMatch(s -> {
+                    if (s.getStartTime() == null || s.getEndTime() == null) return false;
+                    return !(proposedEndTime.compareTo(s.getStartTime()) <= 0 || proposedStartTime.compareTo(s.getEndTime()) >= 0);
+                });
+
+        if (hasTimeConflict) {
+            warnings.add("Time conflict: Another active session overlaps with " + proposedStartTime + " - " + proposedEndTime + " on " + proposedDate + ".");
+        }
+
+        // Simulate subsequent cascade preview
+        List<ReschedulePreviewResponse.AffectedSessionDetail> cascadePreview = new ArrayList<>();
+        if (shiftSubsequent) {
+            LocalDate cascadeCursor = proposedDate.plusDays(1);
+            for (ScheduledSession s : allSessions) {
+                if (s.getSessionNumber() > session.getSessionNumber() && s.getStatus() == SessionStatus.SCHEDULED && !s.isLocked()) {
+                    while (nonTeachingDates.contains(cascadeCursor) || !slotMap.containsKey(cascadeCursor.getDayOfWeek())) {
+                        cascadeCursor = cascadeCursor.plusDays(1);
+                        if (plan.getTermEndDate() != null && cascadeCursor.isAfter(plan.getTermEndDate().plusMonths(2))) {
+                            break;
+                        }
+                    }
+                    DayOfWeek dow = cascadeCursor.getDayOfWeek();
+                    TimetableSlot ts = (slotMap.containsKey(dow) && !slotMap.get(dow).isEmpty())
+                            ? slotMap.get(dow).get(0)
+                            : autoSlot;
+
+                    cascadePreview.add(ReschedulePreviewResponse.AffectedSessionDetail.builder()
+                            .sessionNumber(s.getSessionNumber())
+                            .topicTitle(s.getTopicTitle())
+                            .originalDate(s.getSessionDate())
+                            .newDate(cascadeCursor)
+                            .newStartTime(ts.getStartTime())
+                            .newEndTime(ts.getEndTime())
+                            .reason("Shifted forward to preserve syllabus topic order")
+                            .build());
+
+                    cascadeCursor = cascadeCursor.plusDays(1);
                 }
             }
         }
 
-        List<String> warnings = new ArrayList<>();
-        warnings.add(String.format("Rescheduling will shift topic '%s' to %s (%s at %s).",
-                session.getTopicTitle(), proposedDate, proposedSlot.getDayOfWeek(), proposedSlot.getStartTime()));
-        if (subsequentCount > 0) {
-            warnings.add(String.format("%d subsequent scheduled classes will ripple forward to maintain topic sequence.", subsequentCount));
+        String deadlineImpact = "Syllabus sequence preserved. All milestone targets remain on schedule.";
+        for (AssessmentMilestone m : milestones) {
+            if (m.getStartDate() != null) {
+                if (proposedDate.isAfter(m.getStartDate().minusDays(1)) && m.getTargetModules() != null && m.getTargetModules().contains(session.getModuleNumber())) {
+                    deadlineImpact = "Notice: Rescheduled date (" + proposedDate + ") is within milestone window for " + m.getName() + " (" + m.getStartDate() + ").";
+                    break;
+                }
+                for (ReschedulePreviewResponse.AffectedSessionDetail affected : cascadePreview) {
+                    if (affected.getNewDate() != null && affected.getNewDate().isAfter(m.getStartDate().minusDays(1))) {
+                        deadlineImpact = "Notice: Cascaded session #" + affected.getSessionNumber() + " (" + affected.getTopicTitle() + ") approaches milestone " + m.getName() + " (" + m.getStartDate() + ").";
+                        break;
+                    }
+                }
+            }
         }
+
+        boolean isFeasible = !isOutsideTerm && !hasTimeConflict;
 
         return ReschedulePreviewResponse.builder()
                 .sessionId(sessionId)
@@ -148,13 +350,18 @@ public class ScheduleExecutionService {
                 .originalDate(session.getSessionDate())
                 .originalStartTime(session.getStartTime())
                 .proposedDate(proposedDate)
-                .proposedStartTime(proposedSlot.getStartTime())
-                .proposedEndTime(proposedSlot.getEndTime())
-                .reason("Adaptive curriculum recovery for missed session")
-                .affectedSubsequentSessionsCount((int) subsequentCount)
+                .proposedStartTime(proposedStartTime)
+                .proposedEndTime(proposedEndTime)
+                .roomNumber(roomNumber)
+                .proposedDayOfWeek(proposedDate.getDayOfWeek().name())
+                .reason(request != null && request.getTargetDate() != null ? "Teacher customized reschedule" : "Adaptive curriculum recovery for missed session")
+                .affectedSubsequentSessionsCount(cascadePreview.size())
                 .deadlineImpact(deadlineImpact)
                 .conflictWarnings(warnings)
-                .isFeasible(true)
+                .isFeasible(isFeasible)
+                .isOutsideTerm(isOutsideTerm)
+                .hasConflict(hasTimeConflict)
+                .affectedSessionsPreview(cascadePreview)
                 .build();
     }
 
@@ -177,9 +384,19 @@ public class ScheduleExecutionService {
         LocalDate origDate = session.getSessionDate();
         LocalTime origTime = session.getStartTime();
 
-        ReschedulePreviewResponse preview = previewReschedule(classroomId, sessionId, teacherEmail);
+        ReschedulePreviewResponse preview = previewReschedule(classroomId, sessionId, request != null ? ReschedulePreviewRequest.builder()
+                .targetDate(request.getTargetDate())
+                .targetStartTime(request.getTargetStartTime())
+                .targetEndTime(request.getTargetEndTime())
+                .durationMinutes(request.getDurationMinutes())
+                .roomNumber(request.getRoomNumber())
+                .shiftSubsequentSessions(request.isShiftSubsequentSessions())
+                .build() : null, teacherEmail);
+
         LocalDate targetDate = request.getTargetDate() != null ? request.getTargetDate() : preview.getProposedDate();
         LocalTime targetTime = request.getTargetStartTime() != null ? request.getTargetStartTime() : preview.getProposedStartTime();
+        LocalTime targetEndTime = request.getTargetEndTime() != null ? request.getTargetEndTime() : preview.getProposedEndTime();
+        String roomNumber = (request.getRoomNumber() != null && !request.getRoomNumber().isBlank()) ? request.getRoomNumber() : preview.getRoomNumber();
 
         if (request.isShiftSubsequentSessions()) {
             List<ScheduledSession> allSessions = sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc(plan.getId());
@@ -208,6 +425,13 @@ public class ScheduleExecutionService {
                         s.setEndTime(ts.getEndTime());
                     }
                     sessionRepository.save(s);
+                    if (s.getTopicId() != null) {
+                        final LocalDate shiftedDate = nextDate;
+                        syllabusItemRepository.findById(s.getTopicId()).ifPresent(item -> {
+                            item.setPlannedTeachingDate(shiftedDate);
+                            syllabusItemRepository.save(item);
+                        });
+                    }
                     nextDate = nextDate.plusDays(1);
                 }
             }
@@ -216,12 +440,22 @@ public class ScheduleExecutionService {
         session.setSessionDate(targetDate);
         session.setDayOfWeek(targetDate.getDayOfWeek());
         session.setStartTime(targetTime);
-        if (preview.getProposedEndTime() != null) {
-            session.setEndTime(preview.getProposedEndTime());
+        if (targetEndTime != null) {
+            session.setEndTime(targetEndTime);
+        }
+        if (roomNumber != null) {
+            session.setRoomNumber(roomNumber);
         }
         session.setStatus(SessionStatus.SCHEDULED);
         session.setTeacherNotes("Rescheduled: " + (request.getReason() != null ? request.getReason() : "Pacing adjustment"));
         sessionRepository.save(session);
+
+        if (session.getTopicId() != null) {
+            syllabusItemRepository.findById(session.getTopicId()).ifPresent(item -> {
+                item.setPlannedTeachingDate(targetDate);
+                syllabusItemRepository.save(item);
+            });
+        }
 
         // Audit Record
         RescheduleRecord record = RescheduleRecord.builder()
@@ -425,18 +659,69 @@ public class ScheduleExecutionService {
         return generator.toPlanResponse(saved, sessions);
     }
 
+    public SchedulePlanResponse getPlanById(String classroomId, String planId, String userEmail) {
+        verifyTeacherOrStudentAccess(classroomId, userEmail);
+        TeachingSchedulePlan plan = planRepository.findById(planId)
+                .filter(p -> p.getClassroomId().equals(classroomId))
+                .orElseThrow(() -> new IllegalArgumentException("Schedule plan not found: " + planId));
+        List<ScheduledSession> sessions = sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc(plan.getId());
+        return generator.toPlanResponse(plan, sessions);
+    }
+
     public SchedulePlanResponse getActiveOrDraftPlan(String classroomId, String userEmail) {
+        return getActiveOrDraftPlan(classroomId, null, userEmail);
+    }
+
+    public SchedulePlanResponse getActiveOrDraftPlan(String classroomId, String requestedPlanId, String userEmail) {
         verifyTeacherOrStudentAccess(classroomId, userEmail);
 
-        // 1. Look for approved plan
-        TeachingSchedulePlan plan = planRepository.findFirstByClassroomIdAndStatusOrderByVersionNumberDesc(
-                classroomId, SchedulePlanStatus.APPROVED).orElse(null);
+        if (requestedPlanId != null && !requestedPlanId.isBlank()) {
+            Optional<TeachingSchedulePlan> requested = planRepository.findById(requestedPlanId)
+                    .filter(p -> p.getClassroomId().equals(classroomId));
+            if (requested.isPresent()) {
+                TeachingSchedulePlan p = requested.get();
+                List<ScheduledSession> sessions = sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc(p.getId());
+                return generator.toPlanResponse(p, sessions);
+            }
+        }
 
-        // 2. If no approved plan, return latest draft
-        if (plan == null) {
-            List<TeachingSchedulePlan> all = planRepository.findByClassroomIdOrderByVersionNumberDesc(classroomId);
-            if (!all.isEmpty()) {
-                plan = all.get(0);
+        // Determine whether user is teacher/admin or student
+        Classroom classroom = classroomRepository.findById(classroomId).orElse(null);
+        User user = userRepository.findByEmail(userEmail).orElse(null);
+        boolean isTeacherOrAdmin = false;
+        if (classroom != null && user != null) {
+            isTeacherOrAdmin = (classroom.getTeacherId() != null &&
+                    (classroom.getTeacherId().equals(user.getId()) || classroom.getTeacherId().equalsIgnoreCase(user.getEmail())))
+                    || (user.getRole() != null && "ADMIN".equalsIgnoreCase(user.getRole().name()));
+        }
+
+        TeachingSchedulePlan plan = null;
+        if (isTeacherOrAdmin) {
+            // For teachers, prefer the latest draft plan if one exists (or latest overall)
+            TeachingSchedulePlan draftPlan = planRepository.findFirstByClassroomIdAndStatusOrderByVersionNumberDesc(
+                    classroomId, SchedulePlanStatus.DRAFT).orElse(null);
+            TeachingSchedulePlan approvedPlan = planRepository.findFirstByClassroomIdAndStatusOrderByVersionNumberDesc(
+                    classroomId, SchedulePlanStatus.APPROVED).orElse(null);
+
+            if (draftPlan != null && (approvedPlan == null || draftPlan.getVersionNumber() >= approvedPlan.getVersionNumber())) {
+                plan = draftPlan;
+            } else if (approvedPlan != null) {
+                plan = approvedPlan;
+            } else {
+                List<TeachingSchedulePlan> all = planRepository.findByClassroomIdOrderByVersionNumberDesc(classroomId);
+                if (!all.isEmpty()) {
+                    plan = all.get(0);
+                }
+            }
+        } else {
+            // For students, prioritize the approved published plan
+            plan = planRepository.findFirstByClassroomIdAndStatusOrderByVersionNumberDesc(
+                    classroomId, SchedulePlanStatus.APPROVED).orElse(null);
+            if (plan == null) {
+                List<TeachingSchedulePlan> all = planRepository.findByClassroomIdOrderByVersionNumberDesc(classroomId);
+                if (!all.isEmpty()) {
+                    plan = all.get(0);
+                }
             }
         }
 

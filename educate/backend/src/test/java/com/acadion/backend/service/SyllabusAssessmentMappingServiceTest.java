@@ -304,4 +304,108 @@ public class SyllabusAssessmentMappingServiceTest {
 
         assertTrue(suggestions.isEmpty());
     }
+
+    // -------------------------------------------------------------------------
+    // 23. Three-way Semantic Assessment Analysis (Matches, Missing in Paper, Unmatched Question Content)
+    // -------------------------------------------------------------------------
+    @Test
+    @DisplayName("23. Topic assessment analysis distinguishes matched concepts, missing syllabus concepts, and unmatched question concepts")
+    void testAnalyzeTopicAssessment_WithQuestionPaper_ConceptMatchingAndCoverage() {
+        when(classroomRepository.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(userRepository.findByEmail(teacherOwner.getEmail())).thenReturn(Optional.of(teacherOwner));
+
+        SyllabusItem dpTopic = SyllabusItem.builder()
+                .id("topic_dp")
+                .classroomId(classroom.getId())
+                .unit("Unit 3")
+                .topic("Dynamic Programming")
+                .subtopics(List.of("0/1 Knapsack Problem", "Matrix Chain Multiplication", "Bellman Ford Algorithm"))
+                .build();
+
+        when(syllabusItemRepository.findByIdAndClassroomId("topic_dp", classroom.getId()))
+                .thenReturn(Optional.of(dpTopic));
+
+        QuestionPaper paperWithQuestions = QuestionPaper.builder()
+                .paperId("QP-2026-FINAL")
+                .subject("Design and Analysis of Algorithms")
+                .subjectCode("21CS42")
+                .createdBy(teacherOwner.getId())
+                .questions(List.of(
+                        QuestionPaper.Question.builder()
+                                .questionId("Q1")
+                                .text("Explain the 0/1 Knapsack Problem using Dynamic Programming formulation")
+                                .topic("Dynamic Programming")
+                                .marks(10.0)
+                                .build(),
+                        QuestionPaper.Question.builder()
+                                .questionId("Q2")
+                                .text("Explain QuickSort partitioning and worst-case recurrence")
+                                .topic("Divide and Conquer")
+                                .marks(8.0)
+                                .build()
+                ))
+                .build();
+
+        when(questionPaperRepository.findFirstByPaperIdOrderByUploadedAtDesc("QP-2026-FINAL"))
+                .thenReturn(Optional.of(paperWithQuestions));
+
+        com.acadion.backend.dto.syllabus.AssessmentAnalysisRequest req =
+                com.acadion.backend.dto.syllabus.AssessmentAnalysisRequest.builder()
+                        .topicId("topic_dp")
+                        .paperId("QP-2026-FINAL")
+                        .build();
+
+        com.acadion.backend.dto.syllabus.TopicAssessmentAnalysisResponse analysis =
+                mappingService.analyzeTopicAssessment(classroom.getId(), req, teacherOwner.getEmail());
+
+        assertNotNull(analysis);
+        assertEquals("topic_dp", analysis.getTopicId());
+        assertEquals("Dynamic Programming", analysis.getTopicTitle());
+        assertEquals("QP-2026-FINAL", analysis.getPaperId());
+
+        // A. Matched concepts
+        assertFalse(analysis.getMatchedConcepts().isEmpty());
+        assertTrue(analysis.getMatchedConcepts().stream().anyMatch(m -> m.getConcept().toLowerCase().contains("knapsack") || "Q1".equals(m.getQuestionId())));
+
+        // B. Missing syllabus concepts (Matrix Chain Multiplication or Bellman Ford not covered in Q1/Q2)
+        assertFalse(analysis.getMissingSyllabusConcepts().isEmpty());
+        assertTrue(analysis.getMissingSyllabusConcepts().stream().anyMatch(mis -> mis.getConcept().contains("Matrix Chain") || mis.getConcept().contains("Bellman Ford")));
+
+        // C. Unmatched question concepts (Q2 QuickSort does not match DP topic)
+        assertFalse(analysis.getUnmatchedQuestionConcepts().isEmpty());
+        assertTrue(analysis.getUnmatchedQuestionConcepts().stream().anyMatch(u -> "Q2".equals(u.getQuestionId())));
+    }
+
+    @Test
+    @DisplayName("24. Manual question content analysis evaluates supplied text against topic")
+    void testAnalyzeTopicAssessment_ManualContentAnalysis() {
+        when(classroomRepository.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(userRepository.findByEmail(teacherOwner.getEmail())).thenReturn(Optional.of(teacherOwner));
+
+        SyllabusItem dpTopic = SyllabusItem.builder()
+                .id("topic_dp")
+                .classroomId(classroom.getId())
+                .unit("Unit 3")
+                .topic("Dynamic Programming")
+                .subtopics(List.of("0/1 Knapsack Problem", "Matrix Chain Multiplication"))
+                .build();
+
+        when(syllabusItemRepository.findByIdAndClassroomId("topic_dp", classroom.getId()))
+                .thenReturn(Optional.of(dpTopic));
+
+        com.acadion.backend.dto.syllabus.AssessmentAnalysisRequest req =
+                com.acadion.backend.dto.syllabus.AssessmentAnalysisRequest.builder()
+                        .topicId("topic_dp")
+                        .manualContent("Solve 0/1 Knapsack Problem with optimal substructure property")
+                        .build();
+
+        com.acadion.backend.dto.syllabus.TopicAssessmentAnalysisResponse analysis =
+                mappingService.analyzeTopicAssessment(classroom.getId(), req, teacherOwner.getEmail());
+
+        assertNotNull(analysis);
+        assertEquals("MANUAL_INPUT", analysis.getPaperId());
+        assertFalse(analysis.getMatchedConcepts().isEmpty());
+        assertTrue(analysis.getMatchedConcepts().stream().anyMatch(m -> m.getConcept().toLowerCase().contains("knapsack")));
+        assertTrue(analysis.getMissingSyllabusConcepts().stream().anyMatch(mis -> mis.getConcept().contains("Matrix Chain")));
+    }
 }

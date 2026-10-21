@@ -29,6 +29,11 @@ public class SyllabusItemResponse {
     private Double estimatedHours;
     private LocalDate plannedStartDate;
     private LocalDate plannedCompletionDate;
+    private LocalDate actualCompletionDate;
+    private Double actualTeachingHours;
+    private List<String> linkedSessionIds;
+    private Integer completedSessionsCount;
+    private Integer totalSessionsCount;
     private List<LearningResource> learningResources;
     private String referenceMaterials;
     private String createdBy;

@@ -18,4 +18,7 @@ public class ApplyRescheduleRequest {
     private boolean shiftSubsequentSessions = true;
     private LocalDate targetDate;
     private LocalTime targetStartTime;
+    private LocalTime targetEndTime;
+    private int durationMinutes;
+    private String roomNumber;
 }

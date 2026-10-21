@@ -620,7 +620,8 @@ public class SyllabusServiceTest {
         when(syllabusItemRepository.countByClassroomId(classroom1.getId())).thenReturn(0L);
         when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.COMPLETED)).thenReturn(0L);
         when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.IN_PROGRESS)).thenReturn(0L);
-        when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.NOT_STARTED)).thenReturn(0L);
+        when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.PARTIALLY_COMPLETED)).thenReturn(0L);
+        lenient().when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.NOT_STARTED)).thenReturn(0L);
 
         SyllabusProgressResponse emptyProgress = syllabusService.getSyllabusProgress(classroom1.getId(), teacherOwner.getEmail());
         assertEquals(0L, emptyProgress.getTotalTopics());
@@ -630,7 +631,8 @@ public class SyllabusServiceTest {
         when(syllabusItemRepository.countByClassroomId(classroom1.getId())).thenReturn(4L);
         when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.COMPLETED)).thenReturn(2L);
         when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.IN_PROGRESS)).thenReturn(1L);
-        when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.NOT_STARTED)).thenReturn(1L);
+        when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.PARTIALLY_COMPLETED)).thenReturn(0L);
+        lenient().when(syllabusItemRepository.countByClassroomIdAndStatus(classroom1.getId(), SyllabusStatus.NOT_STARTED)).thenReturn(1L);
 
         SyllabusProgressResponse popProgress = syllabusService.getSyllabusProgress(classroom1.getId(), teacherOwner.getEmail());
         assertEquals(4L, popProgress.getTotalTopics());

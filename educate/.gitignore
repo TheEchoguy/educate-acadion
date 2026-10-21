@@ -13,6 +13,8 @@ backend/start_backend.ps1
 # Logs & Python cache
 *.log
 logs/__pycache__/
+logs/.env
+*.env
 !logs/*.py
 !logs/requirements.txt
 

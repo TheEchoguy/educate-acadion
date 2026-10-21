@@ -24,6 +24,7 @@ export const getLocalTodayStr = (d = new Date()) => {
 export const classifyTopicSchedule = (item, todayStr = getLocalTodayStr()) => {
   if (!item) return "UNSCHEDULED";
   if (item.status === "COMPLETED") return "COMPLETED";
+  if (item.status === "IN_PROGRESS" || item.status === "PARTIALLY_COMPLETED") return "IN_PROGRESS";
 
   const start = item.plannedStartDate || null;
   const completion = item.plannedCompletionDate || null;
@@ -33,11 +34,8 @@ export const classifyTopicSchedule = (item, todayStr = getLocalTodayStr()) => {
     return "OVERDUE";
   }
 
-  // 2. In Progress / Active: explicitly IN_PROGRESS, or today is within start and completion
-  if (
-    item.status === "IN_PROGRESS" ||
-    (start && start <= todayStr && (!completion || completion >= todayStr))
-  ) {
+  // 2. In Progress / Active: today is within start and completion
+  if (start && start <= todayStr && (!completion || completion >= todayStr)) {
     return "IN_PROGRESS";
   }
 

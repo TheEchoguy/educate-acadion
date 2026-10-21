@@ -17,7 +17,7 @@ import uvicorn
 from ai_extractor import extract_questions_with_ai, MODEL_NAME
 from pdf_reader import extract_text_from_pdf_bytes, extract_text_from_pdf_file, extract_text_from_image_bytes
 from ml_risk_xai import analyze_student_risk
-from rag_tutor import index_module_notes, ask_study_tutor, get_indexed_modules
+from rag_tutor import index_pdf_notes, index_module_notes, ask_study_tutor, get_indexed_modules
 
 app = FastAPI(title="Acadion AI Paper Parser, ML XAI & RAG Tutor Microservice", version="1.2.0")
 
@@ -74,10 +74,10 @@ async def rag_upload_notes_endpoint(
     try:
         content = await file.read()
         filename = file.filename or f"module_{moduleNumber}_notes.pdf"
-        result = index_module_notes(
+        result = index_pdf_notes(
             classroom_id=classroomId,
-            module_number=int(moduleNumber),
-            pdf_bytes=content,
+            module_num=int(moduleNumber),
+            pdf_source=content,
             filename=filename
         )
         return result

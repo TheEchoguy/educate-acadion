@@ -21,6 +21,7 @@ import EvaluationSchemeConfig from "../../components/classroom/EvaluationSchemeC
 import IaMarksUploadSection from "../../components/classroom/IaMarksUploadSection";
 import ClassroomHeader from "../../components/classroom/ClassroomHeader";
 import AiContentStudioSection from "../../components/classroom/AiContentStudioSection";
+import RagStudyTutorSection from "../../components/classroom/RagStudyTutorSection";
 
 function ClassroomWorkspace() {
   const { id } = useParams();
@@ -69,6 +70,8 @@ function ClassroomWorkspace() {
     activeSection = "scheme";
   } else if (sParam === "studio" || sParam === "ai-studio" || tParam === "studio") {
     activeSection = "studio";
+  } else if (sParam === "tutor" || sParam === "rag" || tParam === "tutor") {
+    activeSection = "tutor";
   } else if (sParam === "iamarks" || sParam === "intelligence" || tParam === "iamarks") {
     activeSection = "management";
   } else if (sParam === "syllabus" || tParam === "syllabus") {
@@ -495,6 +498,16 @@ function ClassroomWorkspace() {
                 <span className="section-label">AI Content Studio</span>
                 <span className="section-stage-badge studio-badge-accent">Objective 2</span>
               </button>
+
+              <button
+                type="button"
+                className={`top-section-btn ${activeSection === "tutor" ? "active" : ""}`}
+                onClick={() => handleSectionChange("tutor")}
+              >
+                <span className="section-icon">🤖</span>
+                <span className="section-label">AI Study Tutor</span>
+                <span className="section-stage-badge" style={{ background: "rgba(6, 182, 212, 0.2)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.4)" }}>RAG Agent</span>
+              </button>
             </div>
 
             {/* SECTION 1: CLASSROOM MANAGEMENT */}
@@ -863,6 +876,13 @@ function ClassroomWorkspace() {
             {activeSection === "studio" && (
               <div className="tab-panel-container" style={{ padding: "20px" }}>
                 <AiContentStudioSection classroomId={id} isTeacher={true} />
+              </div>
+            )}
+
+            {/* SECTION 6: AI STUDY TUTOR (RAG AGENT) */}
+            {activeSection === "tutor" && (
+              <div className="tab-panel-container" style={{ padding: "20px" }}>
+                <RagStudyTutorSection classroomId={id} classroomName={classroom?.name} isTeacher={true} />
               </div>
             )}
           </>
