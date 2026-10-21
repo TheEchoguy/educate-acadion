@@ -4,6 +4,7 @@ import { getActivePlan } from "../../services/syllabusSchedulingService";
 
 export default function SyllabusOverviewSection({
   items = [],
+  activePlan: propActivePlan = null,
   coverage = null,
   versions = [],
   revisionStats = null,
@@ -12,11 +13,17 @@ export default function SyllabusOverviewSection({
   onOpenPublishModal,
   onNavigateToScheduling,
 }) {
-  const [activePlan, setActivePlan] = useState(null);
+  const [activePlan, setActivePlan] = useState(propActivePlan);
   const [planLoading, setPlanLoading] = useState(false);
   const [hoveredStatus, setHoveredStatus] = useState(null);
 
   const classroomId = classroom?.id;
+
+  useEffect(() => {
+    if (propActivePlan) {
+      setActivePlan(propActivePlan);
+    }
+  }, [propActivePlan]);
 
   useEffect(() => {
     let active = true;
@@ -232,21 +239,27 @@ export default function SyllabusOverviewSection({
           <div className="tsm-hero-analytics-details">
             <h3 className="tsm-hero-analytics-title">Curriculum Delivery Pacing</h3>
             <p className="tsm-hero-analytics-subtitle">
-              {completedCount} of {totalTopics} syllabus topics delivered across active units.
+              {completedCount} of {totalTopics} syllabus topics delivered across active units
+              {activePlan?.sessions?.length ? ` (${activePlan.completedSessions || 0} of ${activePlan.sessions.length} timetable sessions completed)` : ""}.
             </p>
             <div className="tsm-hero-stat-chips">
               <span className="tsm-hero-stat-chip">
                 ⏱️ <strong>{displayCompletedHours}</strong> / {displayPlannedHours} Hours Taught ({hoursPct}%)
               </span>
               <span className="tsm-hero-stat-chip" style={{ color: "#34d399" }}>
-                ✓ <strong>{completedCount}</strong> Completed
+                ✓ <strong>{completedCount}</strong> Completed Topics
               </span>
               <span className="tsm-hero-stat-chip" style={{ color: "#f59e0b" }}>
                 ⚡ <strong>{inProgressCount}</strong> In Progress
               </span>
               <span className="tsm-hero-stat-chip">
-                📌 <strong>{notStartedCount}</strong> Remaining
+                📌 <strong>{notStartedCount}</strong> Remaining Topics
               </span>
+              {activePlan?.sessions?.length > 0 && (
+                <span className="tsm-hero-stat-chip" style={{ color: "#38bdf8", borderColor: "rgba(56, 189, 248, 0.3)" }}>
+                  🗓️ <strong>{activePlan.sessions.length}</strong> Timetable Sessions
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -336,7 +349,7 @@ export default function SyllabusOverviewSection({
       </div>
 
       {/* 3. VISUAL CHARTS GRID (DOUGHNUT + MODULE BARS + HOURS DELIVERY + PLANNED VS ACTUAL) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
+      <div className="tsm-overview-charts-grid">
         {/* CHART 1: DOUGHNUT CHART FOR TOPIC STATUS DISTRIBUTION */}
         <div className="tsm-metric-card" style={{ padding: "22px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -437,12 +450,13 @@ export default function SyllabusOverviewSection({
             </div>
 
             {/* Interactive Legend */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 150 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 170 }}>
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
+                  gap: 12,
                   fontSize: "0.82rem",
                   cursor: "pointer",
                   padding: "4px 8px",
@@ -452,11 +466,11 @@ export default function SyllabusOverviewSection({
                 onMouseEnter={() => setHoveredStatus("completed")}
                 onMouseLeave={() => setHoveredStatus(null)}
               >
-                <span style={{ display: "flex", alignItems: "center", gap: 6, color: "#cbd5e1" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6, color: "#cbd5e1", whiteSpace: "nowrap" }}>
                   <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#10b981" }}></span>
                   Completed
                 </span>
-                <span style={{ fontWeight: 700, color: "#34d399" }}>
+                <span style={{ fontWeight: 700, color: "#34d399", whiteSpace: "nowrap" }}>
                   {completedCount} ({Math.round(completedPct * 100)}%)
                 </span>
               </div>
@@ -466,6 +480,7 @@ export default function SyllabusOverviewSection({
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
+                  gap: 12,
                   fontSize: "0.82rem",
                   cursor: "pointer",
                   padding: "4px 8px",
@@ -475,11 +490,11 @@ export default function SyllabusOverviewSection({
                 onMouseEnter={() => setHoveredStatus("in_progress")}
                 onMouseLeave={() => setHoveredStatus(null)}
               >
-                <span style={{ display: "flex", alignItems: "center", gap: 6, color: "#cbd5e1" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6, color: "#cbd5e1", whiteSpace: "nowrap" }}>
                   <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#f59e0b" }}></span>
                   In Progress
                 </span>
-                <span style={{ fontWeight: 700, color: "#fbbf24" }}>
+                <span style={{ fontWeight: 700, color: "#fbbf24", whiteSpace: "nowrap" }}>
                   {inProgressCount} ({Math.round(inProgressPct * 100)}%)
                 </span>
               </div>
@@ -489,6 +504,7 @@ export default function SyllabusOverviewSection({
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
+                  gap: 12,
                   fontSize: "0.82rem",
                   cursor: "pointer",
                   padding: "4px 8px",
@@ -498,11 +514,11 @@ export default function SyllabusOverviewSection({
                 onMouseEnter={() => setHoveredStatus("not_started")}
                 onMouseLeave={() => setHoveredStatus(null)}
               >
-                <span style={{ display: "flex", alignItems: "center", gap: 6, color: "#cbd5e1" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6, color: "#cbd5e1", whiteSpace: "nowrap" }}>
                   <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#475569" }}></span>
                   Not Started
                 </span>
-                <span style={{ fontWeight: 700, color: "#94a3b8" }}>
+                <span style={{ fontWeight: 700, color: "#94a3b8", whiteSpace: "nowrap" }}>
                   {notStartedCount} ({Math.round(notStartedPct * 100)}%)
                 </span>
               </div>
@@ -681,6 +697,22 @@ export default function SyllabusOverviewSection({
                   <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#ffffff" }}>{scheduledSessions}</div>
                 </div>
               </div>
+
+              {/* Feasibility & Carry-Forward Status Indicators */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, flexWrap: "wrap", gap: 6, fontSize: "0.75rem" }}>
+                <span style={{ color: activePlan.feasibilityStatus === "FEASIBLE" ? "#34d399" : "#f87171", display: "flex", alignItems: "center", gap: 4 }}>
+                  <span>{activePlan.feasibilityStatus === "FEASIBLE" ? "✓" : "⚠️"}</span>
+                  <span>Feasibility: <strong>{activePlan.feasibilityStatus || "FEASIBLE"}</strong></span>
+                  {activePlan.unscheduledTopics?.length > 0 && <span>({activePlan.unscheduledTopics.length} unscheduled)</span>}
+                </span>
+
+                {sessions.some((s) => s.isCarriedForward || s.remainingPortion) && (
+                  <span style={{ color: "#fbbf24", display: "flex", alignItems: "center", gap: 4 }}>
+                    <span>↳</span>
+                    <span>Carry-forward active: <strong>{sessions.filter((s) => s.isCarriedForward || s.remainingPortion).length} session(s)</strong></span>
+                  </span>
+                )}
+              </div>
             </div>
           ) : (
             <div style={{ textAlign: "center", padding: "16px 0", color: "#94a3b8", fontSize: "0.85rem" }}>
@@ -699,6 +731,89 @@ export default function SyllabusOverviewSection({
           )}
         </div>
       </div>
+
+      {/* 4. UPCOMING SESSIONS TIMELINE & SCHEDULE SUMMARY (From Active Plan) */}
+      {activePlan?.sessions?.length > 0 && (
+        <div className="tsm-metric-card" style={{ padding: "20px 24px", background: "rgba(30, 27, 46, 0.75)", border: "1px solid rgba(255, 255, 255, 0.1)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: "1.2rem" }}>📅</span>
+              <div>
+                <h4 style={{ margin: 0, color: "#ffffff", fontSize: "1.05rem", fontWeight: 700 }}>
+                  Upcoming Teaching Schedule Timeline
+                </h4>
+                <span style={{ fontSize: "0.78rem", color: "#94a3b8" }}>
+                  Verified schedule v{activePlan.versionNumber} • Next planned classroom sessions
+                </span>
+              </div>
+            </div>
+
+            {onNavigateToScheduling && (
+              <button
+                type="button"
+                className="tsm-btn-secondary"
+                style={{ padding: "6px 14px", fontSize: "0.82rem", color: "#38bdf8", borderColor: "rgba(56, 189, 248, 0.4)" }}
+                onClick={onNavigateToScheduling}
+              >
+                Open Full Teaching Calendar →
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+            {activePlan.sessions
+              .filter((s) => s.status === "SCHEDULED" || s.status === "PARTIALLY_COMPLETED")
+              .slice(0, 4)
+              .map((session) => (
+                <div
+                  key={session.id}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.04)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.76rem", color: "#a78bfa", fontWeight: 700 }}>
+                      Session #{session.sessionNumber} • Mod {session.moduleNumber}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.7rem",
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        fontWeight: 600,
+                        background: session.status === "PARTIALLY_COMPLETED" ? "rgba(245, 158, 11, 0.2)" : "rgba(56, 189, 248, 0.15)",
+                        color: session.status === "PARTIALLY_COMPLETED" ? "#fbbf24" : "#38bdf8",
+                      }}
+                    >
+                      {session.status === "PARTIALLY_COMPLETED" ? "Partial (Carry Over)" : "Scheduled"}
+                    </span>
+                  </div>
+
+                  <div style={{ color: "#ffffff", fontWeight: 600, fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {session.topicTitle}
+                  </div>
+
+                  {session.subtopicTitle && (
+                    <div style={{ color: "#94a3b8", fontSize: "0.78rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {session.subtopicTitle}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4, fontSize: "0.75rem", color: "#cbd5e1" }}>
+                    <span>🗓️ {session.sessionDate} ({session.dayOfWeek?.substring(0, 3)})</span>
+                    <span>⏰ {session.startTime?.substring(0, 5)} - {session.endTime?.substring(0, 5)}</span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* 4. PUBLICATION & VERSION SUMMARY BANNER */}
       <div className="tsm-pub-banner" style={{ margin: 0 }}>

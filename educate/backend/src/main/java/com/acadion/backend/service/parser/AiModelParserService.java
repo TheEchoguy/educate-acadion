@@ -230,16 +230,37 @@ public class AiModelParserService {
                 JsonNode optArray = qNode.path("options");
                 if (optArray.isArray()) {
                     for (JsonNode o : optArray) {
-                        options.add(o.asText());
+                        if (o.isObject() && o.has("text")) {
+                            options.add(o.path("text").asText());
+                        } else {
+                            options.add(o.asText());
+                        }
                     }
                 }
 
+                String qType = qNode.path("questionType").asText("THEORY");
+                if (qType.equalsIgnoreCase("THEORY") && options.size() >= 2) {
+                    qType = "MCQ";
+                }
+
+                String textPrompt = qNode.has("prompt") && !qNode.path("prompt").asText().isBlank()
+                        ? qNode.path("prompt").asText()
+                        : qNode.path("text").asText("");
+
+                String correct = qNode.has("correctOption") && !qNode.path("correctOption").asText().isBlank()
+                        ? qNode.path("correctOption").asText()
+                        : qNode.path("correctAnswer").asText(null);
+
+                String explanation = qNode.path("explanation").asText(null);
+                Integer moduleNum = qNode.has("module") && !qNode.path("module").isNull() ? qNode.path("module").asInt() : null;
+
                 QuestionPaper.Question q = QuestionPaper.Question.builder()
                         .questionId(qNode.path("questionId").asText("Q" + (questions.size() + 1)))
-                        .text(qNode.path("text").asText(""))
-                        .marks(qNode.path("marks").asDouble(5.0))
-                        .section(qNode.path("section").asText(null))
-                        .questionType(qNode.path("questionType").asText("THEORY"))
+                        .text(textPrompt)
+                        .prompt(textPrompt)
+                        .marks(qNode.path("marks").asDouble(qType.equalsIgnoreCase("MCQ") ? 1.0 : 5.0))
+                        .section(qNode.path("section").asText(moduleNum != null ? "MODULE-" + moduleNum : null))
+                        .questionType(qType)
                         .parentQuestion(qNode.path("parentQuestion").asText(null))
                         .groupName(qNode.path("groupName").asText(null))
                         .optionalQuestion(qNode.path("optionalQuestion").asBoolean(false))
@@ -248,6 +269,10 @@ public class AiModelParserService {
                         .topic(qNode.path("topic").asText("General"))
                         .imageUrl(qNode.path("imageUrl").asText(null))
                         .options(options)
+                        .correctAnswer(correct)
+                        .correctOption(correct)
+                        .explanation(explanation)
+                        .module(moduleNum)
                         .build();
 
                 if (!q.getText().isBlank()) {

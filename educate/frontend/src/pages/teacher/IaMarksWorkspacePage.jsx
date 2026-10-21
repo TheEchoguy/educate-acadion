@@ -92,7 +92,7 @@ export default function IaMarksWorkspacePage() {
               classroom={classroom}
               backLabel="← Back to Workspace Selection"
               onBack={() => navigate(`/teacher/classrooms/${id}/workspaces`)}
-              workspaceTitle="Academic Intelligence"
+              workspaceTitle="IA Split-Up Marks Ingestion"
               onRegenerateCode={handleRegenerate}
               regenerating={regenerating}
               showJoinCode={true}

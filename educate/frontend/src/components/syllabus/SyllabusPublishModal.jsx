@@ -20,7 +20,7 @@ export default function SyllabusPublishModal({
       setPublishing(true);
       await onPublish({
         versionTitle: versionTitle.trim() || `Release v${nextVersion}`,
-        changeSummary: changeSummary.trim() || "Routine syllabus snapshot publication.",
+        changeSummary: changeSummary.trim(),
       });
       onClose();
     } catch (err) {

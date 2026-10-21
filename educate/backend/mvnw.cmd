@@ -27,7 +27,9 @@
 @REM   MVNW_VERBOSE - true: enable verbose log; others: silence the output
 @REM ----------------------------------------------------------------------------
 
-@IF EXIST "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot" (
+@IF EXIST "C:\Program Files\Java\jdk-17" (
+  @SET "JAVA_HOME=C:\Program Files\Java\jdk-17"
+) ELSE @IF EXIST "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot" (
   @SET "JAVA_HOME=C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot"
 ) ELSE @IF "%JAVA_HOME%"=="" (
   @IF EXIST "%LOCALAPPDATA%\Programs\Eclipse Adoptium\jdk-21.0.12.101-hotspot" (

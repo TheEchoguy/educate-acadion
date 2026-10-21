@@ -7,6 +7,7 @@ export default function SyllabusTopicsSection({
   onDeleteTopic,
   onStatusChange,
   onReorder,
+  onNavigateToScheduling,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -74,6 +75,7 @@ export default function SyllabusTopicsSection({
             <option value="ALL">All Teaching Statuses</option>
             <option value="NOT_STARTED">Not Started</option>
             <option value="IN_PROGRESS">In Progress</option>
+            <option value="PARTIALLY_COMPLETED">Partially Completed</option>
             <option value="COMPLETED">Completed</option>
           </select>
         </div>
@@ -110,13 +112,29 @@ export default function SyllabusTopicsSection({
 
       {/* TOPICS GROUPED BY UNIT */}
       {items.length === 0 ? (
-        <div className="tsm-empty-state">
-          <div className="tsm-empty-icon">📚</div>
-          <h3>No syllabus topics created yet</h3>
-          <p>Get started by defining units and adding lecture topics for this classroom.</p>
-          <button type="button" className="tsm-btn-primary" onClick={onAddTopic}>
-            + Create First Topic
-          </button>
+        <div className="tsm-empty-state" style={{ padding: "48px 24px", textAlign: "center" }}>
+          <div className="tsm-empty-icon" style={{ fontSize: "2.5rem", marginBottom: 12 }}>📖</div>
+          <h3 style={{ fontSize: "1.35rem", fontWeight: 700, color: "#ffffff", marginBottom: 8 }}>
+            No Syllabus Topics Configured Yet
+          </h3>
+          <p style={{ maxWidth: 540, margin: "0 auto 20px auto", color: "#94a3b8", lineHeight: 1.6, fontSize: "0.9rem" }}>
+            This classroom has not yet established its curriculum topics or syllabus units. You can add topics manually or use the Syllabus Scheduling document intake to extract your official syllabus automatically.
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <button type="button" className="tsm-btn-primary" onClick={onAddTopic}>
+              + Add Topics Manually
+            </button>
+            {onNavigateToScheduling && (
+              <button
+                type="button"
+                className="tsm-btn-secondary"
+                style={{ borderColor: "rgba(56, 189, 248, 0.4)", color: "#38bdf8" }}
+                onClick={onNavigateToScheduling}
+              >
+                📁 Open Document Intake &amp; Scheduling
+              </button>
+            )}
+          </div>
         </div>
       ) : Object.keys(unitsMap).length === 0 ? (
         <div className="tsm-empty-state">
@@ -167,9 +185,9 @@ export default function SyllabusTopicsSection({
                       <div className="tsm-topic-title-row">
                         <span className="tsm-topic-title">{topicItem.topic}</span>
                         <span
-                          className={`tsm-badge tsm-badge-${topicItem.status ? topicItem.status.toLowerCase().replace("_", "-") : "not-started"}`}
+                          className={`tsm-badge tsm-badge-${topicItem.status ? topicItem.status.toLowerCase().replace(/_/g, "-") : "not-started"}`}
                         >
-                          {topicItem.status ? topicItem.status.replace("_", " ") : "NOT STARTED"}
+                          {topicItem.status ? topicItem.status.replace(/_/g, " ") : "NOT STARTED"}
                         </span>
                       </div>
 
@@ -177,15 +195,51 @@ export default function SyllabusTopicsSection({
                         <div className="tsm-topic-desc">{topicItem.description}</div>
                       )}
 
+                      {/* Extracted subtopics list */}
+                      {topicItem.subtopics && topicItem.subtopics.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                          {topicItem.subtopics.map((sub, sIdx) => (
+                            <span
+                              key={sIdx}
+                              style={{
+                                fontSize: "0.74rem",
+                                padding: "2px 8px",
+                                borderRadius: 6,
+                                background: "rgba(168, 85, 247, 0.12)",
+                                color: "#d8b4fe",
+                                border: "1px solid rgba(168, 85, 247, 0.25)",
+                              }}
+                            >
+                              ↳ {sub}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="tsm-topic-meta-row">
-                        {topicItem.estimatedHours && (
+                        {topicItem.estimatedHours != null && (
                           <span className="tsm-topic-meta-item">
-                            ⏱️ {topicItem.estimatedHours} hrs
+                            ⏱️ Est: {topicItem.estimatedHours} hrs
                           </span>
                         )}
-                        {topicItem.plannedStartDate && (
+                        {topicItem.actualTeachingHours != null && (
+                          <span className="tsm-topic-meta-item" style={{ color: "#34d399" }}>
+                            ⏱️ Actual: {topicItem.actualTeachingHours} hrs
+                          </span>
+                        )}
+                        {(topicItem.plannedStartDate || topicItem.plannedTeachingDate) && (
                           <span className="tsm-topic-meta-item">
-                            🗓️ {topicItem.plannedStartDate} → {topicItem.plannedCompletionDate || "TBD"}
+                            🗓️ {topicItem.plannedStartDate || topicItem.plannedTeachingDate} {topicItem.plannedCompletionDate ? `→ ${topicItem.plannedCompletionDate}` : ""}
+                          </span>
+                        )}
+                        {topicItem.actualCompletionDate && (
+                          <span className="tsm-topic-meta-item" style={{ color: "#34d399" }}>
+                            ✅ Completed: {topicItem.actualCompletionDate}
+                          </span>
+                        )}
+                        {topicItem.linkedSessionIds?.length > 0 && (
+                          <span className="tsm-topic-meta-item" style={{ color: "#38bdf8" }}>
+                            📅 {topicItem.linkedSessionIds.length} scheduled session(s)
                           </span>
                         )}
                         {topicItem.learningObjectives?.length > 0 && (
@@ -216,6 +270,7 @@ export default function SyllabusTopicsSection({
                       >
                         <option value="NOT_STARTED">Not Started</option>
                         <option value="IN_PROGRESS">In Progress</option>
+                        <option value="PARTIALLY_COMPLETED">Partially Completed</option>
                         <option value="COMPLETED">Completed</option>
                       </select>
 

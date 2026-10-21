@@ -16,11 +16,8 @@ export const uploadPaper = async (formData) => {
   return response.data;
 };
 
-export const getAllPapers = async () => {
-
-  const response =
-    await API.get("/papers");
-
+export const getAllPapers = async (params = {}) => {
+  const response = await API.get("/papers", { params });
   return response.data;
 };
 

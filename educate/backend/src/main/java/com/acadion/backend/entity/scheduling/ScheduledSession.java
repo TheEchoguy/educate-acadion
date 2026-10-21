@@ -73,6 +73,20 @@ public class ScheduledSession {
 
     private String teacherNotes;
 
+    private String portionsCovered;
+
+    private String remainingPortion;
+
+    private Integer carriedForwardFromSessionNumber;
+
+    private Integer carriedForwardToSessionNumber;
+
+    @Builder.Default
+    private boolean isCarriedForward = false;
+
     @Builder.Default
     private boolean isLocked = false;
+
+    @Builder.Default
+    private java.util.List<String> coveredTopics = new java.util.ArrayList<>();
 }

@@ -65,6 +65,19 @@ public class QuestionPaper {
     @Builder.Default
     private Boolean allowedForPractice = false;
 
+    // PUBLICATION STATUS: DRAFT, PUBLISHED, ARCHIVED
+    @Builder.Default
+    private String publicationStatus = "PUBLISHED";
+
+    // SOURCE MODE: TOPIC, NOTES, TOPIC_NOTES, MANUAL, UPLOADED
+    private String sourceMode;
+
+    // DIFFICULTY: EASY, MEDIUM, HARD
+    private String difficulty;
+
+    // TOPIC / SUBJECT FOCUS
+    private String topic;
+
     private String assignedSemester;
 
     private String createdBy;
@@ -123,6 +136,15 @@ public class QuestionPaper {
 
         // Correct Answer for MCQ (e.g. "A" or Option text)
         private String correctAnswer;
+
+        // "A" | "B" | "C" | "D"
+        private String correctOption;
+
+        // Solution prompt stem
+        private String prompt;
+
+        // Module number 1 to 5
+        private Integer module;
 
         // Explanation / Reference Solution
         private String explanation;

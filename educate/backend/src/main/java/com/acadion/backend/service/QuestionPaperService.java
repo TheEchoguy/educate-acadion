@@ -183,7 +183,82 @@ public class QuestionPaperService {
     // =====================================
 
     public List<QuestionPaper> getAllPapers() {
-        return questionPaperRepository.findAll();
+        return getAllPapers(null, null);
+    }
+
+    public List<QuestionPaper> getAllPapers(String role, String status) {
+        List<QuestionPaper> all = questionPaperRepository.findAll();
+        if ("STUDENT".equalsIgnoreCase(role)) {
+            return all.stream()
+                    .filter(p -> p.getPublicationStatus() == null || "PUBLISHED".equalsIgnoreCase(p.getPublicationStatus()))
+                    .map(this::sanitizeForStudent)
+                    .toList();
+        }
+        if (status != null && !status.isBlank()) {
+            return all.stream()
+                    .filter(p -> status.equalsIgnoreCase(p.getPublicationStatus()))
+                    .toList();
+        }
+        return all;
+    }
+
+    /**
+     * Remove correct answers and explanations from questions for student attempts.
+     */
+    public QuestionPaper sanitizeForStudent(QuestionPaper paper) {
+        if (paper == null || paper.getQuestions() == null || paper.getQuestions().isEmpty()) {
+            return paper;
+        }
+
+        List<QuestionPaper.Question> sanitizedQuestions = paper.getQuestions().stream()
+                .map(q -> QuestionPaper.Question.builder()
+                        .questionId(q.getQuestionId())
+                        .text(q.getText())
+                        .section(q.getSection())
+                        .groupName(q.getGroupName())
+                        .optionalQuestion(q.getOptionalQuestion())
+                        .optionalWith(q.getOptionalWith())
+                        .parentQuestion(q.getParentQuestion())
+                        .maxAttempt(q.getMaxAttempt())
+                        .questionType(q.getQuestionType())
+                        .marks(q.getMarks())
+                        .options(q.getOptions())
+                        .topic(q.getTopic())
+                        .imageUrl(q.getImageUrl())
+                        .correctAnswer(null) // HIDDEN FOR STUDENT
+                        .explanation(null)   // HIDDEN FOR STUDENT
+                        .build())
+                .collect(java.util.stream.Collectors.toList());
+
+        return QuestionPaper.builder()
+                .id(paper.getId())
+                .paperId(paper.getPaperId())
+                .subject(paper.getSubject())
+                .internalNo(paper.getInternalNo())
+                .originalFileName(paper.getOriginalFileName())
+                .contentType(paper.getContentType())
+                .uploadedAt(paper.getUploadedAt())
+                .collegeName(paper.getCollegeName())
+                .subjectCode(paper.getSubjectCode())
+                .examName(paper.getExamName())
+                .semester(paper.getSemester())
+                .date(paper.getDate())
+                .duration(paper.getDuration())
+                .durationMinutes(paper.getDurationMinutes())
+                .maxMarks(paper.getMaxMarks())
+                .rawMarks(paper.getRawMarks())
+                .totalMarks(paper.getTotalMarks())
+                .allowedForPractice(paper.getAllowedForPractice())
+                .assignedSemester(paper.getAssignedSemester())
+                .paperCategory(paper.getPaperCategory())
+                .paperFormat(paper.getPaperFormat())
+                .publicationStatus(paper.getPublicationStatus())
+                .sourceMode(paper.getSourceMode())
+                .difficulty(paper.getDifficulty())
+                .topic(paper.getTopic())
+                .createdBy(paper.getCreatedBy())
+                .questions(sanitizedQuestions)
+                .build();
     }
 
     // =====================================
@@ -191,9 +266,16 @@ public class QuestionPaperService {
     // =====================================
 
     public QuestionPaper getPaper(String identifier) {
-        return questionPaperRepository.findById(identifier)
-                .or(() -> questionPaperRepository.findFirstByPaperIdOrderByUploadedAtDesc(identifier))
-                .orElseThrow(() -> new IllegalArgumentException("Question paper not found"));
+        if (identifier == null || identifier.isBlank()) {
+            throw new IllegalArgumentException("Question paper identifier cannot be empty");
+        }
+        String cleanId = identifier.trim();
+        return questionPaperRepository.findById(cleanId)
+                .or(() -> questionPaperRepository.findFirstByPaperIdOrderByUploadedAtDesc(cleanId))
+                .or(() -> questionPaperRepository.findFirstByPaperIdIgnoreCaseOrderByUploadedAtDesc(cleanId))
+                .or(() -> questionPaperRepository.findFirstBySubjectCodeIgnoreCaseOrderByUploadedAtDesc(cleanId))
+                .or(() -> questionPaperRepository.findFirstBySubjectIgnoreCaseOrderByUploadedAtDesc(cleanId))
+                .orElseThrow(() -> new IllegalArgumentException("Question paper not found: " + cleanId));
     }
 
     // =====================================
@@ -217,7 +299,10 @@ public class QuestionPaperService {
                         .topic(question.getTopic())
                         .imageUrl(question.getImageUrl())
                         .options(question.getOptions())
-                        .correctAnswer(question.getCorrectAnswer())
+                        .correctAnswer(question.getCorrectAnswer() != null ? question.getCorrectAnswer() : question.getCorrectOption())
+                        .correctOption(question.getCorrectOption() != null ? question.getCorrectOption() : question.getCorrectAnswer())
+                        .prompt(question.getPrompt() != null ? question.getPrompt() : question.getText())
+                        .module(question.getModule())
                         .explanation(question.getExplanation())
                         .build()
                 )
@@ -251,6 +336,10 @@ public class QuestionPaperService {
                 .paperCategory(request.getPaperCategory() != null ? request.getPaperCategory() : "ASSESSMENT")
                 .paperFormat(request.getPaperFormat() != null ? request.getPaperFormat() : "THEORY")
                 .allowedForPractice(request.getAllowedForPractice() != null ? request.getAllowedForPractice() : false)
+                .publicationStatus(request.getPublicationStatus() != null ? request.getPublicationStatus() : "PUBLISHED")
+                .sourceMode(request.getSourceMode())
+                .difficulty(request.getDifficulty())
+                .topic(request.getTopic())
                 .assignedSemester(request.getAssignedSemester() != null ? request.getAssignedSemester() : request.getSemester())
                 .createdBy(request.getCreatedBy())
                 .questions(questions)
@@ -287,7 +376,10 @@ public class QuestionPaperService {
                         .topic(question.getTopic())
                         .imageUrl(question.getImageUrl())
                         .options(question.getOptions())
-                        .correctAnswer(question.getCorrectAnswer())
+                        .correctAnswer(question.getCorrectAnswer() != null ? question.getCorrectAnswer() : question.getCorrectOption())
+                        .correctOption(question.getCorrectOption() != null ? question.getCorrectOption() : question.getCorrectAnswer())
+                        .prompt(question.getPrompt() != null ? question.getPrompt() : question.getText())
+                        .module(question.getModule())
                         .explanation(question.getExplanation())
                         .build()
                 )
@@ -316,6 +408,10 @@ public class QuestionPaperService {
         if (request.getPaperCategory() != null) paper.setPaperCategory(request.getPaperCategory());
         if (request.getPaperFormat() != null) paper.setPaperFormat(request.getPaperFormat());
         if (request.getAllowedForPractice() != null) paper.setAllowedForPractice(request.getAllowedForPractice());
+        if (request.getPublicationStatus() != null) paper.setPublicationStatus(request.getPublicationStatus());
+        if (request.getSourceMode() != null) paper.setSourceMode(request.getSourceMode());
+        if (request.getDifficulty() != null) paper.setDifficulty(request.getDifficulty());
+        if (request.getTopic() != null) paper.setTopic(request.getTopic());
         if (request.getAssignedSemester() != null) paper.setAssignedSemester(request.getAssignedSemester());
         if (request.getCreatedBy() != null) paper.setCreatedBy(request.getCreatedBy());
         paper.setQuestions(updatedQuestions);

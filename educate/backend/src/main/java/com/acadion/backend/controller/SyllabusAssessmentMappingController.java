@@ -1,8 +1,6 @@
 package com.acadion.backend.controller;
 
-import com.acadion.backend.dto.syllabus.AssessmentMappingResponse;
-import com.acadion.backend.dto.syllabus.AssessmentMappingSuggestionResponse;
-import com.acadion.backend.dto.syllabus.CreateAssessmentMappingRequest;
+import com.acadion.backend.dto.syllabus.*;
 import com.acadion.backend.service.SyllabusAssessmentMappingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -103,6 +101,17 @@ public class SyllabusAssessmentMappingController {
         String email = getAuthenticatedEmail(principal);
         mappingService.deleteMapping(classroomId, mappingId, email);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/assessment-analysis")
+    public ResponseEntity<TopicAssessmentAnalysisResponse> analyzeTopicAssessment(
+            @PathVariable("classroomId") String classroomId,
+            @RequestBody AssessmentAnalysisRequest request,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        TopicAssessmentAnalysisResponse response = mappingService.analyzeTopicAssessment(classroomId, request, email);
+        return ResponseEntity.ok(response);
     }
 
     private String getAuthenticatedEmail(Principal principal) {

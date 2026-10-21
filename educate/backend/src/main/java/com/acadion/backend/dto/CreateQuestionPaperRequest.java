@@ -33,6 +33,11 @@ public class CreateQuestionPaperRequest {
 
     private Boolean allowedForPractice;
 
+    private String publicationStatus; // DRAFT, PUBLISHED, ARCHIVED
+    private String sourceMode; // TOPIC, NOTES, TOPIC_NOTES, MANUAL, UPLOADED
+    private String difficulty; // EASY, MEDIUM, HARD
+    private String topic;
+
     private String assignedSemester;
 
     private String createdBy;
@@ -85,6 +90,15 @@ public class CreateQuestionPaperRequest {
 
         // Correct answer option (A, B, C, D or text)
         private String correctAnswer;
+
+        // "A" | "B" | "C" | "D"
+        private String correctOption;
+
+        // Prompt stem
+        private String prompt;
+
+        // Module number
+        private Integer module;
 
         // Solution explanation / rationale
         private String explanation;

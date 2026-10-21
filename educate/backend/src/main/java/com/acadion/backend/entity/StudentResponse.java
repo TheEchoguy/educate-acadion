@@ -23,6 +23,8 @@ public class StudentResponse {
 
     private String usn;
 
+    private String studentId;
+
     private String paperId;
 
     private LocalDateTime submittedAt;

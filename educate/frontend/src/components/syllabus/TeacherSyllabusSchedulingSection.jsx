@@ -15,6 +15,8 @@ import {
   verifyInputs,
   resetSchedulingData,
   generateSchedule,
+  getPlans,
+  getPlanById,
   getActivePlan,
   approvePlan,
   recordSessionOutcome,
@@ -38,6 +40,7 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
   const [documents, setDocuments] = useState([]);
   const [inputs, setInputs] = useState(null);
   const [activePlan, setActivePlan] = useState(null);
+  const [availablePlans, setAvailablePlans] = useState([]);
   const [rescheduleHistory, setRescheduleHistory] = useState([]);
 
   // Planning Upload state
@@ -64,6 +67,8 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
   const [selectedSessionForOutcome, setSelectedSessionForOutcome] = useState(null);
   const [outcomeStatus, setOutcomeStatus] = useState("COMPLETED");
   const [outcomeNotes, setOutcomeNotes] = useState("");
+  const [outcomePortionsCovered, setOutcomePortionsCovered] = useState("");
+  const [outcomeRemainingPortion, setOutcomeRemainingPortion] = useState("");
 
   // Reschedule simulation modal state
   const [selectedSessionForReschedule, setSelectedSessionForReschedule] = useState(null);
@@ -71,6 +76,10 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
   const [rescheduleReason, setRescheduleReason] = useState("");
   const [shiftSubsequent, setShiftSubsequent] = useState(true);
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleTargetDate, setRescheduleTargetDate] = useState("");
+  const [rescheduleStartTime, setRescheduleStartTime] = useState("");
+  const [rescheduleEndTime, setRescheduleEndTime] = useState("");
+  const [rescheduleRoom, setRescheduleRoom] = useState("");
 
   // Manual topic allocation modal state
   const [showManualModal, setShowManualModal] = useState(false);
@@ -84,8 +93,8 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
   const [allocating, setAllocating] = useState(false);
 
   // Generation parameters state
-  const [termStartDate, setTermStartDate] = useState("");
-  const [termEndDate, setTermEndDate] = useState("");
+  const [termStartDate, setTermStartDate] = useState("2026-07-20");
+  const [termEndDate, setTermEndDate] = useState("2026-11-13");
   const [allowPastDates, setAllowPastDates] = useState(false);
   const [generating, setGenerating] = useState(false);
 
@@ -120,11 +129,12 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
   const reloadData = useCallback(async () => {
     if (!classroomId) return;
     try {
-      const [docsRes, inputsRes, planRes, historyRes] = await Promise.allSettled([
+      const [docsRes, inputsRes, planRes, historyRes, plansRes] = await Promise.allSettled([
         getDocuments(classroomId),
         getExtractionInputs(classroomId),
         getActivePlan(classroomId),
         getRescheduleHistory(classroomId),
+        getPlans(classroomId),
       ]);
 
       if (docsRes.status === "fulfilled") {
@@ -142,11 +152,19 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
         setReviewModules(inp?.moduleOutlines || []);
 
         // Prepopulate term start and end dates from events if available
-        if (inp?.calendarEvents?.length > 0 && !termStartDate) {
+        if (inp?.calendarEvents?.length > 0) {
           const starts = inp.calendarEvents.map((e) => e.startDate).filter(Boolean).sort();
-          const ends = inp.calendarEvents.map((e) => e.endDate || e.startDate).filter(Boolean).sort();
-          if (starts.length > 0) setTermStartDate(starts[0]);
-          if (ends.length > 0) setTermEndDate(ends[ends.length - 1]);
+          const seeEvent = inp.calendarEvents.find((e) => {
+            const name = (e.name || e.title || e.eventType || "").toUpperCase();
+            return name.includes("SEE") || name.includes("SEMESTER END") || name.includes("EXAMINATION");
+          });
+          const cutoff = seeEvent?.startDate ? seeEvent.startDate : "2026-11-13";
+          if (!termStartDate && starts.length > 0) {
+            setTermStartDate(starts[0].startsWith("2026") ? starts[0] : "2026-07-20");
+          }
+          if (!termEndDate) {
+            setTermEndDate(cutoff.startsWith("2026") ? cutoff : "2026-11-13");
+          }
         }
       } else {
         setInputs(null);
@@ -156,10 +174,14 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
         setReviewModules([]);
       }
 
-      if (planRes.status === "fulfilled") {
-        setActivePlan(planRes.value || null);
+      if (plansRes.status === "fulfilled") {
+        setAvailablePlans(plansRes.value || []);
       } else {
-        setActivePlan(null);
+        setAvailablePlans([]);
+      }
+
+      if (planRes.status === "fulfilled" && planRes.value) {
+        setActivePlan(planRes.value);
       }
 
       if (historyRes.status === "fulfilled") {
@@ -174,6 +196,21 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
       setLoading(false);
     }
   }, [classroomId, termStartDate]);
+
+  const handleSelectPlanVersion = async (planId) => {
+    if (!planId) return;
+    try {
+      setLoading(true);
+      const plan = await getPlanById(classroomId, planId);
+      setActivePlan(plan);
+      toast.success(`Switched to schedule v${plan.versionNumber} (${plan.status})`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load selected schedule version");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -453,6 +490,8 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
     setSelectedSessionForOutcome(session);
     setOutcomeStatus(session.status || "COMPLETED");
     setOutcomeNotes(session.teacherNotes || "");
+    setOutcomePortionsCovered(session.portionsCovered || "");
+    setOutcomeRemainingPortion(session.remainingPortion || "");
   };
 
   const handleSaveOutcome = async () => {
@@ -461,8 +500,12 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
       await recordSessionOutcome(
         classroomId,
         selectedSessionForOutcome.id,
-        outcomeStatus,
-        outcomeNotes
+        {
+          outcome: outcomeStatus,
+          teacherNotes: outcomeNotes,
+          portionsCovered: outcomePortionsCovered,
+          remainingPortion: outcomeRemainingPortion,
+        }
       );
       toast.success("Session outcome updated!");
       setSelectedSessionForOutcome(null);
@@ -481,9 +524,31 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
     try {
       const preview = await previewReschedule(classroomId, session.id);
       setReschedulePreview(preview);
+      if (preview) {
+        setRescheduleTargetDate(preview.proposedDate || "");
+        setRescheduleStartTime(preview.proposedStartTime ? preview.proposedStartTime.substring(0, 5) : "");
+        setRescheduleEndTime(preview.proposedEndTime ? preview.proposedEndTime.substring(0, 5) : "");
+        setRescheduleRoom(preview.roomNumber || session.roomNumber || "Main");
+      }
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || err.message || "Failed to calculate replacement slot");
+    }
+  };
+
+  const handleLiveReschedulePreview = async (date, start, end, room, shift) => {
+    if (!selectedSessionForReschedule) return;
+    try {
+      const preview = await previewReschedule(classroomId, selectedSessionForReschedule.id, {
+        targetDate: date || rescheduleTargetDate || undefined,
+        targetStartTime: (start || rescheduleStartTime) ? `${(start || rescheduleStartTime).substring(0, 5)}:00` : undefined,
+        targetEndTime: (end || rescheduleEndTime) ? `${(end || rescheduleEndTime).substring(0, 5)}:00` : undefined,
+        roomNumber: room !== undefined ? room : rescheduleRoom,
+        shiftSubsequentSessions: shift !== undefined ? shift : shiftSubsequent,
+      });
+      setReschedulePreview(preview);
+    } catch (err) {
+      console.warn("Live reschedule preview error:", err);
     }
   };
 
@@ -494,7 +559,10 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
       const updatedPlan = await applyReschedule(classroomId, selectedSessionForReschedule.id, {
         reason: rescheduleReason || "Pacing adjustment",
         shiftSubsequentSessions: shiftSubsequent,
-        customTargetDate: reschedulePreview.proposedDate,
+        targetDate: rescheduleTargetDate || reschedulePreview.proposedDate,
+        targetStartTime: rescheduleStartTime ? `${rescheduleStartTime.substring(0, 5)}:00` : reschedulePreview.proposedStartTime,
+        targetEndTime: rescheduleEndTime ? `${rescheduleEndTime.substring(0, 5)}:00` : reschedulePreview.proposedEndTime,
+        roomNumber: rescheduleRoom || reschedulePreview.roomNumber || "Main",
       });
       if (updatedPlan) {
         setActivePlan(updatedPlan);
@@ -1947,6 +2015,25 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
                     <option value="SKIPPED">Skipped</option>
                     <option value="CANCELLED">Cancelled</option>
                   </select>
+
+                  {/* Schedule Plan Version Switcher */}
+                  {availablePlans.length > 1 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: "0.8rem", color: "#a78bfa", fontWeight: 600 }}>Plan:</span>
+                      <select
+                        className="ssm-version-select"
+                        value={activePlan?.planId || ""}
+                        onChange={(e) => handleSelectPlanVersion(e.target.value)}
+                        style={{ borderColor: "rgba(167, 139, 250, 0.4)" }}
+                      >
+                        {availablePlans.map((p) => (
+                          <option key={p.planId} value={p.planId}>
+                            v{p.versionNumber} ({p.status}) — {p.totalSessions} Sessions
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -2049,18 +2136,24 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
                                         ? "rgba(168, 85, 247, 0.15)"
                                         : session.subtopicSource === "TEACHER_EDITED"
                                         ? "rgba(16, 185, 129, 0.15)"
+                                        : session.subtopicSource === "TEACHER_REVIEW_SUGGESTION"
+                                        ? "rgba(245, 158, 11, 0.15)"
                                         : "rgba(59, 130, 246, 0.15)",
                                     color:
                                       session.subtopicSource === "AI_GENERATED"
                                         ? "#c084fc"
                                         : session.subtopicSource === "TEACHER_EDITED"
                                         ? "#34d399"
+                                        : session.subtopicSource === "TEACHER_REVIEW_SUGGESTION"
+                                        ? "#fbbf24"
                                         : "#60a5fa",
                                     border:
                                       session.subtopicSource === "AI_GENERATED"
                                         ? "1px solid rgba(168, 85, 247, 0.3)"
                                         : session.subtopicSource === "TEACHER_EDITED"
                                         ? "1px solid rgba(16, 185, 129, 0.3)"
+                                        : session.subtopicSource === "TEACHER_REVIEW_SUGGESTION"
+                                        ? "1px solid rgba(245, 158, 11, 0.3)"
                                         : "1px solid rgba(59, 130, 246, 0.3)",
                                   }}
                                 >
@@ -2068,6 +2161,8 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
                                     ? "✨ AI Focus"
                                     : session.subtopicSource === "TEACHER_EDITED"
                                     ? "✏️ Teacher Focus"
+                                    : session.subtopicSource === "TEACHER_REVIEW_SUGGESTION"
+                                    ? "💡 Suggested Focus"
                                     : "⚡ Learning Focus"}
                                 </span>
                               )}
@@ -2082,6 +2177,30 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
                                   🔒
                                 </span>
                               )}
+                            </p>
+                          )}
+                          {session.isCarriedForward && (
+                            <div style={{ marginTop: 4 }}>
+                              <span style={{ fontSize: "0.72rem", color: "#fbbf24", background: "rgba(245, 158, 11, 0.15)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(245, 158, 11, 0.3)" }}>
+                                ⚡ Carried forward from Session #{session.carriedForwardFromSessionNumber}
+                              </span>
+                            </div>
+                          )}
+                          {session.carriedForwardToSessionNumber && (
+                            <div style={{ marginTop: 4 }}>
+                              <span style={{ fontSize: "0.72rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.15)", padding: "2px 8px", borderRadius: 4, border: "1px solid rgba(56, 189, 248, 0.3)" }}>
+                                ➡️ Continued in Session #{session.carriedForwardToSessionNumber}
+                              </span>
+                            </div>
+                          )}
+                          {session.portionsCovered && (
+                            <p style={{ margin: "3px 0 0 0", fontSize: "0.76rem", color: "#cbd5e1" }}>
+                              <strong style={{ color: "#34d399" }}>Covered:</strong> {session.portionsCovered}
+                            </p>
+                          )}
+                          {session.remainingPortion && (
+                            <p style={{ margin: "3px 0 0 0", fontSize: "0.76rem", color: "#fca5a5" }}>
+                              <strong style={{ color: "#fbbf24" }}>Carry-Forward:</strong> {session.remainingPortion}
                             </p>
                           )}
                           {session.teacherNotes && (
@@ -2259,11 +2378,16 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
                     <div>
-                      <h4 style={{ color: "#ffffff", margin: 0, fontSize: "1.15rem" }}>
-                        Feasibility &amp; Capacity Report (Plan v{activePlan.versionNumber})
-                      </h4>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <h4 style={{ color: "#ffffff", margin: 0, fontSize: "1.15rem" }}>
+                          Feasibility &amp; Capacity Report (Plan v{activePlan.versionNumber})
+                        </h4>
+                        <span style={{ fontSize: "0.72rem", padding: "2px 8px", borderRadius: 4, background: activePlan.status === "APPROVED" ? "rgba(16, 185, 129, 0.2)" : "rgba(168, 85, 247, 0.2)", color: activePlan.status === "APPROVED" ? "#34d399" : "#c084fc", fontWeight: 600, border: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                          {activePlan.status === "APPROVED" ? "Approved Plan" : "Editable Draft"}
+                        </span>
+                      </div>
                       <p style={{ margin: "2px 0 0 0", color: "#94a3b8", fontSize: "0.82rem" }}>
-                        Evaluation of pedagogy hours vs available timetable periods.
+                        Evaluation of pedagogy hours vs available timetable periods between {activePlan.termStartDate || "start"} and {activePlan.termEndDate || "end"}.
                       </p>
                     </div>
 
@@ -2292,22 +2416,36 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
                     </span>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 18 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 18 }}>
                     <div style={{ background: "rgba(255, 255, 255, 0.04)", padding: "12px", borderRadius: 10 }}>
                       <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Total Sessions</div>
-                      <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#ffffff" }}>{activePlan.totalSessions}</div>
+                      <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#ffffff" }}>
+                        {activePlan.totalSessions ?? activePlan.totalPlannedSessions ?? activePlan.sessions?.length ?? 0}
+                      </div>
                     </div>
                     <div style={{ background: "rgba(255, 255, 255, 0.04)", padding: "12px", borderRadius: 10 }}>
                       <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Required Teaching Hours</div>
-                      <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#38bdf8" }}>{activePlan.requiredHours} hrs</div>
+                      <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#38bdf8" }}>
+                        {activePlan.requiredHours != null ? `${Number(activePlan.requiredHours).toFixed(0)} hrs` : "0 hrs"}
+                      </div>
                     </div>
                     <div style={{ background: "rgba(255, 255, 255, 0.04)", padding: "12px", borderRadius: 10 }}>
                       <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Allocated Hours</div>
-                      <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#34d399" }}>{activePlan.allocatedHours} hrs</div>
+                      <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#34d399" }}>
+                        {activePlan.allocatedHours != null ? `${Number(activePlan.allocatedHours).toFixed(0)} hrs` : "0 hrs"}
+                      </div>
+                    </div>
+                    <div style={{ background: "rgba(255, 255, 255, 0.04)", padding: "12px", borderRadius: 10 }}>
+                      <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Available Period Capacity</div>
+                      <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#a78bfa" }}>
+                        {activePlan.availableHours != null ? `${Number(activePlan.availableHours).toFixed(0)} hrs` : "0 hrs"}
+                      </div>
                     </div>
                     <div style={{ background: "rgba(255, 255, 255, 0.04)", padding: "12px", borderRadius: 10 }}>
                       <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Buffer / Revision Sessions</div>
-                      <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#fbbf24" }}>{activePlan.bufferSessionsCount || 0}</div>
+                      <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#fbbf24" }}>
+                        {activePlan.bufferSessionsCount ?? 0}
+                      </div>
                     </div>
                   </div>
 
@@ -2648,8 +2786,8 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
       {/* ======================================================== */}
       {selectedSessionForOutcome && (
         <div className="modal-backdrop">
-          <div className="modal-content-card" style={{ maxWidth: 480 }}>
-            <div className="modal-header">
+          <div className="sched-modal-card" style={{ maxWidth: 480 }}>
+            <div className="sched-modal-header">
               <h2>Record Teaching Outcome</h2>
               <button
                 type="button"
@@ -2660,47 +2798,86 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
               </button>
             </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, color: "#ffffff", fontSize: "1.05rem" }}>
-                Session #{selectedSessionForOutcome.sessionNumber}: {selectedSessionForOutcome.topicTitle}
+            <div className="sched-modal-body">
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, color: "#ffffff", fontSize: "1.05rem" }}>
+                  Session #{selectedSessionForOutcome.sessionNumber}: {selectedSessionForOutcome.topicTitle}
+                </div>
+                <div style={{ fontSize: "0.82rem", color: "#94a3b8", marginTop: 2 }}>
+                  Date: {selectedSessionForOutcome.sessionDate} • Module {selectedSessionForOutcome.moduleNumber}
+                </div>
               </div>
-              <div style={{ fontSize: "0.82rem", color: "#94a3b8", marginTop: 2 }}>
-                Date: {selectedSessionForOutcome.sessionDate} • Module {selectedSessionForOutcome.moduleNumber}
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontSize: "0.82rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
+                  Delivery Status
+                </label>
+                <select
+                  className="ssm-version-select"
+                  style={{ width: "100%" }}
+                  value={outcomeStatus}
+                  onChange={(e) => setOutcomeStatus(e.target.value)}
+                >
+                  <option value="COMPLETED">Completed (Fully Delivered)</option>
+                  <option value="PARTIALLY_COMPLETED">Partially Completed (Requires Continuation)</option>
+                  <option value="SKIPPED">Skipped (Class Postponed / Missed)</option>
+                  <option value="SCHEDULED">Scheduled (Not Yet Conducted)</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
+
+              {outcomeStatus === "PARTIALLY_COMPLETED" && (
+                <div style={{ background: "rgba(245, 158, 11, 0.1)", border: "1px solid rgba(245, 158, 11, 0.3)", borderRadius: 10, padding: "12px", marginBottom: 16 }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fbbf24", marginBottom: 6 }}>
+                    ⚡ Adaptive Carry-Forward Workflow
+                  </div>
+                  <p style={{ margin: "0 0 10px 0", fontSize: "0.78rem", color: "#e2e8f0", lineHeight: 1.4 }}>
+                    The unfinished portion will be carried forward into the next available timetable period. Downstream sessions shift to preserve syllabus sequence without inventing extra slots.
+                  </p>
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ display: "block", fontSize: "0.78rem", color: "#cbd5e1", marginBottom: 4 }}>
+                      Portion Completed in this Session:
+                    </label>
+                    <input
+                      type="text"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      placeholder="e.g. Completed Introduction & Architecture concepts"
+                      value={outcomePortionsCovered}
+                      onChange={(e) => setOutcomePortionsCovered(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", color: "#cbd5e1", marginBottom: 4 }}>
+                      Remaining Portion to Carry Forward:
+                    </label>
+                    <input
+                      type="text"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      placeholder="e.g. Practical Implementation & Protocol details remaining"
+                      value={outcomeRemainingPortion}
+                      onChange={(e) => setOutcomeRemainingPortion(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", fontSize: "0.82rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
+                  Teacher Notes / Topics Covered
+                </label>
+                <textarea
+                  className="search-input"
+                  style={{ width: "100%", height: 75, resize: "none" }}
+                  placeholder="e.g. Covered core concepts; hands-on demo to be continued in next period."
+                  value={outcomeNotes}
+                  onChange={(e) => setOutcomeNotes(e.target.value)}
+                />
               </div>
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: "0.82rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                Delivery Status
-              </label>
-              <select
-                className="ssm-version-select"
-                style={{ width: "100%" }}
-                value={outcomeStatus}
-                onChange={(e) => setOutcomeStatus(e.target.value)}
-              >
-                <option value="COMPLETED">Completed (Fully Delivered)</option>
-                <option value="PARTIALLY_COMPLETED">Partially Completed (Requires Continuation)</option>
-                <option value="SKIPPED">Skipped (Class Postponed / Missed)</option>
-                <option value="SCHEDULED">Scheduled (Not Yet Conducted)</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", fontSize: "0.82rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                Teacher Notes / Topics Covered
-              </label>
-              <textarea
-                className="search-input"
-                style={{ width: "100%", height: 80, resize: "none" }}
-                placeholder="e.g. Covered core concepts; hands-on demo to be continued in next period."
-                value={outcomeNotes}
-                onChange={(e) => setOutcomeNotes(e.target.value)}
-              />
-            </div>
-
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div className="sched-modal-footer">
               <button
                 type="button"
                 className="tsm-btn-secondary"
@@ -2721,8 +2898,8 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
       {/* ======================================================== */}
       {selectedSessionForReschedule && (
         <div className="modal-backdrop">
-          <div className="modal-content-card" style={{ maxWidth: 520 }}>
-            <div className="modal-header">
+          <div className="sched-modal-card" style={{ maxWidth: 580 }}>
+            <div className="sched-modal-header">
               <h2>Adaptive Session Reschedule</h2>
               <button
                 type="button"
@@ -2733,62 +2910,173 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
               </button>
             </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, color: "#ffffff", fontSize: "1.05rem" }}>
-                #{selectedSessionForReschedule.sessionNumber}: {selectedSessionForReschedule.topicTitle}
+            <div className="sched-modal-body">
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, color: "#ffffff", fontSize: "1.05rem" }}>
+                  #{selectedSessionForReschedule.sessionNumber}: {selectedSessionForReschedule.topicTitle}
+                </div>
+                <div style={{ fontSize: "0.82rem", color: "#f87171", marginTop: 2 }}>
+                  Current Allocated Date: {selectedSessionForReschedule.sessionDate} ({selectedSessionForReschedule.startTime} - {selectedSessionForReschedule.endTime}) • Room {selectedSessionForReschedule.roomNumber || "Main"}
+                </div>
               </div>
-              <div style={{ fontSize: "0.82rem", color: "#f87171", marginTop: 2 }}>
-                Current Date: {selectedSessionForReschedule.sessionDate} ({selectedSessionForReschedule.startTime} - {selectedSessionForReschedule.endTime})
-              </div>
-            </div>
 
-            {reschedulePreview ? (
-              <div style={{ background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.3)", borderRadius: 10, padding: "14px", marginBottom: 16 }}>
-                <div style={{ fontSize: "0.78rem", color: "#34d399", fontWeight: 700 }}>PROPOSED REPLACEMENT SLOT:</div>
-                <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#ffffff", margin: "4px 0" }}>
-                  {reschedulePreview.proposedDate} ({reschedulePreview.proposedDayOfWeek})
+              {/* EDITABLE RESCHEDULING PARAMETERS */}
+              <div style={{ background: "rgba(255, 255, 255, 0.04)", borderRadius: 10, padding: "14px", marginBottom: 14 }}>
+                <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#a78bfa", marginBottom: 10 }}>
+                  Customize Replacement Slot
                 </div>
-                <div style={{ fontSize: "0.84rem", color: "#cbd5e1" }}>
-                  Time: {reschedulePreview.proposedStartTime} - {reschedulePreview.proposedEndTime} • Room {reschedulePreview.roomNumber || "Main"}
-                </div>
-                {reschedulePreview.affectedSubsequentSessionsCount > 0 && (
-                  <div style={{ fontSize: "0.8rem", color: "#fbbf24", marginTop: 6 }}>
-                    ⚠️ Shifting this session will adaptively cascade {reschedulePreview.affectedSubsequentSessionsCount} subsequent session(s).
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.76rem", color: "#cbd5e1", marginBottom: 4 }}>
+                      Replacement Date
+                    </label>
+                    <input
+                      type="date"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      value={rescheduleTargetDate}
+                      onChange={(e) => {
+                        setRescheduleTargetDate(e.target.value);
+                        handleLiveReschedulePreview(e.target.value, rescheduleStartTime, rescheduleEndTime, rescheduleRoom, shiftSubsequent);
+                      }}
+                    />
                   </div>
-                )}
-              </div>
-            ) : (
-              <div style={{ padding: "20px 0", textAlign: "center", color: "#94a3b8" }}>
-                Calculating feasible replacement slot...
-              </div>
-            )}
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.76rem", color: "#cbd5e1", marginBottom: 4 }}>
+                      Room Number
+                    </label>
+                    <input
+                      type="text"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      placeholder="e.g. Room A201"
+                      value={rescheduleRoom}
+                      onChange={(e) => {
+                        setRescheduleRoom(e.target.value);
+                        handleLiveReschedulePreview(rescheduleTargetDate, rescheduleStartTime, rescheduleEndTime, e.target.value, shiftSubsequent);
+                      }}
+                    />
+                  </div>
+                </div>
 
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: "0.82rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                Reason for Rescheduling
-              </label>
-              <input
-                type="text"
-                className="search-input"
-                style={{ width: "100%" }}
-                placeholder="e.g. Faculty on duty / Special lab session"
-                value={rescheduleReason}
-                onChange={(e) => setRescheduleReason(e.target.value)}
-              />
-            </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.76rem", color: "#cbd5e1", marginBottom: 4 }}>
+                      Start Time
+                    </label>
+                    <input
+                      type="time"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      value={rescheduleStartTime}
+                      onChange={(e) => {
+                        setRescheduleStartTime(e.target.value);
+                        handleLiveReschedulePreview(rescheduleTargetDate, e.target.value, rescheduleEndTime, rescheduleRoom, shiftSubsequent);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.76rem", color: "#cbd5e1", marginBottom: 4 }}>
+                      End Time
+                    </label>
+                    <input
+                      type="time"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      value={rescheduleEndTime}
+                      onChange={(e) => {
+                        setRescheduleEndTime(e.target.value);
+                        handleLiveReschedulePreview(rescheduleTargetDate, rescheduleStartTime, e.target.value, rescheduleRoom, shiftSubsequent);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.82rem", color: "#cbd5e1" }}>
+              {/* VALIDATION NOTICES & CONFLICTS */}
+              {reschedulePreview?.conflictWarnings?.length > 0 && (
+                <div style={{ background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.4)", borderRadius: 8, padding: "10px", marginBottom: 12 }}>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#f87171" }}>Schedule Conflict / Warnings:</div>
+                  <ul style={{ margin: "4px 0 0 0", paddingLeft: 18, color: "#fca5a5", fontSize: "0.76rem", lineHeight: 1.5 }}>
+                    {reschedulePreview.conflictWarnings.map((w, wIdx) => (
+                      <li key={wIdx}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {reschedulePreview?.deadlineImpact && (
+                <div style={{ fontSize: "0.78rem", color: "#38bdf8", marginBottom: 12 }}>
+                  ℹ️ {reschedulePreview.deadlineImpact}
+                </div>
+              )}
+
+              {/* CASCADING IMPACT PREVIEW */}
+              {shiftSubsequent && reschedulePreview?.affectedSessionsPreview?.length > 0 && (
+                <div style={{ maxHeight: 150, overflowY: "auto", background: "rgba(0, 0, 0, 0.3)", borderRadius: 8, padding: "8px", marginBottom: 14, border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                  <div style={{ fontSize: "0.76rem", color: "#fbbf24", fontWeight: 700, marginBottom: 4 }}>
+                    Cascading Impact ({reschedulePreview.affectedSessionsPreview.length} subsequent sessions will move):
+                  </div>
+                  <table style={{ width: "100%", fontSize: "0.74rem", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ color: "#94a3b8", textAlign: "left" }}>
+                        <th style={{ padding: "3px 6px" }}>Session</th>
+                        <th style={{ padding: "3px 6px" }}>Topic</th>
+                        <th style={{ padding: "3px 6px" }}>Original</th>
+                        <th style={{ padding: "3px 6px" }}>Proposed New</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reschedulePreview.affectedSessionsPreview.slice(0, 8).map((aff, aIdx) => (
+                        <tr key={aIdx} style={{ borderTop: "1px solid rgba(255, 255, 255, 0.05)", color: "#cbd5e1" }}>
+                          <td style={{ padding: "3px 6px" }}>#{aff.sessionNumber}</td>
+                          <td style={{ padding: "3px 6px" }}>{aff.topicTitle}</td>
+                          <td style={{ padding: "3px 6px", color: "#f87171" }}>{aff.originalDate}</td>
+                          <td style={{ padding: "3px 6px", color: "#34d399", fontWeight: 600 }}>{aff.newDate} ({aff.newStartTime?.substring(0, 5)})</td>
+                        </tr>
+                      ))}
+                      {reschedulePreview.affectedSessionsPreview.length > 8 && (
+                        <tr>
+                          <td colSpan={4} style={{ padding: "4px 6px", color: "#94a3b8", fontStyle: "italic", textAlign: "center" }}>
+                            ...and {reschedulePreview.affectedSessionsPreview.length - 8} more subsequent sessions shift forward
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", fontSize: "0.82rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
+                  Reason for Rescheduling
+                </label>
                 <input
-                  type="checkbox"
-                  checked={shiftSubsequent}
-                  onChange={(e) => setShiftSubsequent(e.target.checked)}
+                  type="text"
+                  className="search-input"
+                  style={{ width: "100%" }}
+                  placeholder="e.g. Faculty on duty / Special lab session"
+                  value={rescheduleReason}
+                  onChange={(e) => setRescheduleReason(e.target.value)}
                 />
-                Shift subsequent sessions to preserve syllabus order
-              </label>
+              </div>
+
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.82rem", color: "#cbd5e1" }}>
+                  <input
+                    type="checkbox"
+                    checked={shiftSubsequent}
+                    onChange={(e) => {
+                      setShiftSubsequent(e.target.checked);
+                      handleLiveReschedulePreview(rescheduleTargetDate, rescheduleStartTime, rescheduleEndTime, rescheduleRoom, e.target.checked);
+                    }}
+                  />
+                  Shift subsequent sessions to preserve syllabus order
+                </label>
+              </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div className="sched-modal-footer">
               <button
                 type="button"
                 className="tsm-btn-secondary"
@@ -2814,140 +3102,142 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
       {/* ======================================================== */}
       {showManualModal && (
         <div className="modal-backdrop">
-          <div className="modal-content-card" style={{ maxWidth: 520 }}>
-            <div className="modal-header">
+          <div className="sched-modal-card" style={{ maxWidth: 520 }}>
+            <div className="sched-modal-header">
               <h2>Add Topic to Date (Manual Allocation)</h2>
               <button type="button" className="modal-close-btn" onClick={() => setShowManualModal(false)}>
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleManualAllocate}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                    Target Date
-                  </label>
-                  <input
-                    type="date"
-                    className="search-input"
-                    style={{ width: "100%" }}
-                    value={manualDate}
-                    onChange={(e) => setManualDate(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                    Target Module
-                  </label>
-                  <select
-                    className="ssm-version-select"
-                    style={{ width: "100%" }}
-                    value={manualModule}
-                    onChange={(e) => setManualModule(e.target.value)}
-                  >
-                    {availableModules.length === 0 ? (
-                      <option value="" disabled>No extracted modules available</option>
-                    ) : (
-                      availableModules.map((m) => (
-                        <option key={m.moduleNumber} value={m.moduleNumber}>
-                          Module {m.moduleNumber}: {m.moduleTitle}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-              </div>
-
-              {/* TIMETABLE PERIOD SELECTION FOR THIS DAY */}
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                  Timetable Period on {selectedDayOfWeek || "Selected Day"}
-                </label>
-                {dayMatchedSlots.length > 0 ? (
-                  <select
-                    className="ssm-version-select"
-                    style={{ width: "100%" }}
-                    value={manualPeriodId}
-                    onChange={(e) => setManualPeriodId(e.target.value)}
-                  >
-                    <option value="">Default Timetable Slot (Auto-match)</option>
-                    {dayMatchedSlots.map((slot) => (
-                      <option key={slot.id} value={slot.id}>
-                        {slot.startTime} - {slot.endTime} (Room {slot.roomNumber || "Main"}, {slot.durationMinutes}m)
-                      </option>
-                    ))}
-                  </select>
-                ) : manualDate ? (
-                  <div style={{ fontSize: "0.8rem", color: "#fbbf24", background: "rgba(245, 158, 11, 0.1)", padding: "8px 12px", borderRadius: 8 }}>
-                    ℹ️ No verified slot on {selectedDayOfWeek}. An extra/compensatory period will be allocated.
+            <form onSubmit={handleManualAllocate} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+              <div className="sched-modal-body">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
+                      Target Date
+                    </label>
+                    <input
+                      type="date"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      value={manualDate}
+                      onChange={(e) => setManualDate(e.target.value)}
+                      required
+                    />
                   </div>
-                ) : (
-                  <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Pick a date to view available periods.</div>
-                )}
-              </div>
 
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                  Topic Title
-                </label>
-                <input
-                  type="text"
-                  className="search-input"
-                  style={{ width: "100%" }}
-                  placeholder="e.g. Distributed File System Architecture"
-                  value={manualTopic}
-                  onChange={(e) => setManualTopic(e.target.value)}
-                  required
-                />
-              </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
+                      Target Module
+                    </label>
+                    <select
+                      className="ssm-version-select"
+                      style={{ width: "100%" }}
+                      value={manualModule}
+                      onChange={(e) => setManualModule(e.target.value)}
+                    >
+                      {availableModules.length === 0 ? (
+                        <option value="" disabled>No extracted modules available</option>
+                      ) : (
+                        availableModules.map((m) => (
+                          <option key={m.moduleNumber} value={m.moduleNumber}>
+                            Module {m.moduleNumber}: {m.moduleTitle}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 14 }}>
-                <div>
+                {/* TIMETABLE PERIOD SELECTION FOR THIS DAY */}
+                <div style={{ marginBottom: 14 }}>
                   <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                    Subtopic / Focus
+                    Timetable Period on {selectedDayOfWeek || "Selected Day"}
+                  </label>
+                  {dayMatchedSlots.length > 0 ? (
+                    <select
+                      className="ssm-version-select"
+                      style={{ width: "100%" }}
+                      value={manualPeriodId}
+                      onChange={(e) => setManualPeriodId(e.target.value)}
+                    >
+                      <option value="">Default Timetable Slot (Auto-match)</option>
+                      {dayMatchedSlots.map((slot) => (
+                        <option key={slot.id} value={slot.id}>
+                          {slot.startTime} - {slot.endTime} (Room {slot.roomNumber || "Main"}, {slot.durationMinutes}m)
+                        </option>
+                      ))}
+                    </select>
+                  ) : manualDate ? (
+                    <div style={{ fontSize: "0.8rem", color: "#fbbf24", background: "rgba(245, 158, 11, 0.1)", padding: "8px 12px", borderRadius: 8 }}>
+                      ℹ️ No verified slot on {selectedDayOfWeek}. An extra/compensatory period will be allocated.
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Pick a date to view available periods.</div>
+                  )}
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
+                    Topic Title
                   </label>
                   <input
                     type="text"
                     className="search-input"
                     style={{ width: "100%" }}
-                    placeholder="e.g. NameNode replication"
-                    value={manualSubtopic}
-                    onChange={(e) => setManualSubtopic(e.target.value)}
+                    placeholder="e.g. Distributed File System Architecture"
+                    value={manualTopic}
+                    onChange={(e) => setManualTopic(e.target.value)}
+                    required
                   />
                 </div>
 
-                <div>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 14 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
+                      Subtopic / Focus
+                    </label>
+                    <input
+                      type="text"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      placeholder="e.g. NameNode replication"
+                      value={manualSubtopic}
+                      onChange={(e) => setManualSubtopic(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
+                      Duration (mins)
+                    </label>
+                    <input
+                      type="number"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      value={manualDuration}
+                      onChange={(e) => setManualDuration(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
                   <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                    Duration (mins)
+                    Notes / Reason for Manual Allocation
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     className="search-input"
                     style={{ width: "100%" }}
-                    value={manualDuration}
-                    onChange={(e) => setManualDuration(e.target.value)}
+                    placeholder="e.g. Special lecture / syllabus advance"
+                    value={manualNotes}
+                    onChange={(e) => setManualNotes(e.target.value)}
                   />
                 </div>
               </div>
 
-              <div style={{ marginBottom: 20 }}>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 6, fontWeight: 600 }}>
-                  Notes / Reason for Manual Allocation
-                </label>
-                <input
-                  type="text"
-                  className="search-input"
-                  style={{ width: "100%" }}
-                  placeholder="e.g. Special lecture / syllabus advance"
-                  value={manualNotes}
-                  onChange={(e) => setManualNotes(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <div className="sched-modal-footer">
                 <button type="button" className="tsm-btn-secondary" onClick={() => setShowManualModal(false)}>
                   Cancel
                 </button>
@@ -2965,94 +3255,96 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
       {/* ======================================================== */}
       {showAddSlotModal && (
         <div className="modal-backdrop">
-          <div className="modal-content-card" style={{ maxWidth: 440 }}>
-            <div className="modal-header">
+          <div className="sched-modal-card" style={{ maxWidth: 460 }}>
+            <div className="sched-modal-header">
               <h2>Add Timetable Period</h2>
               <button type="button" className="modal-close-btn" onClick={() => setShowAddSlotModal(false)}>
                 ✕
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Day of Week</label>
-                <select
-                  className="ssm-version-select"
-                  style={{ width: "100%" }}
-                  value={newSlot.dayOfWeek}
-                  onChange={(e) => setNewSlot({ ...newSlot, dayOfWeek: e.target.value })}
-                >
-                  {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"].map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="sched-modal-body">
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Day of Week</label>
+                  <select
+                    className="ssm-version-select"
+                    style={{ width: "100%" }}
+                    value={newSlot.dayOfWeek}
+                    onChange={(e) => setNewSlot({ ...newSlot, dayOfWeek: e.target.value })}
+                  >
+                    {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"].map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Start Time</label>
-                  <input
-                    type="time"
-                    className="search-input"
-                    style={{ width: "100%" }}
-                    value={newSlot.startTime}
-                    onChange={(e) => setNewSlot({ ...newSlot, startTime: e.target.value })}
-                  />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Start Time</label>
+                    <input
+                      type="time"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      value={newSlot.startTime}
+                      onChange={(e) => setNewSlot({ ...newSlot, startTime: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>End Time</label>
+                    <input
+                      type="time"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      value={newSlot.endTime}
+                      onChange={(e) => setNewSlot({ ...newSlot, endTime: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>End Time</label>
-                  <input
-                    type="time"
-                    className="search-input"
-                    style={{ width: "100%" }}
-                    value={newSlot.endTime}
-                    onChange={(e) => setNewSlot({ ...newSlot, endTime: e.target.value })}
-                  />
-                </div>
-              </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Room Number</label>
-                  <input
-                    type="text"
-                    className="search-input"
-                    style={{ width: "100%" }}
-                    placeholder="e.g. 302"
-                    value={newSlot.roomNumber}
-                    onChange={(e) => setNewSlot({ ...newSlot, roomNumber: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Faculty</label>
-                  <input
-                    type="text"
-                    className="search-input"
-                    style={{ width: "100%" }}
-                    placeholder="Faculty Name"
-                    value={newSlot.facultyName}
-                    onChange={(e) => setNewSlot({ ...newSlot, facultyName: e.target.value })}
-                  />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Room Number</label>
+                    <input
+                      type="text"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      placeholder="e.g. 302"
+                      value={newSlot.roomNumber}
+                      onChange={(e) => setNewSlot({ ...newSlot, roomNumber: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Faculty</label>
+                    <input
+                      type="text"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      placeholder="Faculty Name"
+                      value={newSlot.facultyName}
+                      onChange={(e) => setNewSlot({ ...newSlot, facultyName: e.target.value })}
+                    />
+                  </div>
                 </div>
               </div>
+            </div>
 
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-                <button type="button" className="tsm-btn-secondary" onClick={() => setShowAddSlotModal(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="tsm-btn-primary"
-                  onClick={() => {
-                    setReviewSlots([...reviewSlots, { ...newSlot, id: `slot_${Date.now()}` }]);
-                    setShowAddSlotModal(false);
-                  }}
-                >
-                  Add Slot
-                </button>
-              </div>
+            <div className="sched-modal-footer">
+              <button type="button" className="tsm-btn-secondary" onClick={() => setShowAddSlotModal(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="tsm-btn-primary"
+                onClick={() => {
+                  setReviewSlots([...reviewSlots, { ...newSlot, id: `slot_${Date.now()}` }]);
+                  setShowAddSlotModal(false);
+                }}
+              >
+                Add Slot
+              </button>
             </div>
           </div>
         </div>
@@ -3063,105 +3355,107 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
       {/* ======================================================== */}
       {showAddEventModal && (
         <div className="modal-backdrop">
-          <div className="modal-content-card" style={{ maxWidth: 460 }}>
-            <div className="modal-header">
+          <div className="sched-modal-card" style={{ maxWidth: 480 }}>
+            <div className="sched-modal-header">
               <h2>Add Academic Calendar Event</h2>
               <button type="button" className="modal-close-btn" onClick={() => setShowAddEventModal(false)}>
                 ✕
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Event Name</label>
-                <input
-                  type="text"
-                  className="search-input"
-                  style={{ width: "100%" }}
-                  placeholder="e.g. Independence Day / Internal Assessment 1"
-                  value={newEvent.eventName}
-                  onChange={(e) => setNewEvent({ ...newEvent, eventName: e.target.value })}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div className="sched-modal-body">
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Start Date</label>
+                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Event Name</label>
                   <input
-                    type="date"
+                    type="text"
                     className="search-input"
                     style={{ width: "100%" }}
-                    value={newEvent.startDate}
-                    onChange={(e) => setNewEvent({ ...newEvent, startDate: e.target.value, endDate: newEvent.endDate || e.target.value })}
+                    placeholder="e.g. Independence Day / Internal Assessment 1"
+                    value={newEvent.eventName}
+                    onChange={(e) => setNewEvent({ ...newEvent, eventName: e.target.value })}
                   />
                 </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Start Date</label>
+                    <input
+                      type="date"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      value={newEvent.startDate}
+                      onChange={(e) => setNewEvent({ ...newEvent, startDate: e.target.value, endDate: newEvent.endDate || e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>End Date</label>
+                    <input
+                      type="date"
+                      className="search-input"
+                      style={{ width: "100%" }}
+                      value={newEvent.endDate}
+                      onChange={(e) => setNewEvent({ ...newEvent, endDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+
                 <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>End Date</label>
-                  <input
-                    type="date"
-                    className="search-input"
+                  <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Event Type</label>
+                  <select
+                    className="ssm-version-select"
                     style={{ width: "100%" }}
-                    value={newEvent.endDate}
-                    onChange={(e) => setNewEvent({ ...newEvent, endDate: e.target.value })}
-                  />
+                    value={newEvent.eventType}
+                    onChange={(e) => {
+                      const type = e.target.value;
+                      const isHoliday = type === "HOLIDAY" || type === "RESTRICTED_HOLIDAY";
+                      setNewEvent({
+                        ...newEvent,
+                        eventType: type,
+                        isTeachingDay: !isHoliday,
+                        colorCode: isHoliday ? "#ef4444" : "#3b82f6",
+                      });
+                    }}
+                  >
+                    <option value="HOLIDAY">Holiday (Non-Teaching)</option>
+                    <option value="RESTRICTED_HOLIDAY">Restricted Holiday</option>
+                    <option value="COLLEGE_EVENT">Institutional / College Event</option>
+                    <option value="EXAM_INTERNAL">Internal Assessment (CIE)</option>
+                    <option value="EXAM_SEMESTER">Semester Exam (SEE)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.84rem", color: "#cbd5e1" }}>
+                    <input
+                      type="checkbox"
+                      checked={newEvent.isTeachingDay}
+                      onChange={(e) => setNewEvent({ ...newEvent, isTeachingDay: e.target.checked })}
+                    />
+                    Regular teaching is permitted on this date
+                  </label>
                 </div>
               </div>
+            </div>
 
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "#cbd5e1", marginBottom: 4 }}>Event Type</label>
-                <select
-                  className="ssm-version-select"
-                  style={{ width: "100%" }}
-                  value={newEvent.eventType}
-                  onChange={(e) => {
-                    const type = e.target.value;
-                    const isHoliday = type === "HOLIDAY" || type === "RESTRICTED_HOLIDAY";
-                    setNewEvent({
-                      ...newEvent,
-                      eventType: type,
-                      isTeachingDay: !isHoliday,
-                      colorCode: isHoliday ? "#ef4444" : "#3b82f6",
-                    });
-                  }}
-                >
-                  <option value="HOLIDAY">Holiday (Non-Teaching)</option>
-                  <option value="RESTRICTED_HOLIDAY">Restricted Holiday</option>
-                  <option value="COLLEGE_EVENT">Institutional / College Event</option>
-                  <option value="EXAM_INTERNAL">Internal Assessment (CIE)</option>
-                  <option value="EXAM_SEMESTER">Semester Exam (SEE)</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: "0.84rem", color: "#cbd5e1" }}>
-                  <input
-                    type="checkbox"
-                    checked={newEvent.isTeachingDay}
-                    onChange={(e) => setNewEvent({ ...newEvent, isTeachingDay: e.target.checked })}
-                  />
-                  Regular teaching is permitted on this date
-                </label>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-                <button type="button" className="tsm-btn-secondary" onClick={() => setShowAddEventModal(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="tsm-btn-primary"
-                  onClick={() => {
-                    if (!newEvent.startDate || !newEvent.eventName) {
-                      toast.error("Please provide event name and start date");
-                      return;
-                    }
-                    setReviewEvents([...reviewEvents, { ...newEvent, id: `ev_${Date.now()}` }]);
-                    setShowAddEventModal(false);
-                  }}
-                >
-                  Add Event
-                </button>
-              </div>
+            <div className="sched-modal-footer">
+              <button type="button" className="tsm-btn-secondary" onClick={() => setShowAddEventModal(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="tsm-btn-primary"
+                onClick={() => {
+                  if (!newEvent.startDate || !newEvent.eventName) {
+                    toast.error("Please provide event name and start date");
+                    return;
+                  }
+                  setReviewEvents([...reviewEvents, { ...newEvent, id: `ev_${Date.now()}` }]);
+                  setShowAddEventModal(false);
+                }}
+              >
+                Add Event
+              </button>
             </div>
           </div>
         </div>

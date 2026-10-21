@@ -1,8 +1,6 @@
 package com.acadion.backend.service;
 
-import com.acadion.backend.dto.syllabus.AssessmentMappingResponse;
-import com.acadion.backend.dto.syllabus.AssessmentMappingSuggestionResponse;
-import com.acadion.backend.dto.syllabus.CreateAssessmentMappingRequest;
+import com.acadion.backend.dto.syllabus.*;
 import com.acadion.backend.entity.*;
 import com.acadion.backend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -438,5 +436,289 @@ public class SyllabusAssessmentMappingService {
                 .createdAt(m.getCreatedAt())
                 .updatedAt(m.getUpdatedAt())
                 .build();
+    }
+
+    public TopicAssessmentAnalysisResponse analyzeTopicAssessment(
+            String classroomId,
+            AssessmentAnalysisRequest request,
+            String teacherEmail
+    ) {
+        Classroom classroom = getExistingClassroom(classroomId);
+        User teacher = getAuthenticatedTeacher(teacherEmail);
+        verifyClassroomOwnership(classroom, teacher);
+
+        if (request.getTopicId() == null || request.getTopicId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Syllabus topic ID is required for assessment analysis");
+        }
+
+        boolean hasPaper = request.getPaperId() != null && !request.getPaperId().isBlank();
+        boolean hasManual = request.getManualText() != null && !request.getManualText().isBlank();
+
+        if (!hasPaper && !hasManual) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Either an assessment paper ID or manual question text must be provided");
+        }
+
+        SyllabusItem targetTopic = syllabusItemRepository.findByIdAndClassroomId(request.getTopicId(), classroom.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Syllabus topic not found: " + request.getTopicId()));
+
+        List<SyllabusItem> allClassroomTopics = syllabusItemRepository.findByClassroomIdOrderByOrderIndexAscCreatedAtAsc(classroom.getId());
+
+        // Extract syllabus concepts
+        Set<String> syllabusConcepts = new LinkedHashSet<>();
+        syllabusConcepts.add(targetTopic.getTopic().trim());
+        if (targetTopic.getSubtopics() != null) {
+            for (String sub : targetTopic.getSubtopics()) {
+                if (sub != null && !sub.isBlank()) {
+                    syllabusConcepts.add(sub.trim());
+                }
+            }
+        }
+        // Also split topic by delimiter if only 1 concept
+        if (syllabusConcepts.size() == 1) {
+            String[] splits = targetTopic.getTopic().split("[,;—\\-]+");
+            for (String s : splits) {
+                if (s.trim().length() > 3) {
+                    syllabusConcepts.add(s.trim());
+                }
+            }
+        }
+
+        // Collect questions to evaluate
+        List<QuestionPaper.Question> questionsToEvaluate = new ArrayList<>();
+        String paperTitle = "Manual Content";
+        QuestionPaper paper = null;
+
+        if (hasPaper) {
+            paper = questionPaperRepository.findFirstByPaperIdOrderByUploadedAtDesc(request.getPaperId().trim())
+                    .or(() -> questionPaperRepository.findById(request.getPaperId().trim()))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Question paper not found: " + request.getPaperId()));
+
+            paperTitle = paper.getExamName() != null ? paper.getExamName() : (paper.getSubject() != null ? paper.getSubject() : paper.getPaperId());
+
+            if (paper.getQuestions() != null) {
+                if (request.getQuestionId() != null && !request.getQuestionId().isBlank()) {
+                    String qid = request.getQuestionId().trim();
+                    paper.getQuestions().stream()
+                            .filter(q -> qid.equalsIgnoreCase(q.getQuestionId()))
+                            .findFirst()
+                            .ifPresent(questionsToEvaluate::add);
+                } else {
+                    questionsToEvaluate.addAll(paper.getQuestions());
+                }
+            }
+        }
+
+        if (hasManual) {
+            String manual = request.getManualText().trim();
+            String[] blocks = manual.split("\n\n+");
+            int manualIdx = 1;
+            for (String block : blocks) {
+                if (!block.isBlank()) {
+                    questionsToEvaluate.add(QuestionPaper.Question.builder()
+                            .questionId("M" + manualIdx)
+                            .text(block.trim())
+                            .topic("Manual Submission")
+                            .build());
+                    manualIdx++;
+                }
+            }
+        }
+
+        // Three-way breakdown
+        List<MatchedConceptItem> matchedConcepts = new ArrayList<>();
+        List<MissingSyllabusConceptItem> missingSyllabusConcepts = new ArrayList<>();
+        List<UnmatchedQuestionConceptItem> unmatchedQuestionConcepts = new ArrayList<>();
+
+        Set<String> matchedConceptNames = new HashSet<>();
+        Set<String> matchedQuestionIds = new HashSet<>();
+
+        // Match concepts
+        for (String concept : syllabusConcepts) {
+            Set<String> conceptTokens = tokenizeAndFilter(concept);
+            QuestionPaper.Question bestMatchQuestion = null;
+            double bestScore = 0.0;
+
+            for (QuestionPaper.Question q : questionsToEvaluate) {
+                String qText = (q.getText() != null ? q.getText() : "") + " " + (q.getTopic() != null ? q.getTopic() : "");
+                Set<String> qTokens = tokenizeAndFilter(qText);
+
+                double score = computeConceptSimilarity(concept, conceptTokens, qText, qTokens);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatchQuestion = q;
+                }
+            }
+
+            if (bestMatchQuestion != null && bestScore >= 0.30) {
+                matchedConceptNames.add(concept);
+                matchedQuestionIds.add(bestMatchQuestion.getQuestionId());
+
+                String matchType = bestScore >= 0.70 ? "STRONG" : (bestScore >= 0.45 ? "PARTIAL" : "UNCERTAIN");
+                String confidenceBand = bestScore >= 0.70 ? "HIGH" : (bestScore >= 0.45 ? "MEDIUM" : "LOW");
+                String qExcerpt = bestMatchQuestion.getText() != null
+                        ? (bestMatchQuestion.getText().length() > 140 ? bestMatchQuestion.getText().substring(0, 140) + "..." : bestMatchQuestion.getText())
+                        : bestMatchQuestion.getTopic();
+
+                matchedConcepts.add(MatchedConceptItem.builder()
+                        .concept(concept)
+                        .conceptName(concept)
+                        .syllabusTopic(targetTopic.getTopic())
+                        .subtopic(concept)
+                        .questionId(bestMatchQuestion.getQuestionId())
+                        .questionIdentifier(bestMatchQuestion.getQuestionId())
+                        .syllabusExcerpt((targetTopic.getUnit() != null ? targetTopic.getUnit() + " — " : "") + concept)
+                        .syllabusSnippet((targetTopic.getUnit() != null ? targetTopic.getUnit() + " — " : "") + concept)
+                        .questionExcerpt(qExcerpt)
+                        .questionSnippet(qExcerpt)
+                        .matchType(matchType)
+                        .confidenceScore(Math.round(bestScore * 100.0) / 100.0)
+                        .confidenceBand(confidenceBand)
+                        .explanation("Question " + bestMatchQuestion.getQuestionId() + " tests '" + concept + "' with " + confidenceBand.toLowerCase() + " semantic alignment.")
+                        .build());
+            } else {
+                missingSyllabusConcepts.add(MissingSyllabusConceptItem.builder()
+                        .concept(concept)
+                        .conceptName(concept)
+                        .subtopic(concept)
+                        .syllabusExcerpt((targetTopic.getUnit() != null ? targetTopic.getUnit() + " — " : "") + concept)
+                        .explanation("No question in the evaluated paper/content directly addresses this syllabus concept.")
+                        .confidenceBand("HIGH")
+                        .suggestedAction("Consider incorporating an assessment item for '" + concept + "' in upcoming internal evaluations.")
+                        .build());
+            }
+        }
+
+        // Unmatched questions
+        for (QuestionPaper.Question q : questionsToEvaluate) {
+            if (!matchedQuestionIds.contains(q.getQuestionId())) {
+                SyllabusItem candidateOtherTopic = null;
+                double bestOtherScore = 0.0;
+                String qText = (q.getText() != null ? q.getText() : "") + " " + (q.getTopic() != null ? q.getTopic() : "");
+                Set<String> qTokens = tokenizeAndFilter(qText);
+
+                for (SyllabusItem other : allClassroomTopics) {
+                    if (other.getId().equals(targetTopic.getId())) continue;
+                    Set<String> otherTokens = tokenizeAndFilter(other.getTopic());
+                    double score = computeOverlap(qTokens, otherTokens);
+                    if (score > bestOtherScore) {
+                        bestOtherScore = score;
+                        candidateOtherTopic = other;
+                    }
+                }
+
+                String detectedConcept = q.getTopic() != null && !q.getTopic().isBlank()
+                        ? q.getTopic()
+                        : extractCoreConceptPhrase(q.getText());
+
+                String possibleAlt = (candidateOtherTopic != null && bestOtherScore > 0.20)
+                        ? (candidateOtherTopic.getUnit() + ": " + candidateOtherTopic.getTopic())
+                        : "Advanced / Out-of-scope extension";
+
+                String divergence = "Question focuses on '" + detectedConcept + "', which is outside the scope of selected topic '" + targetTopic.getTopic() + "'.";
+
+                unmatchedQuestionConcepts.add(UnmatchedQuestionConceptItem.builder()
+                        .questionId(q.getQuestionId())
+                        .questionIdentifier(q.getQuestionId())
+                        .questionText(q.getText() != null && q.getText().length() > 180 ? q.getText().substring(0, 180) + "..." : q.getText())
+                        .detectedConcept(detectedConcept)
+                        .explanation(divergence)
+                        .divergenceReason(divergence)
+                        .potentialModuleMapping(possibleAlt)
+                        .possibleAlternativeTopic(possibleAlt)
+                        .teacherReviewAction("Verify whether this question belongs to " + possibleAlt + " or should remain excluded.")
+                        .build());
+            }
+        }
+
+        double alignmentPct = syllabusConcepts.isEmpty() ? 0.0 : ((double) matchedConceptNames.size() / syllabusConcepts.size()) * 100.0;
+
+        String scope = "Syllabus Topic: " + targetTopic.getTopic() + " (" + (targetTopic.getUnit() != null ? targetTopic.getUnit() : "Unit") + ") vs. "
+                + (hasPaper ? "Assessment Paper: " + paperTitle : "Manual Content Submission");
+
+        String resolvedPaperId = paper != null ? paper.getPaperId() : (hasManual ? "MANUAL_INPUT" : null);
+
+        return TopicAssessmentAnalysisResponse.builder()
+                .analysisScope(scope)
+                .topicId(targetTopic.getId())
+                .topicTitle(targetTopic.getTopic())
+                .syllabusTopicId(targetTopic.getId())
+                .syllabusTopicName(targetTopic.getTopic())
+                .unit(targetTopic.getUnit())
+                .paperId(resolvedPaperId)
+                .examName(paper != null ? paper.getSubject() : "Manual Input Analysis")
+                .questionId(request.getQuestionId())
+                .questionIdentifier(request.getQuestionId())
+                .coveredConcepts(matchedConcepts)
+                .matchedConcepts(matchedConcepts)
+                .missingSyllabusConcepts(missingSyllabusConcepts)
+                .unmatchedQuestionConcepts(unmatchedQuestionConcepts)
+                .totalSyllabusConceptsEvaluated(syllabusConcepts.size())
+                .totalQuestionConceptsEvaluated(questionsToEvaluate.size())
+                .alignmentPercentage(Math.round(alignmentPct * 10.0) / 10.0)
+                .requiresTeacherConfirmation(true)
+                .limitationsNotes("Semantic suggestions are generated for educator validation. Topics absent from this assessment paper are not presumed absent from the curriculum.")
+                .notes("Generated suggestions are for teacher review. Concepts absent from this assessment paper are not presumed absent from the curriculum.")
+                .aiProviderUsed("Deterministic Semantic Analyzer (Fallback)")
+                .build();
+    }
+
+    private Set<String> tokenizeAndFilter(String text) {
+        if (text == null) return Collections.emptySet();
+        Set<String> stopWords = Set.of(
+                "what", "is", "are", "explain", "describe", "define", "discuss", "with", "neat", "sketch",
+                "diagram", "write", "note", "the", "and", "for", "from", "that", "this", "these", "those",
+                "how", "does", "which", "when", "where", "module", "unit", "part", "question", "marks"
+        );
+        Set<String> tokens = new HashSet<>();
+        String[] words = text.toLowerCase(Locale.ROOT).split("[^a-zA-Z0-9]+");
+        for (String w : words) {
+            if (w.length() >= 3 && !stopWords.contains(w)) {
+                tokens.add(w);
+            }
+        }
+        return tokens;
+    }
+
+    private double computeConceptSimilarity(String concept, Set<String> conceptTokens, String qText, Set<String> qTokens) {
+        if (conceptTokens.isEmpty() || qTokens.isEmpty()) return 0.0;
+
+        String normConcept = concept.toLowerCase(Locale.ROOT).trim();
+        String normQText = qText.toLowerCase(Locale.ROOT).trim();
+
+        if (normQText.contains(normConcept) && normConcept.length() > 4) {
+            return 0.92;
+        }
+
+        long commonCount = conceptTokens.stream().filter(qTokens::contains).count();
+        double recall = (double) commonCount / conceptTokens.size();
+        double precision = (double) commonCount / Math.min(qTokens.size(), conceptTokens.size() + 4);
+        double f1 = (recall + precision > 0) ? (2.0 * recall * precision) / (recall + precision) : 0.0;
+
+        if (recall >= 0.75) {
+            return Math.max(0.80, f1);
+        } else if (recall >= 0.50) {
+            return Math.max(0.60, f1);
+        } else if (commonCount >= 1) {
+            return Math.max(0.35, f1);
+        }
+        return 0.0;
+    }
+
+    private double computeOverlap(Set<String> s1, Set<String> s2) {
+        if (s1.isEmpty() || s2.isEmpty()) return 0.0;
+        long common = s1.stream().filter(s2::contains).count();
+        return (double) common / Math.max(s1.size(), s2.size());
+    }
+
+    private String extractCoreConceptPhrase(String text) {
+        if (text == null || text.isBlank()) return "General Question Concept";
+        String clean = text.replaceAll("^[0-9a-zA-Z\\(\\)\\.\\-\\s]{1,6}\\s+", "").trim();
+        String[] words = clean.split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Math.min(words.length, 6); i++) {
+            if (sb.length() > 0) sb.append(" ");
+            sb.append(words[i]);
+        }
+        return sb.toString();
     }
 }

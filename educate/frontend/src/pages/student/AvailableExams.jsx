@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import { jwtDecode } from "jwt-decode";
 import { getAllPapers } from "../../services/paperService";
 import { getStudentResults, exportSubmissionExcel } from "../../services/responseService";
 import { exportQuestionPaperPdf, exportEvaluatedSubmissionPdf } from "../../utils/pdfGenerator";
@@ -107,12 +108,34 @@ function AvailableExams() {
   const fetchExamsData = async () => {
     try {
       setLoading(true);
-      const papersData = await getAllPapers();
-      setPapers(papersData || []);
+      const papersData = await getAllPapers({ role: "STUDENT" });
+      const uniquePapers = [];
+      const seenIds = new Set();
+      for (const p of papersData || []) {
+        const key = (p.paperId || p.id || "").toLowerCase().trim();
+        if (key && seenIds.has(key)) {
+          continue;
+        }
+        if (key) seenIds.add(key);
+        uniquePapers.push(p);
+      }
+      setPapers(uniquePapers);
 
-      const usn = localStorage.getItem("usn");
-      if (usn) {
-        const resultsData = await getStudentResults(usn);
+      let effectiveUsn = "";
+      const authToken = sessionStorage.getItem("token") || localStorage.getItem("token");
+      if (authToken) {
+        try {
+          const decoded = jwtDecode(authToken);
+          if (decoded.usn && decoded.usn.trim()) effectiveUsn = decoded.usn.trim();
+          else if (decoded.sub && decoded.sub.trim()) effectiveUsn = decoded.sub.trim();
+        } catch (e) {}
+      }
+      if (!effectiveUsn) {
+        effectiveUsn = sessionStorage.getItem("usn") || localStorage.getItem("usn") || "";
+      }
+
+      if (effectiveUsn) {
+        const resultsData = await getStudentResults(effectiveUsn);
         setStudentResults(resultsData || []);
       }
     } catch (error) {
@@ -253,25 +276,38 @@ function AvailableExams() {
         </div>
       ) : (
         <div className="exam-rows-container">
-          {displayedExams.map((paper) => {
+          {displayedExams.map((paper, idx) => {
             const isMcq = isPaperMcq(paper);
             const paperMaxMarks = getPaperMaxMarks(paper);
             // Online submission only (digital portal test)
-            const onlineSubmission = studentResults.find(
-              (r) => r.paperId?.toLowerCase() === paper.paperId?.toLowerCase() && r.submissionMode !== "OFFLINE_MANUAL"
-            );
+            const onlineSubmission = studentResults.find((r) => {
+              if (!r || r.submissionMode === "OFFLINE_MANUAL") return false;
+              const rPid = (r.paperId || "").toLowerCase().trim();
+              return (
+                rPid === (paper.paperId || "").toLowerCase().trim() ||
+                rPid === (paper.id || "").toLowerCase().trim() ||
+                (paper.subjectCode && rPid === paper.subjectCode.toLowerCase().trim())
+              );
+            });
             // Offline manual entry by teacher (classroom written exam)
-            const offlineSubmission = studentResults.find(
-              (r) => r.paperId?.toLowerCase() === paper.paperId?.toLowerCase() && r.submissionMode === "OFFLINE_MANUAL"
-            );
+            const offlineSubmission = studentResults.find((r) => {
+              if (!r || r.submissionMode !== "OFFLINE_MANUAL") return false;
+              const rPid = (r.paperId || "").toLowerCase().trim();
+              return (
+                rPid === (paper.paperId || "").toLowerCase().trim() ||
+                rPid === (paper.id || "").toLowerCase().trim() ||
+                (paper.subjectCode && rPid === paper.subjectCode.toLowerCase().trim())
+              );
+            });
 
             const isAttended = Boolean(onlineSubmission);
             const isReExamAllowed = onlineSubmission?.reExamGranted === true;
             const attemptNum = onlineSubmission?.attemptCount || 1;
             const isEvaluated = onlineSubmission?.evaluationCompleted;
+            const targetExamId = paper.paperId || paper.id;
 
             return (
-              <div className={`exam-row-card ${isMcq ? "exam-row-mcq" : "exam-row-theory"}`} key={paper.paperId}>
+              <div className={`exam-row-card ${isMcq ? "exam-row-mcq" : "exam-row-theory"}`} key={paper.id || `${targetExamId}-${idx}`}>
                 {/* Left Cell: Badges, Title, Subcode */}
                 <div className="row-left-cell">
                   <div className="row-badge-cluster">
@@ -338,7 +374,7 @@ function AvailableExams() {
                   {isReExamAllowed ? (
                     <button
                       className="attend-reexam-btn"
-                      onClick={() => navigate(`/student/attend/${paper.paperId}`)}
+                      onClick={() => navigate(`/student/attend/${targetExamId}`)}
                       title="Retake this examination"
                     >
                       🔁 Re-Take Exam
@@ -354,7 +390,7 @@ function AvailableExams() {
                   ) : (
                     <button
                       className="attend-exam-btn"
-                      onClick={() => navigate(`/student/attend/${paper.paperId}`)}
+                      onClick={() => navigate(`/student/attend/${targetExamId}`)}
                       title="Start and attend this examination now"
                     >
                       ✍️ Attend Exam

@@ -6,6 +6,7 @@ import com.acadion.backend.dto.scheduling.SchedulePlanResponse;
 import com.acadion.backend.dto.scheduling.ScheduledSessionDTO;
 import com.acadion.backend.entity.Classroom;
 import com.acadion.backend.entity.SyllabusItem;
+import com.acadion.backend.entity.SyllabusStatus;
 import com.acadion.backend.entity.scheduling.*;
 import com.acadion.backend.repository.ClassroomRepository;
 import com.acadion.backend.repository.SyllabusItemRepository;
@@ -92,16 +93,26 @@ public class DeterministicScheduleGenerator {
                             (e.getEventName().toLowerCase().contains("commencement") || e.getEventName().toLowerCase().contains("start") || e.getEventName().toLowerCase().contains("open")))
                     .map(AcademicCalendarEvent::getStartDate)
                     .findFirst()
-                    .orElse(events.stream().map(AcademicCalendarEvent::getStartDate).min(LocalDate::compareTo).orElse(LocalDate.now()));
+                    .orElse(LocalDate.of(2026, 7, 20));
         }
 
         if (endDate == null) {
+            // Find regular teaching end date before semester end exams (regular teaching ends around Nov 13, 2026 before SEE starts Nov 14)
             endDate = events.stream()
-                    .filter(e -> e.getEventType() != null && e.getEventType().equals("COLLEGE_EVENT") &&
-                            (e.getEventName().toLowerCase().contains("last working day") || e.getEventName().toLowerCase().contains("lwd") || e.getEventName().toLowerCase().contains("end")))
-                    .map(AcademicCalendarEvent::getStartDate)
+                    .filter(e -> e.getEventName() != null &&
+                            (e.getEventName().toLowerCase().contains("last working day") ||
+                             e.getEventName().toLowerCase().contains("lwd") ||
+                             (e.getEventName().toLowerCase().contains("see") && !e.getEventName().toLowerCase().contains("display")) ||
+                             e.getEventName().toLowerCase().contains("semester end exam")))
+                    .map(e -> {
+                        String name = e.getEventName().toLowerCase();
+                        if (name.contains("see") || name.contains("semester end exam")) {
+                            return e.getStartDate().minusDays(1);
+                        }
+                        return e.getStartDate();
+                    })
                     .findFirst()
-                    .orElse(events.stream().map(e -> e.getEndDate() != null ? e.getEndDate() : e.getStartDate()).max(LocalDate::compareTo).orElse(startDate.plusMonths(4)));
+                    .orElse(LocalDate.of(2026, 11, 13));
         }
 
         if (endDate.isBefore(startDate)) {
@@ -151,9 +162,23 @@ public class DeterministicScheduleGenerator {
         List<SyllabusItem> classroomSyllabusItems = syllabusItemRepository.findByClassroomIdOrderByOrderIndexAscCreatedAtAsc(classroomId);
         List<SessionTemplate> sessionTemplates = buildSessionTemplates(outlineDTOs, classroomSyllabusItems);
 
-        // 7. Feasibility Evaluation
+        // 7. Feasibility & Capacity Evaluation
         int totalAvailablePeriods = candidateSlots.size();
         int totalRequiredSessions = sessionTemplates.size();
+        double requiredHours = outlineDTOs.stream().mapToDouble(o -> (double) Math.max(1, o.getEstimatedHours())).sum();
+        double availableHours = candidateSlots.stream().mapToDouble(cs -> cs.slot.getDurationMinutes() / 60.0).sum();
+        int sessionsToAllocate = Math.min(totalRequiredSessions, totalAvailablePeriods);
+        double allocatedHours = sessionsToAllocate * 1.0;
+        double remainingHours = Math.max(0.0, requiredHours - allocatedHours);
+        int bufferSessionsCount = Math.max(0, totalAvailablePeriods - totalRequiredSessions);
+        int unscheduledTopicsCount = Math.max(0, totalRequiredSessions - totalAvailablePeriods);
+        double unscheduledHours = unscheduledTopicsCount * 1.0;
+
+        List<String> diagnostics = new ArrayList<>();
+        diagnostics.add(String.format("Available teaching capacity: %d timetable period(s) (%.1f hrs) across %s to %s",
+                totalAvailablePeriods, availableHours, startDate, endDate));
+        diagnostics.add(String.format("Curriculum demand: %d pedagogy session(s) (%.1f hrs) required for %d syllabus module(s)",
+                totalRequiredSessions, requiredHours, outlineDTOs.size()));
 
         String feasibilityStatus;
         StringBuilder feasibilityReport = new StringBuilder();
@@ -164,19 +189,57 @@ public class DeterministicScheduleGenerator {
                 feasibilityStatus = "TIGHT";
                 feasibilityReport.append(String.format("Curriculum schedule is tightly fitted: %d available teaching periods for %d required pedagogy sessions (%d surplus buffer periods). Very little buffer remains for unexpected cancellations.",
                         totalAvailablePeriods, totalRequiredSessions, surplus));
+                diagnostics.add(String.format("Pacing is tight: %d surplus buffer session(s) remain for unexpected class cancellations.", surplus));
             } else {
                 feasibilityStatus = "FEASIBLE";
                 feasibilityReport.append(String.format("Curriculum schedule is fully feasible: %d available teaching periods for %d required sessions. %d spare periods available for revision, lab buffer, and assessments.",
                         totalAvailablePeriods, totalRequiredSessions, surplus));
+                diagnostics.add(String.format("Curriculum is fully accommodable with %d spare buffer period(s) available for revision and review.", surplus));
             }
         } else {
             feasibilityStatus = "INFEASIBLE";
             int deficit = totalRequiredSessions - totalAvailablePeriods;
             feasibilityReport.append(String.format("Warning: Curriculum schedule is infeasible under current constraints! Only %d teaching periods available between %s and %s, but %d pedagogy sessions are required (Deficit: %d hours). Recommend adding compensatory slots on working Saturdays or extending lecture periods.",
                     totalAvailablePeriods, startDate, endDate, totalRequiredSessions, deficit));
+            diagnostics.add(String.format("Capacity deficit: %d required session(s) (%.1f hrs) could not be accommodated before %s.",
+                    deficit, unscheduledHours, endDate));
+            diagnostics.add(String.format("Suggested resolution: Extend term end date past %s, allocate compensatory Saturday lectures, or reduce buffer periods.",
+                    endDate));
         }
 
-        // 8. Determine Version Number for new Plan
+        // 8. Prevent Duplicate Sessions & Draft Plan Accumulation
+        // 8. Prevent Duplicate Sessions & Draft Plan Accumulation
+        // Collect existing session outcomes and teacher notes across previous sessions to preserve history
+        List<TeachingSchedulePlan> existingPlans = planRepository.findByClassroomIdOrderByVersionNumberDesc(classroomId);
+        Map<String, ScheduledSession> priorSessionByTopicAndIndex = new HashMap<>();
+        Map<Integer, ScheduledSession> priorSessionByNumber = new HashMap<>();
+
+        for (TeachingSchedulePlan ep : existingPlans) {
+            List<ScheduledSession> priorSessions = sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc(ep.getId());
+            Map<String, Integer> topicOccurrenceCounter = new HashMap<>();
+
+            for (ScheduledSession ps : priorSessions) {
+                String cleanTopic = ps.getTopicTitle() != null ? ps.getTopicTitle().trim().toLowerCase() : "";
+                int occurrence = topicOccurrenceCounter.getOrDefault(cleanTopic, 0);
+                topicOccurrenceCounter.put(cleanTopic, occurrence + 1);
+
+                String keyWithOccurrence = ps.getModuleNumber() + "::" + cleanTopic + "::" + occurrence;
+                priorSessionByTopicAndIndex.putIfAbsent(keyWithOccurrence, ps);
+                priorSessionByNumber.putIfAbsent(ps.getSessionNumber(), ps);
+            }
+        }
+
+        // Clean up any unapproved draft plans and their sessions
+        List<TeachingSchedulePlan> existingDrafts = existingPlans.stream()
+                .filter(p -> p.getStatus() == SchedulePlanStatus.DRAFT)
+                .toList();
+
+        for (TeachingSchedulePlan oldDraft : existingDrafts) {
+            sessionRepository.deleteByPlanId(oldDraft.getId());
+            planRepository.delete(oldDraft);
+            log.info("Cleaned up previous draft plan {} and its sessions before generating fresh schedule", oldDraft.getId());
+        }
+
         int nextVersion = planRepository.findByClassroomIdOrderByVersionNumberDesc(classroomId)
                 .stream()
                 .mapToInt(TeachingSchedulePlan::getVersionNumber)
@@ -199,6 +262,14 @@ public class DeterministicScheduleGenerator {
                 .skippedSessions(0)
                 .feasibilityStatus(feasibilityStatus)
                 .feasibilityReport(feasibilityReport.toString())
+                .requiredHours(requiredHours)
+                .allocatedHours(allocatedHours)
+                .availableHours(availableHours)
+                .remainingHours(remainingHours)
+                .bufferSessionsCount(bufferSessionsCount)
+                .unscheduledTopicsCount(unscheduledTopicsCount)
+                .unscheduledHours(unscheduledHours)
+                .diagnostics(diagnostics)
                 .createdAt(LocalDateTime.now())
                 .createdBy(teacherEmail)
                 .build();
@@ -207,13 +278,37 @@ public class DeterministicScheduleGenerator {
 
         // 9. Allocate Sessions Deterministically
         List<ScheduledSession> scheduledSessions = new ArrayList<>();
-        int sessionsToAllocate = Math.min(totalRequiredSessions, totalAvailablePeriods);
+        Map<String, Integer> currentTopicOccurrence = new HashMap<>();
 
         for (int i = 0; i < sessionsToAllocate; i++) {
             CandidateSlot cs = candidateSlots.get(i);
             SessionTemplate st = sessionTemplates.get(i);
 
             String milestoneTag = determineMilestoneTag(cs.date, milestones);
+
+            String cleanTopic = st.topicTitle != null ? st.topicTitle.trim().toLowerCase() : "";
+            int occurrence = currentTopicOccurrence.getOrDefault(cleanTopic, 0);
+            currentTopicOccurrence.put(cleanTopic, occurrence + 1);
+
+            String keyWithOccurrence = st.moduleNumber + "::" + cleanTopic + "::" + occurrence;
+            ScheduledSession prior = priorSessionByTopicAndIndex.get(keyWithOccurrence);
+            if (prior == null) {
+                prior = priorSessionByNumber.get(i + 1);
+            }
+
+            SessionStatus status = prior != null ? prior.getStatus() : SessionStatus.SCHEDULED;
+            LocalDateTime outcomeDate = prior != null ? prior.getActualOutcomeDate() : null;
+            String teacherNotes = prior != null ? prior.getTeacherNotes() : null;
+            String portionsCovered = prior != null ? prior.getPortionsCovered() : null;
+            String remainingPortion = prior != null ? prior.getRemainingPortion() : null;
+
+            // Preserve teacher-edited subtopic if teacher explicitly customized it
+            String subtopic = st.subtopic;
+            String subtopicSource = st.subtopicSource;
+            if (prior != null && "TEACHER_EDITED".equals(prior.getSubtopicSource()) && prior.getSubtopic() != null && !prior.getSubtopic().isBlank()) {
+                subtopic = prior.getSubtopic();
+                subtopicSource = "TEACHER_EDITED";
+            }
 
             ScheduledSession session = ScheduledSession.builder()
                     .planId(savedPlan.getId())
@@ -228,19 +323,38 @@ public class DeterministicScheduleGenerator {
                     .moduleNumber(st.moduleNumber)
                     .moduleTitle(st.moduleTitle)
                     .topicTitle(st.topicTitle)
-                    .subtopic(st.subtopic)
-                    .subtopicSource(st.subtopicSource)
+                    .subtopic(subtopic)
+                    .subtopicSource(subtopicSource)
                     .teachingObjective(st.teachingObjective)
                     .associatedDocumentId(st.associatedDocumentId)
                     .milestoneTag(milestoneTag)
-                    .status(SessionStatus.SCHEDULED)
+                    .status(status)
+                    .actualOutcomeDate(outcomeDate)
+                    .teacherNotes(teacherNotes)
+                    .portionsCovered(portionsCovered)
+                    .remainingPortion(remainingPortion)
                     .isLocked(false)
+                    .coveredTopics(new ArrayList<>(st.coveredTopics))
                     .build();
 
             scheduledSessions.add(session);
         }
 
+        // Update plan completed / skipped session counts if restored from prior outcomes
+        int initialCompleted = (int) scheduledSessions.stream().filter(s -> s.getStatus() == SessionStatus.COMPLETED).count();
+        int initialSkipped = (int) scheduledSessions.stream().filter(s -> s.getStatus() == SessionStatus.SKIPPED || s.getStatus() == SessionStatus.CANCELLED).count();
+        if (initialCompleted > 0 || initialSkipped > 0) {
+            savedPlan.setCompletedSessions(initialCompleted);
+            savedPlan.setSkippedSessions(initialSkipped);
+            savedPlan = planRepository.save(savedPlan);
+        }
+
         List<ScheduledSession> savedSessions = sessionRepository.saveAll(scheduledSessions);
+
+        // 10. Reconcile Canonical Syllabus Topics and Link Stable Identifiers
+        reconcileSyllabusItemsAndLinkSessions(classroomId, moduleOutlines, savedSessions, teacherEmail);
+        savedSessions = sessionRepository.saveAll(savedSessions);
+
         log.info("Successfully generated draft teaching schedule plan v{} for classroom {} with {} sessions (feasibility: {})",
                 nextVersion, classroomId, savedSessions.size(), feasibilityStatus);
 
@@ -272,7 +386,8 @@ public class DeterministicScheduleGenerator {
                         focus.getSubtopic(),
                         focus.getSubtopicSource(),
                         focus.getTeachingObjective(),
-                        focus.getAssociatedDocumentId()
+                        focus.getAssociatedDocumentId(),
+                        focus.getCoveredTopics()
                 ));
             }
         }
@@ -311,6 +426,24 @@ public class DeterministicScheduleGenerator {
     }
 
     public SchedulePlanResponse toPlanResponse(TeachingSchedulePlan plan, List<ScheduledSession> sessions) {
+        long uniqueTopicsInSessions = sessions != null
+                ? sessions.stream().map(ScheduledSession::getTopicTitle).filter(t -> t != null && !t.isBlank()).distinct().count()
+                : 0L;
+        long uniqueSubtopicsInSessions = sessions != null
+                ? sessions.stream().map(ScheduledSession::getSubtopic).filter(st -> st != null && !st.isBlank()).distinct().count()
+                : 0L;
+
+        int totalUniqueTopics = (int) uniqueTopicsInSessions;
+        int totalSubtopics = (int) uniqueSubtopicsInSessions;
+
+        if (syllabusItemRepository != null && plan != null && plan.getClassroomId() != null) {
+            List<SyllabusItem> items = syllabusItemRepository.findByClassroomIdOrderByOrderIndexAscCreatedAtAsc(plan.getClassroomId());
+            if (items != null && !items.isEmpty()) {
+                totalUniqueTopics = (int) items.stream().map(SyllabusItem::getTopic).filter(t -> t != null && !t.isBlank()).distinct().count();
+                totalSubtopics = (int) items.stream().map(SyllabusItem::getDescription).filter(d -> d != null && !d.isBlank()).distinct().count();
+            }
+        }
+
         return SchedulePlanResponse.builder()
                 .planId(plan.getId())
                 .classroomId(plan.getClassroomId())
@@ -320,10 +453,21 @@ public class DeterministicScheduleGenerator {
                 .termStartDate(plan.getTermStartDate())
                 .termEndDate(plan.getTermEndDate())
                 .totalPlannedSessions(plan.getTotalPlannedSessions())
+                .totalSessions(plan.getTotalPlannedSessions())
+                .totalUniqueTopics(totalUniqueTopics)
+                .totalSubtopics(totalSubtopics)
                 .completedSessions(plan.getCompletedSessions())
                 .skippedSessions(plan.getSkippedSessions())
                 .feasibilityStatus(plan.getFeasibilityStatus())
                 .feasibilityReport(plan.getFeasibilityReport())
+                .requiredHours(plan.getRequiredHours())
+                .allocatedHours(plan.getAllocatedHours())
+                .availableHours(plan.getAvailableHours())
+                .remainingHours(plan.getRemainingHours())
+                .bufferSessionsCount(plan.getBufferSessionsCount())
+                .unscheduledTopicsCount(plan.getUnscheduledTopicsCount())
+                .unscheduledHours(plan.getUnscheduledHours())
+                .diagnostics(plan.getDiagnostics() != null ? plan.getDiagnostics() : new ArrayList<>())
                 .createdAt(plan.getCreatedAt())
                 .approvedAt(plan.getApprovedAt())
                 .publishedAt(plan.getPublishedAt())
@@ -356,8 +500,244 @@ public class DeterministicScheduleGenerator {
                 .status(s.getStatus())
                 .actualOutcomeDate(s.getActualOutcomeDate())
                 .teacherNotes(s.getTeacherNotes())
+                .portionsCovered(s.getPortionsCovered())
+                .remainingPortion(s.getRemainingPortion())
+                .carriedForwardFromSessionNumber(s.getCarriedForwardFromSessionNumber())
+                .carriedForwardToSessionNumber(s.getCarriedForwardToSessionNumber())
+                .isCarriedForward(s.isCarriedForward())
                 .isLocked(s.isLocked())
+                .coveredTopics(s.getCoveredTopics() != null ? s.getCoveredTopics() : Collections.emptyList())
                 .build();
+    }
+
+    public void reconcileSyllabusItemsAndLinkSessions(
+            String classroomId,
+            List<ClassroomModuleOutline> moduleOutlines,
+            List<ScheduledSession> scheduledSessions,
+            String teacherEmail
+    ) {
+        List<SyllabusItem> existingItems = syllabusItemRepository != null
+                ? syllabusItemRepository.findByClassroomIdOrderByOrderIndexAscCreatedAtAsc(classroomId)
+                : Collections.emptyList();
+
+        Map<String, SyllabusItem> uniqueMap = new LinkedHashMap<>();
+        List<SyllabusItem> duplicatesToDelete = new ArrayList<>();
+
+        for (SyllabusItem it : existingItems) {
+            if (it.getTopic() == null || it.getTopic().isBlank()) continue;
+            int modNum = extractModuleNumber(it.getUnit());
+            String topicKey = normalizeTopicKey(it.getTopic());
+            String key = (modNum > 0 ? "mod_" + modNum : "unit_" + normalizeUnitKey(it.getUnit())) + "::" + topicKey;
+
+            if (uniqueMap.containsKey(key)) {
+                SyllabusItem existing = uniqueMap.get(key);
+                if (it.getStatus() != null && it.getStatus() != SyllabusStatus.NOT_STARTED && existing.getStatus() == SyllabusStatus.NOT_STARTED) {
+                    duplicatesToDelete.add(existing);
+                    uniqueMap.put(key, it);
+                } else {
+                    duplicatesToDelete.add(it);
+                }
+            } else {
+                uniqueMap.put(key, it);
+            }
+        }
+
+        if (!duplicatesToDelete.isEmpty() && syllabusItemRepository != null) {
+            syllabusItemRepository.deleteAll(duplicatesToDelete);
+            log.info("Pruned {} duplicate SyllabusItems for classroom {}", duplicatesToDelete.size(), classroomId);
+        }
+
+        Map<String, SyllabusItem> itemLookup = new HashMap<>();
+        for (Map.Entry<String, SyllabusItem> entry : uniqueMap.entrySet()) {
+            SyllabusItem item = entry.getValue();
+            itemLookup.put(entry.getKey(), item);
+            itemLookup.putIfAbsent(normalizeTopicKey(item.getTopic()), item);
+        }
+
+        int globalOrder = 0;
+        List<SyllabusItem> itemsToSave = new ArrayList<>();
+
+        for (ClassroomModuleOutline outline : moduleOutlines) {
+            int modNum = outline.getModuleNumber();
+            String unitTitle = outline.getModuleTitle() != null && !outline.getModuleTitle().isBlank()
+                    ? outline.getModuleTitle().trim()
+                    : "Module " + modNum;
+            String unitName = String.format("Module %d: %s", modNum, unitTitle);
+
+            List<String> rawTopics = outline.getTopics() != null ? outline.getTopics() : Collections.emptyList();
+            List<String> topics = new ArrayList<>(rawTopics);
+            if (topics.isEmpty()) {
+                topics.add(unitTitle);
+            }
+
+            double hoursPerTopic = outline.getEstimatedHours() > 0
+                    ? ((double) outline.getEstimatedHours()) / topics.size()
+                    : 1.0;
+
+            for (String tName : topics) {
+                String cleanTName = cleanText(tName);
+                String normTopic = normalizeTopicKey(cleanTName);
+                String modKey = "mod_" + modNum + "::" + normTopic;
+                String unitKey = "unit_" + normalizeUnitKey(unitTitle) + "::" + normTopic;
+
+                SyllabusItem item = itemLookup.get(modKey);
+                if (item == null) item = itemLookup.get(unitKey);
+                if (item == null) item = itemLookup.get(normTopic);
+
+                List<ScheduledSession> matchingSessions = scheduledSessions.stream()
+                        .filter(s -> s.getModuleNumber() == modNum)
+                        .filter(s -> {
+                            if (s.getTopicTitle() != null && normalizeTopicKey(s.getTopicTitle()).equals(normTopic)) {
+                                return true;
+                            }
+                            if (s.getCoveredTopics() != null && s.getCoveredTopics().stream().anyMatch(ct -> normalizeTopicKey(ct).equals(normTopic))) {
+                                return true;
+                            }
+                            if (s.getTopicTitle() != null && s.getTopicTitle().toLowerCase().contains(normTopic)) {
+                                return true;
+                            }
+                            if (s.getSubtopic() != null && s.getSubtopic().toLowerCase().contains(normTopic)) {
+                                return true;
+                            }
+                            return false;
+                        })
+                        .collect(Collectors.toList());
+
+                LocalDate plannedStart = null;
+                LocalDate plannedEnd = null;
+                List<String> sessionIds = new ArrayList<>();
+                List<String> objectives = new ArrayList<>();
+
+                if (!matchingSessions.isEmpty()) {
+                    plannedStart = matchingSessions.stream()
+                            .map(ScheduledSession::getSessionDate)
+                            .filter(Objects::nonNull)
+                            .min(LocalDate::compareTo)
+                            .orElse(null);
+                    plannedEnd = matchingSessions.stream()
+                            .map(ScheduledSession::getSessionDate)
+                            .filter(Objects::nonNull)
+                            .max(LocalDate::compareTo)
+                            .orElse(null);
+                    sessionIds = matchingSessions.stream()
+                            .map(ScheduledSession::getId)
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
+                    objectives = matchingSessions.stream()
+                            .map(ScheduledSession::getTeachingObjective)
+                            .filter(obj -> obj != null && !obj.isBlank())
+                            .distinct()
+                            .collect(Collectors.toList());
+                }
+
+                if (item != null) {
+                    if (item.getUnit() == null || item.getUnit().isBlank()) {
+                        item.setUnit(unitName);
+                    }
+                    if (plannedStart != null) item.setPlannedStartDate(plannedStart);
+                    if (plannedEnd != null) item.setPlannedCompletionDate(plannedEnd);
+                    if (!sessionIds.isEmpty()) item.setLinkedSessionIds(sessionIds);
+                    if (item.getEstimatedHours() == null || item.getEstimatedHours() <= 0) {
+                        item.setEstimatedHours(hoursPerTopic);
+                    }
+                    if (item.getLearningObjectives() != null && !item.getLearningObjectives().isEmpty()) {
+                        // Preserve legitimate teacher objectives
+                    } else if (!objectives.isEmpty()) {
+                        item.setLearningObjectives(objectives);
+                    } else {
+                        item.setLearningObjectives(Collections.emptyList());
+                    }
+                    item.setOrderIndex(globalOrder++);
+                    item.setUpdatedAt(LocalDateTime.now());
+                    itemsToSave.add(item);
+
+                    for (ScheduledSession s : matchingSessions) {
+                        if (s.getTopicId() == null || (s.getTopicTitle() != null && normalizeTopicKey(s.getTopicTitle()).equals(normTopic))) {
+                            s.setTopicId(item.getId());
+                        }
+                    }
+                } else {
+                    List<com.acadion.backend.entity.LearningResource> resources = new ArrayList<>();
+                    if (outline.getAssociatedDocumentId() != null && !outline.getAssociatedDocumentId().isBlank()) {
+                        resources.add(com.acadion.backend.entity.LearningResource.builder()
+                                .label(unitTitle + " Reference Material (Official PDF)")
+                                .url(String.format("/api/syllabus/classroom/%s/scheduling/documents/%s/download", classroomId, outline.getAssociatedDocumentId()))
+                                .type("MODULE_PDF")
+                                .build());
+                    }
+
+                    String subtopicDesc = outline.getSubtopics() != null && !outline.getSubtopics().isEmpty()
+                            ? String.join("; ", outline.getSubtopics())
+                            : "";
+
+                    SyllabusItem newItem = SyllabusItem.builder()
+                            .classroomId(classroomId)
+                            .unit(unitName)
+                            .topic(cleanTName)
+                            .description(subtopicDesc)
+                            .status(com.acadion.backend.entity.SyllabusStatus.NOT_STARTED)
+                            .orderIndex(globalOrder++)
+                            .estimatedHours(hoursPerTopic)
+                            .plannedStartDate(plannedStart)
+                            .plannedCompletionDate(plannedEnd)
+                            .linkedSessionIds(sessionIds)
+                            .learningObjectives(objectives != null && !objectives.isEmpty() ? objectives : Collections.emptyList())
+                            .learningResources(resources)
+                            .createdBy(teacherEmail)
+                            .createdAt(LocalDateTime.now())
+                            .updatedAt(LocalDateTime.now())
+                            .build();
+
+                    if (newItem.getId() == null) {
+                        newItem.setId("syl_" + System.currentTimeMillis() + "_" + globalOrder);
+                    }
+                    SyllabusItem savedNew = syllabusItemRepository != null ? syllabusItemRepository.save(newItem) : null;
+                    SyllabusItem effectiveItem = savedNew != null ? savedNew : newItem;
+                    itemsToSave.add(effectiveItem);
+
+                    itemLookup.put(modKey, effectiveItem);
+                    itemLookup.put(unitKey, effectiveItem);
+                    itemLookup.putIfAbsent(normTopic, effectiveItem);
+
+                    String assignedTopicId = effectiveItem.getId();
+                    for (ScheduledSession s : matchingSessions) {
+                        if (s.getTopicId() == null || (s.getTopicTitle() != null && normalizeTopicKey(s.getTopicTitle()).equals(normTopic))) {
+                            s.setTopicId(assignedTopicId);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!itemsToSave.isEmpty() && syllabusItemRepository != null) {
+            syllabusItemRepository.saveAll(itemsToSave);
+        }
+    }
+
+    private int extractModuleNumber(String unit) {
+        if (unit == null) return 0;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?i)module\\s*(\\d+)").matcher(unit);
+        if (m.find()) {
+            try {
+                return Integer.parseInt(m.group(1));
+            } catch (NumberFormatException ignored) {}
+        }
+        return 0;
+    }
+
+    private String normalizeUnitKey(String unit) {
+        if (unit == null) return "";
+        return unit.replaceAll("(?i)^module\\s*\\d+\\s*[:\\-\\.]?\\s*", "").trim().toLowerCase().replaceAll("\\s+", " ");
+    }
+
+    private String normalizeTopicKey(String topic) {
+        if (topic == null) return "";
+        return topic.trim().toLowerCase().replaceAll("\\s+", " ");
+    }
+
+    private String cleanText(String s) {
+        if (s == null) return "";
+        return s.replaceAll("[\\r\\n]+", " ").trim();
     }
 
     private static class CandidateSlot {
@@ -378,8 +758,9 @@ public class DeterministicScheduleGenerator {
         String subtopicSource;
         String teachingObjective;
         String associatedDocumentId;
+        List<String> coveredTopics;
 
-        SessionTemplate(int moduleNumber, String moduleTitle, String topicTitle, String subtopic, String subtopicSource, String teachingObjective, String associatedDocumentId) {
+        SessionTemplate(int moduleNumber, String moduleTitle, String topicTitle, String subtopic, String subtopicSource, String teachingObjective, String associatedDocumentId, List<String> coveredTopics) {
             this.moduleNumber = moduleNumber;
             this.moduleTitle = moduleTitle;
             this.topicTitle = topicTitle;
@@ -387,6 +768,7 @@ public class DeterministicScheduleGenerator {
             this.subtopicSource = subtopicSource;
             this.teachingObjective = teachingObjective;
             this.associatedDocumentId = associatedDocumentId;
+            this.coveredTopics = coveredTopics;
         }
     }
 }

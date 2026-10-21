@@ -177,18 +177,40 @@ public class GeminiParserService {
     }
 
     public List<String> decomposeTopicWithGemini(String topic, String moduleTitle, int sessionCount) {
+        return decomposeTopicWithGemini(topic, moduleTitle, "", sessionCount);
+    }
+
+    public List<String> decomposeTopicWithGemini(String topic, String moduleTitle, String surroundingContext, int sessionCount) {
         if (!isAvailable() || sessionCount <= 0 || topic == null || topic.isBlank()) {
             return java.util.Collections.emptyList();
         }
         try {
             log.info("Calling Gemini AI to decompose topic '{}' into {} sessions...", topic, sessionCount);
+            String contextBlock = (surroundingContext != null && !surroundingContext.isBlank())
+                    ? "\nSurrounding syllabus context:\n" + surroundingContext.substring(0, Math.min(600, surroundingContext.length()))
+                    : "";
+
             String prompt = String.format("""
                 You are an academic syllabus curriculum designer.
-                Given the Module '%s' and Topic '%s', decompose this topic into %d sequential, specific learning focuses/subtopics for %d classroom lectures.
-                Output ONLY a JSON array of %d strings, where each string is a concise, relevant subtopic/learning focus.
-                Do not include generic placeholders. Each item must be specifically about '%s'.
-                Example format: ["Subtopic 1", "Subtopic 2", "Subtopic 3"]
-                """, moduleTitle != null ? moduleTitle : "", topic, sessionCount, sessionCount, sessionCount, topic);
+                Given the Module '%s' and Topic '%s', decompose this topic into exactly %d sequential, specific learning subtopics for %d 1-hour classroom lectures.
+                %s
+
+                Requirements:
+                - Output ONLY a JSON array of %d strings: ["subtopic 1", "subtopic 2", ...]
+                - Each subtopic must be concise, approximately 5 to 6 words long (e.g. 'IoT devices, sensors, actuators and connectivity').
+                - Each subtopic must be displayable on a single line.
+                - Each subtopic must represent a logical pedagogical progression across the %d lectures.
+                - Do NOT use generic labels like 'Part 1', 'Part 2', or repeat the exact same topic title.
+                - Do NOT include markdown fences. Output raw JSON array only.
+                """,
+                    moduleTitle != null ? moduleTitle : "",
+                    topic,
+                    sessionCount,
+                    sessionCount,
+                    contextBlock,
+                    sessionCount,
+                    sessionCount
+            );
 
             String requestBodyJson = String.format("""
                 {
@@ -236,7 +258,9 @@ public class GeminiParserService {
             if (parsedJson.isArray()) {
                 for (JsonNode n : parsedJson) {
                     if (n.isTextual() && !n.asText().isBlank()) {
-                        results.add(n.asText().trim());
+                        String cleaned = n.asText().replaceAll("[\\r\\n]+", " ").trim();
+                        cleaned = cleaned.replaceAll("(?i)\\s*\\(part\\s*\\d+\\)", "");
+                        results.add(cleaned);
                     }
                 }
             }
