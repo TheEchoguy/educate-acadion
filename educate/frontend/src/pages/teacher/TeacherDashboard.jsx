@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getTeacherOverview } from "../../services/syllabusService";
+import FloatingChatbotWidget from "../../components/classroom/FloatingChatbotWidget";
 import "./TeacherDashboard.css";
 
 import imgPapers from "@media/images/topics/teacher_papers.jpg";
@@ -430,6 +431,9 @@ function TeacherDashboard() {
           )}
         </div>
       </div>
+
+      {/* Floating Chatbot Launch Widget */}
+      <FloatingChatbotWidget targetPath="/student/tutor" />
     </div>
   );
 }
