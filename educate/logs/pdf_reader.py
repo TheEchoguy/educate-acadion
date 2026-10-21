@@ -5,7 +5,7 @@ Instant digital text extraction (<0.02s) with fast high-accuracy OCR for scanned
 
 import io
 import os
-import fitz  # PyMuPDF
+import pymupdf as fitz
 from PIL import Image
 import pytesseract
 

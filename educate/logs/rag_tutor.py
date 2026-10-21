@@ -363,12 +363,19 @@ Question: {query}"""
         try:
             from google import genai
             client = genai.Client(api_key=clean_key)
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
-            if response and response.text:
-                return response.text.strip()
+            # Try recommended gemini-3.8-flash, fallback to gemini-2.5-flash
+            for m in ["gemini-3.8-flash", "gemini-2.5-flash"]:
+                try:
+                    response = client.models.generate_content(
+                        model=m,
+                        contents=prompt
+                    )
+                    if response and response.text:
+                        return response.text.strip()
+                except Exception as m_err:
+                    if "404" in str(m_err) or "not found" in str(m_err).lower():
+                        continue
+                    raise m_err
         except Exception as e:
             print(f"[RAG Tutor GenAI SDK Exception]: {e}")
 
