@@ -49,6 +49,7 @@ function StudentClassrooms() {
 
   const handleJoinSubmit = async (e) => {
     e.preventDefault();
+    toast.dismiss();
     const cleanCode = joinCode.trim().toUpperCase();
     if (!cleanCode) {
       toast.error("Please enter a valid classroom join code");
@@ -58,7 +59,7 @@ function StudentClassrooms() {
     try {
       setSubmitting(true);
       const res = await joinClassroom(cleanCode);
-      toast.success(res.message || "Join request submitted! Awaiting teacher approval.");
+      toast.success(res.message || `Joined classroom '${res.classroomName || cleanCode}' successfully!`);
       setShowJoinModal(false);
       setJoinCode("");
       loadStudentClassrooms();
@@ -137,7 +138,7 @@ function StudentClassrooms() {
                 {enrolledClassrooms.map((cls) => (
                   <div key={cls.id} className="student-class-card active-card">
                     <div className="class-card-top">
-                      <span className="subject-pill">{cls.subjectCode}</span>
+                      <span className="subject-pill">{cls.courseCode || cls.subjectCode || "BCS701"}</span>
                       <span className="enrolled-badge">✓ ENROLLED</span>
                     </div>
 

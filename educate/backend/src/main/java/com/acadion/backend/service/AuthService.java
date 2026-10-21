@@ -134,11 +134,12 @@ public class AuthService {
     // LOGIN
     public String login(LoginRequest request) {
 
-        User user = userRepository.findByEmail(
-                request.getEmail()
-        ).orElseThrow(() ->
-                new IllegalArgumentException("User not found")
-        );
+        String rawEmail = request.getEmail() != null ? request.getEmail().trim() : "";
+        User user = userRepository.findByEmail(rawEmail.toLowerCase())
+                .or(() -> userRepository.findByEmail(rawEmail))
+                .orElseThrow(() ->
+                        new IllegalArgumentException("User not found")
+                );
 
         // Email not verified
         if (!user.isVerified()) {

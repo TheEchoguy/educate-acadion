@@ -110,10 +110,20 @@ function AdminDashboard() {
         <div className="topic-showcase-banner">
           <div
             className="showcase-reel-track"
-            style={{ transform: `translateX(-${activeModuleSlide * 25}%)` }}
+            style={{
+              width: `${adminModules.length * 100}%`,
+              transform: `translateX(-${(activeModuleSlide * 100) / adminModules.length}%)`,
+            }}
           >
             {adminModules.map((mod) => (
-              <div key={mod.id} className="showcase-reel-item">
+              <div
+                key={mod.id}
+                className="showcase-reel-item"
+                style={{
+                  width: `${100 / adminModules.length}%`,
+                  flex: `0 0 ${100 / adminModules.length}%`,
+                }}
+              >
                 <div
                   className="topic-photo-slide active-zoom"
                   style={{ backgroundImage: `url(${mod.image})` }}

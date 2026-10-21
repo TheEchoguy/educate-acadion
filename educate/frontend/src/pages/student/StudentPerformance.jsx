@@ -18,7 +18,7 @@ function StudentPerformance() {
   const loadPerformance = async () => {
     try {
       setLoading(true);
-      const usn = localStorage.getItem("usn");
+      const usn = sessionStorage.getItem("usn") || localStorage.getItem("usn");
       if (!usn) {
         toast.error("USN not found");
         return;

@@ -48,6 +48,9 @@ public class ClassroomServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder passwordEncoder;
+
     @InjectMocks
     private ClassroomService classroomService;
 
@@ -214,8 +217,8 @@ public class ClassroomServiceTest {
     void testValidCsvImport() {
         when(classroomRepository.findById(classroom1.getId())).thenReturn(Optional.of(classroom1));
         when(userRepository.findByEmail(teacher1.getEmail())).thenReturn(Optional.of(teacher1));
-        when(userRepository.findByUsn("1DB21CS001")).thenReturn(Optional.of(student1));
-        when(userRepository.findByUsn("1DB21CS002")).thenReturn(Optional.of(student2));
+        when(userRepository.findByUsnIgnoreCase("1DB21CS001")).thenReturn(Optional.of(student1));
+        when(userRepository.findByUsnIgnoreCase("1DB21CS002")).thenReturn(Optional.of(student2));
         when(classroomMembershipRepository.findByClassroomIdAndStudentId(eq(classroom1.getId()), any()))
                 .thenReturn(Optional.empty());
 
@@ -228,7 +231,8 @@ public class ClassroomServiceTest {
         assertEquals(2, summary.getValidRows());
         assertEquals(2, summary.getMatchedCount());
         assertEquals(2, summary.getAddedCount());
-        assertEquals(0, summary.getUnmatchedCount());
+        assertEquals(2, summary.getExistingVerifiedUsersLinked());
+        assertEquals(0, summary.getNewStudentAccountsCreated());
         verify(classroomMembershipRepository, times(2)).save(any(ClassroomMembership.class));
     }
 
@@ -273,7 +277,7 @@ public class ClassroomServiceTest {
     void testValidXlsxImport() throws Exception {
         when(classroomRepository.findById(classroom1.getId())).thenReturn(Optional.of(classroom1));
         when(userRepository.findByEmail(teacher1.getEmail())).thenReturn(Optional.of(teacher1));
-        when(userRepository.findByUsn("1DB21CS001")).thenReturn(Optional.of(student1));
+        when(userRepository.findByUsnIgnoreCase("1DB21CS001")).thenReturn(Optional.of(student1));
         when(classroomMembershipRepository.findByClassroomIdAndStudentId(classroom1.getId(), student1.getId()))
                 .thenReturn(Optional.empty());
 
@@ -467,7 +471,7 @@ public class ClassroomServiceTest {
     void testDuplicateUsnHandling() {
         when(classroomRepository.findById(classroom1.getId())).thenReturn(Optional.of(classroom1));
         when(userRepository.findByEmail(teacher1.getEmail())).thenReturn(Optional.of(teacher1));
-        when(userRepository.findByUsn("1DB21CS001")).thenReturn(Optional.of(student1));
+        when(userRepository.findByUsnIgnoreCase("1DB21CS001")).thenReturn(Optional.of(student1));
         when(classroomMembershipRepository.findByClassroomIdAndStudentId(eq(classroom1.getId()), any()))
                 .thenReturn(Optional.empty());
 
@@ -476,33 +480,37 @@ public class ClassroomServiceTest {
 
         RosterImportSummary summary = classroomService.importRoster(classroom1.getId(), file, teacher1.getEmail());
 
-        assertEquals(2, summary.getTotalRows());
-        assertEquals(2, summary.getValidRows());
+        assertEquals(1, summary.getTotalProcessed());
         assertEquals(1, summary.getDuplicatesInFile());
         assertEquals(1, summary.getAddedCount());
         assertEquals(1, summary.getDuplicateUsns().size());
     }
 
     // -------------------------------------------------------------------------
-    // TEST 8: Unknown USN handling (No User created, reported in unmatched)
+    // TEST 8: Unknown USN handling (Auto-creates verified Student account)
     // -------------------------------------------------------------------------
     @Test
-    @DisplayName("8. Unknown USN does not create user, reports UNMATCHED")
+    @DisplayName("8. Unknown USN auto-creates verified Student User account and enrolls")
     void testUnknownUsnHandling() {
         when(classroomRepository.findById(classroom1.getId())).thenReturn(Optional.of(classroom1));
         when(userRepository.findByEmail(teacher1.getEmail())).thenReturn(Optional.of(teacher1));
-        when(userRepository.findByUsn("1DB99CS999")).thenReturn(Optional.empty());
+        when(userRepository.findByUsnIgnoreCase("1DB99CS999")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(i -> {
+            User u = i.getArgument(0);
+            u.setId("new_stu_id");
+            return u;
+        });
 
-        String csvContent = "USN\n1DB99CS999\n";
+        String csvContent = "USN,Name\n1DB99CS999,Newbie Student\n";
         MockMultipartFile file = new MockMultipartFile("file", "roster.csv", "text/csv", csvContent.getBytes(StandardCharsets.UTF_8));
 
         RosterImportSummary summary = classroomService.importRoster(classroom1.getId(), file, teacher1.getEmail());
 
-        assertEquals(1, summary.getTotalRows());
-        assertEquals(1, summary.getUnmatchedCount());
-        assertEquals(0, summary.getAddedCount());
-        assertEquals("1DB99CS999", summary.getUnmatchedStudents().get(0).getUsn());
-        verify(userRepository, never()).save(any(User.class));
+        assertEquals(1, summary.getTotalProcessed());
+        assertEquals(1, summary.getNewStudentAccountsCreated());
+        assertEquals(0, summary.getExistingVerifiedUsersLinked());
+        verify(userRepository, times(1)).save(any(User.class));
+        verify(classroomMembershipRepository, times(1)).save(any(ClassroomMembership.class));
     }
 
     // -------------------------------------------------------------------------
@@ -513,7 +521,7 @@ public class ClassroomServiceTest {
     void testExistingMembershipHandling() {
         when(classroomRepository.findById(classroom1.getId())).thenReturn(Optional.of(classroom1));
         when(userRepository.findByEmail(teacher1.getEmail())).thenReturn(Optional.of(teacher1));
-        when(userRepository.findByUsn("1DB21CS001")).thenReturn(Optional.of(student1));
+        when(userRepository.findByUsnIgnoreCase("1DB21CS001")).thenReturn(Optional.of(student1));
 
         ClassroomMembership existing = ClassroomMembership.builder()
                 .id("mem_1")
@@ -543,7 +551,7 @@ public class ClassroomServiceTest {
     void testRepeatedRosterUploadIsIdempotent() {
         when(classroomRepository.findById(classroom1.getId())).thenReturn(Optional.of(classroom1));
         when(userRepository.findByEmail(teacher1.getEmail())).thenReturn(Optional.of(teacher1));
-        when(userRepository.findByUsn("1DB21CS001")).thenReturn(Optional.of(student1));
+        when(userRepository.findByUsnIgnoreCase("1DB21CS001")).thenReturn(Optional.of(student1));
 
         ClassroomMembership alreadyActive = ClassroomMembership.builder()
                 .classroomId(classroom1.getId())
@@ -567,7 +575,7 @@ public class ClassroomServiceTest {
     // TEST 11: Student joins with valid code
     // -------------------------------------------------------------------------
     @Test
-    @DisplayName("11. Student joins with valid code creates PENDING membership")
+    @DisplayName("11. Student joins with valid code creates ACTIVE membership immediately")
     void testStudentJoinsWithValidCode() {
         String rawCode = "ACAD01";
         String hashedCode = ClassroomService.hashJoinCode(rawCode);
@@ -580,9 +588,9 @@ public class ClassroomServiceTest {
         Map<String, Object> result = classroomService.submitJoinRequest(rawCode, student1.getEmail());
 
         assertTrue((Boolean) result.get("success"));
-        assertEquals("PENDING", result.get("status"));
+        assertEquals("ACTIVE", result.get("status"));
         verify(classroomMembershipRepository, times(1)).save(argThat(m ->
-                m.getMembershipStatus().equals("PENDING") && m.getMembershipSource().equals("JOIN_CODE")
+                m.getMembershipStatus().equals("ACTIVE") && m.getMembershipSource().equals("JOIN_CODE")
         ));
     }
 
@@ -634,14 +642,14 @@ public class ClassroomServiceTest {
         when(userRepository.findByEmail(student1.getEmail())).thenReturn(Optional.of(student1));
         when(classroomRepository.findByJoinCodeHash(hashedCode)).thenReturn(Optional.of(classroom1));
 
-        ClassroomMembership pending = ClassroomMembership.builder()
+        ClassroomMembership alreadyActive = ClassroomMembership.builder()
                 .classroomId(classroom1.getId())
                 .studentId(student1.getId())
-                .membershipStatus("PENDING")
+                .membershipStatus("ACTIVE")
                 .build();
 
         when(classroomMembershipRepository.findByClassroomIdAndStudentId(classroom1.getId(), student1.getId()))
-                .thenReturn(Optional.of(pending));
+                .thenReturn(Optional.of(alreadyActive));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
                 classroomService.submitJoinRequest(rawCode, student1.getEmail())

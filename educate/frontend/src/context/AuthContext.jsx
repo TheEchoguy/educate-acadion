@@ -7,8 +7,8 @@ function AuthProvider({ children }) {
   const [role, setRole] = useState(null);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    const storedRole = localStorage.getItem("role");
+    const storedToken = sessionStorage.getItem("token") || localStorage.getItem("token");
+    const storedRole = sessionStorage.getItem("role") || localStorage.getItem("role");
 
     if (storedToken) {
       setToken(storedToken);
@@ -17,13 +17,16 @@ function AuthProvider({ children }) {
   }, []);
 
   const login = (jwtToken, userRole) => {
-    localStorage.setItem("token", jwtToken);
-    localStorage.setItem("role", userRole);
+    sessionStorage.setItem("token", jwtToken);
+    sessionStorage.setItem("role", userRole);
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
     setToken(jwtToken);
     setRole(userRole);
   };
 
   const logout = () => {
+    sessionStorage.clear();
     localStorage.clear();
     setToken(null);
     setRole(null);

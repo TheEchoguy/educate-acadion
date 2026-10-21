@@ -175,6 +175,60 @@ export default function ClassroomWorkspaceSelection() {
                   </button>
                 </div>
               </div>
+
+              {/* CARD 4: EVALUATION SCHEME */}
+              <div className="workspace-entry-card" id="card-evaluation-scheme">
+                <div className="workspace-entry-icon" style={{ background: "rgba(167, 139, 250, 0.12)" }}>
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10" />
+                    <line x1="12" y1="20" x2="12" y2="4" />
+                    <line x1="6" y1="20" x2="6" y2="14" />
+                  </svg>
+                </div>
+                <div className="workspace-entry-badge">Evaluation & Scaling</div>
+                <h3 className="workspace-entry-title">Evaluation Scheme</h3>
+                <p className="workspace-entry-desc">
+                  Configure IA weightages, assignment thresholds, lab scaling (IPCC vs Pure Theory), and semester-end exam passing rules.
+                </p>
+                <div className="workspace-entry-footer">
+                  <button
+                    type="button"
+                    className="workspace-entry-btn"
+                    id="btn-open-workspace-evaluation-scheme"
+                    onClick={() => navigate(`/teacher/classrooms/${id}/evaluation-scheme`)}
+                  >
+                    Open Workspace →
+                  </button>
+                </div>
+              </div>
+
+              {/* CARD 5: IA SPLIT-UP MARKS & MODULE MAPPER */}
+              <div className="workspace-entry-card" id="card-ia-marks-ingestion">
+                <div className="workspace-entry-icon" style={{ background: "rgba(56, 189, 248, 0.12)" }}>
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                  </svg>
+                </div>
+                <div className="workspace-entry-badge" style={{ color: "#38BDF8", borderColor: "rgba(56, 189, 248, 0.3)" }}>Academic Intelligence</div>
+                <h3 className="workspace-entry-title">IA Split-Up Marks Ingestion</h3>
+                <p className="workspace-entry-desc">
+                  Download enrolled student Excel templates, ingest question-wise IA sub-marks (1a, 1b.. 4b), and automatically map scores to module mastery.
+                </p>
+                <div className="workspace-entry-footer">
+                  <button
+                    type="button"
+                    className="workspace-entry-btn"
+                    id="btn-open-workspace-ia-marks"
+                    onClick={() => navigate(`/teacher/classrooms/${id}/ia-marks`)}
+                  >
+                    Open Workspace →
+                  </button>
+                </div>
+              </div>
             </div>
           </>
         )}

@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pypdf
+sentence-transformers
+numpy
+google-genai
+requests
+python-dotenv
+openai
+scikit-learn
+shap
+pandas
+joblib
+pymupdf

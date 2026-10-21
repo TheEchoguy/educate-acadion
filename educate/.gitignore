@@ -1,11 +1,24 @@
 # Spring Boot configuration
 backend/src/main/resources/application.properties
+backend/src/main/resources/application-local.properties
+backend/src/main/resources/*local*.properties
+backend/storage/
 
 # Frontend environment file
 frontend/.env
 
-# Logs
-logs/
+# Logs & Python cache
 *.log
+logs/__pycache__/
+logs/.env
+*.env
+!logs/*.py
+!logs/requirements.txt
 
 media-assets/
+
+# PPT Generator Service
+services/ppt-generator-api/.env
+services/ppt-generator-api/.venv/
+services/ppt-generator-api/**/__pycache__/
+services/ppt-generator-api/output/

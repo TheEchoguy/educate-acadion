@@ -2,8 +2,10 @@ import axios from "axios";
 
 const API_BASE = "http://localhost:8080/api/syllabus/classroom";
 
+const getToken = () => sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+
 const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
+  const token = getToken();
   return {
     headers: {
       Authorization: token ? `Bearer ${token}` : "",
@@ -12,7 +14,7 @@ const getAuthHeaders = () => {
 };
 
 export const uploadDocument = async (classroomId, file, documentType, moduleNumber = null, moduleTitle = "") => {
-  const token = localStorage.getItem("token");
+  const token = getToken();
   const formData = new FormData();
   formData.append("file", file);
   formData.append("documentType", documentType);
@@ -22,7 +24,6 @@ export const uploadDocument = async (classroomId, file, documentType, moduleNumb
   const res = await axios.post(`${API_BASE}/${classroomId}/scheduling/documents/upload`, formData, {
     headers: {
       Authorization: token ? `Bearer ${token}` : "",
-      "Content-Type": "multipart/form-data",
     },
   });
   return res.data;

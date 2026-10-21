@@ -39,20 +39,41 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
+
+    toast.dismiss();
+
+    const cleanEmail = (formData.email || "").trim().toLowerCase();
+    const cleanPassword = formData.password;
+
+    if (!cleanEmail || !cleanPassword) {
+      toast.error("Please enter both email and password.");
+      return;
+    }
 
     try {
       setLoading(true);
-      const token = await loginUser(formData);
+      const token = await loginUser({ email: cleanEmail, password: cleanPassword });
       const decoded = jwtDecode(token);
       const role = decoded.role;
 
-      localStorage.setItem("name", decoded.name || "User");
-      localStorage.setItem("email", decoded.sub || formData.email || "");
-      localStorage.setItem("token", token);
-      localStorage.setItem("role", role || "");
-      localStorage.setItem("usn", decoded.usn || "");
-      localStorage.setItem("semester", decoded.semester || "");
-      localStorage.setItem("department", decoded.studentDepartment || "");
+      sessionStorage.setItem("name", decoded.name || "User");
+      sessionStorage.setItem("email", decoded.sub || cleanEmail || "");
+      sessionStorage.setItem("token", token);
+      sessionStorage.setItem("role", role || "");
+      sessionStorage.setItem("usn", decoded.usn || "");
+      sessionStorage.setItem("semester", decoded.semester || "");
+      sessionStorage.setItem("department", decoded.studentDepartment || "");
+
+      // Clear shared localStorage so multiple tabs never conflict
+      localStorage.removeItem("name");
+      localStorage.removeItem("email");
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("usn");
+      localStorage.removeItem("semester");
+      localStorage.removeItem("department");
+
       login(token, role);
 
       // ALWAYS NAVIGATE STRICTLY TO EXISTING HOME PAGE (/home) AFTER ACADION TRANSITION FINISHES
@@ -63,17 +84,20 @@ function Login() {
       // Trigger full-screen movie reveal strictly after successful login of an APPROVED account
       setShowMovieReveal(true);
     } catch (error) {
-      const errorMessage = error.response?.data;
+      const errorData = error.response?.data;
+      const errorMessage = typeof errorData === "string" ? errorData : errorData?.message || error.message;
 
       if (typeof errorMessage === "string" && errorMessage.toLowerCase().includes("approval")) {
         toast.error("Your account is awaiting administrator approval.");
       } else if (typeof errorMessage === "string" && errorMessage.toLowerCase().includes("not found")) {
         toast.error("Account not found. Please register first.");
+      } else if (typeof errorMessage === "string" && errorMessage.toLowerCase().includes("password")) {
+        toast.error("Invalid password. Please check your credentials.");
       } else {
         toast.error(
-          error.response?.data?.message ||
-          error.response?.data ||
-          "Login Failed. Please check your credentials."
+          typeof errorMessage === "string" && errorMessage.length < 80
+            ? errorMessage
+            : "Login Failed. Please check your credentials."
         );
       }
     } finally {
@@ -94,7 +118,6 @@ function Login() {
       )}
 
       <div className="login-page-video-wrapper">
-        <Toaster position="top-right" />
 
         {/* FULL-PAGE MOVING LOGIN MP4 BACKGROUND VIDEO */}
         <video

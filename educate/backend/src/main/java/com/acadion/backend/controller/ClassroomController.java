@@ -63,9 +63,30 @@ public class ClassroomController {
         return ResponseEntity.ok(classroomService.getClassroomDetails(id, email));
     }
 
+    // 4b. Update Classroom Settings (Teacher owner or Admin)
+    @PutMapping("/{id}")
+    public ResponseEntity<ClassroomResponse> updateClassroom(
+            @PathVariable("id") String id,
+            @RequestBody com.acadion.backend.dto.classroom.UpdateClassroomRequest request,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.updateClassroom(id, request, email));
+    }
+
+    // 4c. Delete Classroom (Teacher owner or Admin)
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> deleteClassroom(
+            @PathVariable("id") String id,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.deleteClassroom(id, email));
+    }
+
     // 5. Upload Roster (CSV / XLSX)
-    @PostMapping(value = "/{id}/roster/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<RosterImportSummary> importRoster(
+    @PostMapping(value = {"/{id}/upload-roster", "/{id}/roster/import"}, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<RosterImportSummary> uploadRoster(
             @PathVariable("id") String id,
             @RequestParam("file") MultipartFile file,
             Principal principal
@@ -73,6 +94,40 @@ public class ClassroomController {
         String email = getAuthenticatedEmail(principal);
         RosterImportSummary summary = classroomService.importRoster(id, file, email);
         return ResponseEntity.ok(summary);
+    }
+
+    // 5b. Parse Roster File (Excel / CSV) - Checks USNs in DB without enrolling yet
+    @PostMapping(value = "/{id}/roster/parse", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<com.acadion.backend.dto.classroom.RosterParseResult> parseRosterPreview(
+            @PathVariable("id") String id,
+            @RequestParam("file") MultipartFile file,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.parseRosterPreview(id, file, email));
+    }
+
+    // 5c. Enroll Batch of Students (All or Selected from parsed list)
+    @PostMapping("/{id}/roster/enroll-batch")
+    public ResponseEntity<Map<String, Object>> enrollBatch(
+            @PathVariable("id") String id,
+            @RequestBody com.acadion.backend.dto.classroom.BulkEnrollRequest request,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.enrollBatch(id, request, email));
+    }
+
+    // 5d. Add Single Student manually by USN or Email
+    @PostMapping("/{id}/add-student")
+    public ResponseEntity<Map<String, Object>> addStudent(
+            @PathVariable("id") String id,
+            @RequestBody com.acadion.backend.dto.classroom.AddStudentRequest request,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        Map<String, Object> result = classroomService.addStudent(id, request, email);
+        return ResponseEntity.ok(result);
     }
 
     // 6. Get Classroom Members (Teacher only)
@@ -83,6 +138,16 @@ public class ClassroomController {
     ) {
         String email = getAuthenticatedEmail(principal);
         return ResponseEntity.ok(classroomService.getClassroomMembers(id, email));
+    }
+
+    // 6b. Remove All Members from Classroom (Teacher only)
+    @DeleteMapping("/{id}/members")
+    public ResponseEntity<Map<String, Object>> removeAllMembers(
+            @PathVariable("id") String id,
+            Principal principal
+    ) {
+        String email = getAuthenticatedEmail(principal);
+        return ResponseEntity.ok(classroomService.removeAllMembers(id, email));
     }
 
     // 7. Student Submits Join-Code Request

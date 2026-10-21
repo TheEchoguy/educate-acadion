@@ -30,7 +30,9 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+
+@WebMvcTest(ClassroomController.class)
 @AutoConfigureMockMvc(addFilters = false)
 public class ClassroomControllerTest {
 
@@ -42,6 +44,12 @@ public class ClassroomControllerTest {
 
     @MockBean
     private ClassroomService classroomService;
+
+    @MockBean
+    private com.acadion.backend.security.JwtFilter jwtFilter;
+
+    @MockBean
+    private com.acadion.backend.security.JwtUtil jwtUtil;
 
     @Test
     @WithMockUser(username = "teacher@acadion.com", authorities = {"TEACHER", "ROLE_TEACHER"})

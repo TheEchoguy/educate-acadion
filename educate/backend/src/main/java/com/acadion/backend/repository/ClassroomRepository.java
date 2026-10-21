@@ -12,5 +12,7 @@ public interface ClassroomRepository extends MongoRepository<Classroom, String> 
 
     Optional<Classroom> findByJoinCodeHash(String joinCodeHash);
 
+    Optional<Classroom> findByJoinCode(String joinCode);
+
     List<Classroom> findByDepartmentAndSemesterAndStatus(String department, Integer semester, String status);
 }

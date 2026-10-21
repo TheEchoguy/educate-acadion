@@ -8,6 +8,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Builder
@@ -20,6 +22,8 @@ public class Classroom {
     private String id;
 
     private String name;
+
+    private String courseCode;
 
     private String subjectName;
 
@@ -59,6 +63,18 @@ public class Classroom {
     private LocalDateTime joinCodeExpiresAt;
 
     /**
+     * List of enrolled student IDs
+     */
+    @Builder.Default
+    private List<String> studentIds = new ArrayList<>();
+
+    /**
+     * Enrolled student snapshot detail list
+     */
+    @Builder.Default
+    private List<EnrolledStudent> enrolledStudents = new ArrayList<>();
+
+    /**
      * Status: ACTIVE, INACTIVE, ARCHIVED
      */
     @Builder.Default
@@ -77,6 +93,22 @@ public class Classroom {
 
     public void setSchedulingInputsVerified(boolean schedulingInputsVerified) {
         this.schedulingInputsVerified = schedulingInputsVerified;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class EnrolledStudent {
+        private String studentId;
+        private String usn;
+        private String name;
+        private String email;
+        private LocalDateTime joinedAt;
+        @Builder.Default
+        private String status = "ENROLLED";
+        @Builder.Default
+        private boolean verifiedInDb = true;
     }
 }
 

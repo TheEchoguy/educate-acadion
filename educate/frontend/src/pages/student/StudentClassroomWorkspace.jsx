@@ -1,18 +1,24 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import toast from "react-hot-toast";
 import { getClassroomDetails } from "../../services/classroomService";
 import StudentSyllabusView from "../../components/syllabus/student/StudentSyllabusView";
+import EvaluationSchemeConfig from "../../components/classroom/EvaluationSchemeConfig";
+import StudentPerformanceView from "./StudentPerformanceView";
+import RagStudyTutorSection from "../../components/classroom/RagStudyTutorSection";
 import "./StudentClassrooms.css";
 
 function StudentClassroomWorkspace() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [classroom, setClassroom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const initialTab = searchParams.get("tab") || "syllabus";
+  const [activeTab, setActiveTab] = useState(initialTab === "tutor" || initialTab === "rag" ? "tutor" : initialTab);
 
   useEffect(() => {
     let active = true;
@@ -128,8 +134,85 @@ function StudentClassroomWorkspace() {
               </div>
             </div>
 
-            {/* STUDENT SYLLABUS & REVISION WORKSPACE */}
-            <StudentSyllabusView classroomId={id} />
+            {/* TABS ROW */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+              <button
+                type="button"
+                className={`ssm-subtab-btn ${activeTab === "syllabus" ? "active" : ""}`}
+                onClick={() => setActiveTab("syllabus")}
+                style={{
+                  background: activeTab === "syllabus" ? "#9333ea" : "rgba(255, 255, 255, 0.05)",
+                  color: "#ffffff",
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                📖 Syllabus & Revision
+              </button>
+              <button
+                type="button"
+                className={`ssm-subtab-btn ${activeTab === "scheme" ? "active" : ""}`}
+                onClick={() => setActiveTab("scheme")}
+                style={{
+                  background: activeTab === "scheme" ? "#9333ea" : "rgba(255, 255, 255, 0.05)",
+                  color: "#ffffff",
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                ⚖️ Evaluation Scheme
+              </button>
+              <button
+                type="button"
+                className={`ssm-subtab-btn ${activeTab === "performance" ? "active" : ""}`}
+                onClick={() => setActiveTab("performance")}
+                style={{
+                  background: activeTab === "performance" ? "#9333ea" : "rgba(255, 255, 255, 0.05)",
+                  color: "#ffffff",
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                📊 My Performance & Analytics
+              </button>
+              <button
+                type="button"
+                className={`ssm-subtab-btn ${activeTab === "tutor" ? "active" : ""}`}
+                onClick={() => setActiveTab("tutor")}
+                style={{
+                  background: activeTab === "tutor" ? "linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)" : "rgba(255, 255, 255, 0.05)",
+                  color: "#ffffff",
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: activeTab === "tutor" ? "1px solid rgba(56, 189, 248, 0.6)" : "1px solid rgba(255, 255, 255, 0.1)",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  boxShadow: activeTab === "tutor" ? "0 4px 16px rgba(6, 182, 212, 0.35)" : "none",
+                }}
+              >
+                🤖 AI Study Tutor (RAG)
+              </button>
+            </div>
+
+            {/* TAB CONTENTS */}
+            {activeTab === "syllabus" && <StudentSyllabusView classroomId={id} />}
+            {activeTab === "scheme" && <EvaluationSchemeConfig classroomId={id} isTeacher={false} />}
+            {activeTab === "performance" && <StudentPerformanceView classroomId={id} />}
+            {activeTab === "tutor" && (
+              <RagStudyTutorSection classroomId={id} classroomName={classroom?.name} isTeacher={false} />
+            )}
           </>
         )}
       </div>

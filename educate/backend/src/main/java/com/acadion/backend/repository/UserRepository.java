@@ -24,5 +24,17 @@ public interface UserRepository
 
     Optional<User> findByUsn(String usn);
 
+    Optional<User> findFirstByUsn(String usn);
+
+    Optional<User> findByUsnIgnoreCase(String usn);
+
+    Optional<User> findFirstByUsnIgnoreCase(String usn);
+
+    Optional<User> findByEmailIgnoreCase(String email);
+
+    Optional<User> findFirstByEmailIgnoreCase(String email);
+
+    boolean existsByUsn(String usn);
+
     List<User> findBySemester(Integer semester);
 }
