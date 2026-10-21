@@ -53,7 +53,7 @@ public class AcademicIntelligenceController {
      * Download dynamic blank Excel template (.xlsx) for any IA (1, 2, or 3) containing ONLY
      * confirmed sub-question columns for that IA pre-populated with enrolled students.
      */
-    @GetMapping({"/download-ia-template", "/download-sample-template"})
+    @GetMapping({"/download-ia-template", "/download-sample-template", "/export-ia-report"})
     public ResponseEntity<byte[]> downloadIaTemplate(
             @PathVariable("classroomId") String classroomId,
             @RequestParam(value = "iaNumber", defaultValue = "1") int iaNumber
@@ -224,6 +224,19 @@ public class AcademicIntelligenceController {
     ) {
         Map<String, Object> status = iaMarksIngestionService.getIaPublishStatus(classroomId);
         return ResponseEntity.ok(status);
+    }
+
+    /**
+     * Reset and wipe all recorded marks for a specific IA test (or all if iaNumber == 0).
+     */
+    @DeleteMapping("/reset-ia-marks")
+    public ResponseEntity<Map<String, Object>> resetIaMarks(
+            @PathVariable("classroomId") String classroomId,
+            @RequestParam(value = "iaNumber", defaultValue = "1") int iaNumber
+    ) {
+        log.info("Resetting marks for classroom {}, IA={}", classroomId, iaNumber);
+        Map<String, Object> result = iaMarksIngestionService.resetIaMarks(classroomId, iaNumber);
+        return ResponseEntity.ok(result);
     }
 
     /**

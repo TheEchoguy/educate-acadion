@@ -15,6 +15,7 @@ import {
   generateBlueprint,
   publishIaMarks,
   getIaPublishStatus,
+  resetIaMarks,
 } from "../../services/classroomService";
 import "./IaMarksUploadSection.css";
 import TeacherClassAnalyticsView from "./TeacherClassAnalyticsView";
@@ -39,6 +40,8 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
   // Publish / Draft Confirmation State
   const [publishStatus, setPublishStatus] = useState(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isIngestedDropdownOpen, setIsIngestedDropdownOpen] = useState(true);
+  const [isResettingMarks, setIsResettingMarks] = useState(false);
 
   // Blueprint & Paper Parser State
   const [blueprint, setBlueprint] = useState(null);
@@ -519,6 +522,44 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
       });
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  // 4. Reset Marks for a specific IA or All IAs
+  const handleResetMarks = async (iaNum = selectedIa) => {
+    const iaLabel = iaNum === 0 ? "ALL Internal Assessments (IA-1, IA-2, and IA-3)" : `IA-${iaNum}`;
+    const confirmed = window.confirm(
+      `⚠️ RESET CONFIRMATION:\n\nAre you sure you want to completely RESET and delete all student marks for ${iaLabel}?\n\nThis will remove all entered/ingested scores for ${iaLabel} in ${classroomName || "this classroom"}. This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsResettingMarks(true);
+      setFeedback(null);
+      const res = await resetIaMarks(classroomId, iaNum);
+
+      // Clear manual marks cache
+      setManualMarks({});
+      setIaRecords([]);
+
+      setFeedback({
+        type: "success",
+        message: res.message || `Successfully reset marks for ${iaLabel}. All records have been cleared.`,
+      });
+
+      // Reload records and publish status
+      await Promise.all([
+        loadIaRecords(selectedIa),
+        loadPublishStatus(),
+      ]);
+    } catch (err) {
+      console.error("Failed to reset marks:", err);
+      setFeedback({
+        type: "error",
+        message: err.response?.data?.message || `Failed to reset marks for ${iaLabel}.`,
+      });
+    } finally {
+      setIsResettingMarks(false);
     }
   };
 
@@ -1338,15 +1379,51 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
         </div>
       )}
 
-      {/* Ingested Records Display Section */}
-      <div className="ia-records-section">
-        <div className="ia-records-header">
-          <div>
-            <h3>📋 Ingested IA Marks & Module Mastery</h3>
-            <p>Inspect student question-wise breakdown and module mastery percentages.</p>
+      {/* Ingested Records Display Section (Collapsible Dropdown Accordion) */}
+      <div className={`ia-records-section ${isIngestedDropdownOpen ? "open" : "collapsed"}`}>
+        <div
+          className="ia-records-header ia-records-header-clickable"
+          onClick={() => setIsIngestedDropdownOpen((prev) => !prev)}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="ia-accordion-chevron" title={isIngestedDropdownOpen ? "Click to collapse" : "Click to expand"}>
+              {isIngestedDropdownOpen ? "▲" : "▼"}
+            </span>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0 }}>📋 Ingested IA Marks & Module Mastery</h3>
+                <span className="bp-status-badge default" style={{ fontSize: "0.76rem", padding: "3px 8px" }}>
+                  IA-{selectedIa}
+                </span>
+                <span className="bp-status-badge" style={{ fontSize: "0.76rem", padding: "3px 8px" }}>
+                  {filteredRecords.length} Student{filteredRecords.length !== 1 ? "s" : ""}
+                </span>
+                {isCurrentIaPublished ? (
+                  <span className="bp-status-badge locked" style={{ fontSize: "0.76rem", padding: "3px 8px" }}>
+                    ✅ Published
+                  </span>
+                ) : (
+                  <span
+                    className="bp-status-badge default"
+                    style={{
+                      background: "rgba(234, 179, 8, 0.15)",
+                      color: "#facc15",
+                      borderColor: "rgba(234, 179, 8, 0.3)",
+                      fontSize: "0.76rem",
+                      padding: "3px 8px",
+                    }}
+                  >
+                    🟡 Draft
+                  </span>
+                )}
+              </div>
+              <p style={{ margin: "4px 0 0 0", color: "#94a3b8", fontSize: "0.85rem" }}>
+                Inspect student question-wise breakdown and module mastery percentages. (Click header to {isIngestedDropdownOpen ? "collapse" : "expand"})
+              </p>
+            </div>
           </div>
 
-          <div className="ia-view-filter-group">
+          <div className="ia-view-filter-group" onClick={(e) => e.stopPropagation()}>
             <div className="ia-filter-pills">
               {[1, 2, 3].map((num) => (
                 <button
@@ -1372,91 +1449,154 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
           </div>
         </div>
 
-        {/* TEACHER CONFIRMATION & PUBLICATION CONTROL BANNER */}
-        <div
-          className="bp-preset-bar"
-          style={{
-            margin: "16px 0 20px 0",
-            padding: "14px 18px",
-            background: isCurrentIaPublished ? "rgba(16, 185, 129, 0.1)" : "rgba(234, 179, 8, 0.08)",
-            borderColor: isCurrentIaPublished ? "rgba(16, 185, 129, 0.3)" : "rgba(234, 179, 8, 0.25)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#ffffff" }}>
-              IA-{selectedIa} Visibility Status:
-            </span>
-            {isCurrentIaPublished ? (
-              <span className="bp-status-badge locked" style={{ padding: "4px 10px", fontSize: "0.82rem" }}>
-                ✅ Published to Students ({publishStatus?.[`ia${selectedIa}PublishedCount`] || filteredRecords.length} records)
-              </span>
-            ) : (
-              <span
-                className="bp-status-badge default"
-                style={{
-                  background: "rgba(234, 179, 8, 0.15)",
-                  color: "#facc15",
-                  borderColor: "rgba(234, 179, 8, 0.3)",
-                  padding: "4px 10px",
-                  fontSize: "0.82rem",
-                }}
-              >
-                🟡 DRAFT (Unpublished) — Students cannot see these marks yet
-              </span>
-            )}
-          </div>
+        {/* Collapsible Dropdown Content */}
+        {isIngestedDropdownOpen && (
+          <>
+            {/* ACTION TOOLBAR: DOWNLOAD IA EXCEL & RESET MARKS BUTTONS */}
+            <div className="ia-records-action-bar">
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn-action-download-excel"
+                  onClick={() => handleDownloadSingleIaTemplate(selectedIa)}
+                  disabled={isDownloading}
+                  title={`Download Excel sheet of IA-${selectedIa} with all current student marks and formulas pre-populated`}
+                >
+                  {isDownloading ? (
+                    <>
+                      <span className="ia-spinner" /> Preparing Excel...
+                    </>
+                  ) : (
+                    <>📥 Download IA-{selectedIa} Excel</>
+                  )}
+                </button>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            {isCurrentIaPublished ? (
-              <button
-                type="button"
-                className="btn-preset"
-                onClick={() => handlePublishIaMarks(selectedIa, false)}
-                disabled={isPublishing}
-                style={{ color: "#f87171", borderColor: "rgba(248, 113, 113, 0.3)" }}
-              >
-                {isPublishing ? "Updating..." : "🔒 Unpublish IA-" + selectedIa + " (Revert to Draft)"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn-confirm-lock"
-                onClick={() => handlePublishIaMarks(selectedIa, true)}
-                disabled={isPublishing || filteredRecords.length === 0}
-                style={{
-                  background: "linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)",
-                  borderColor: "#60a5fa",
-                  padding: "8px 18px",
-                  fontSize: "0.88rem",
-                }}
-                title="Confirm and publish these marks so students can view them on their dashboard"
-              >
-                {isPublishing ? (
-                  <>
-                    <span className="ia-spinner" /> Publishing...
-                  </>
-                ) : (
-                  <>📢 Publish IA-{selectedIa} Marks to Students</>
-                )}
-              </button>
-            )}
+                <button
+                  type="button"
+                  className="btn-export-report"
+                  onClick={handleExportMasterReport}
+                  disabled={isDownloading}
+                  style={{ padding: "8px 14px", fontSize: "0.82rem" }}
+                  title="Export full master workbook covering all 3 IAs and Assignments"
+                >
+                  📊 Export Master Sheet (All IAs)
+                </button>
+              </div>
 
-            <button
-              type="button"
-              className="btn-preset"
-              onClick={() => handlePublishIaMarks(0, true)}
-              disabled={isPublishing || filteredRecords.length === 0}
-              title="Confirm & publish all 3 IAs simultaneously"
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn-action-reset-marks"
+                  onClick={() => handleResetMarks(selectedIa)}
+                  disabled={isResettingMarks || filteredRecords.length === 0}
+                  title={`Wipe and reset all entered/ingested marks for IA-${selectedIa}`}
+                >
+                  {isResettingMarks ? (
+                    <>
+                      <span className="ia-spinner" /> Resetting...
+                    </>
+                  ) : (
+                    <>🗑️ Reset IA-{selectedIa} Marks</>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-action-reset-subtle"
+                  onClick={() => handleResetMarks(0)}
+                  disabled={isResettingMarks}
+                  title="Wipe and reset marks across all 3 IAs simultaneously"
+                >
+                  Reset All IAs
+                </button>
+              </div>
+            </div>
+
+            {/* TEACHER CONFIRMATION & PUBLICATION CONTROL BANNER */}
+            <div
+              className="bp-preset-bar"
+              style={{
+                margin: "4px 0 10px 0",
+                padding: "12px 16px",
+                background: isCurrentIaPublished ? "rgba(16, 185, 129, 0.1)" : "rgba(234, 179, 8, 0.08)",
+                borderColor: isCurrentIaPublished ? "rgba(16, 185, 129, 0.3)" : "rgba(234, 179, 8, 0.25)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
             >
-              📢 Publish All IAs
-            </button>
-          </div>
-        </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#ffffff" }}>
+                  IA-{selectedIa} Visibility Status:
+                </span>
+                {isCurrentIaPublished ? (
+                  <span className="bp-status-badge locked" style={{ padding: "4px 10px", fontSize: "0.82rem" }}>
+                    ✅ Published to Students ({publishStatus?.[`ia${selectedIa}PublishedCount`] || filteredRecords.length} records)
+                  </span>
+                ) : (
+                  <span
+                    className="bp-status-badge default"
+                    style={{
+                      background: "rgba(234, 179, 8, 0.15)",
+                      color: "#facc15",
+                      borderColor: "rgba(234, 179, 8, 0.3)",
+                      padding: "4px 10px",
+                      fontSize: "0.82rem",
+                    }}
+                  >
+                    🟡 DRAFT (Unpublished) — Students cannot see these marks yet
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                {isCurrentIaPublished ? (
+                  <button
+                    type="button"
+                    className="btn-preset"
+                    onClick={() => handlePublishIaMarks(selectedIa, false)}
+                    disabled={isPublishing}
+                    style={{ color: "#f87171", borderColor: "rgba(248, 113, 113, 0.3)" }}
+                  >
+                    {isPublishing ? "Updating..." : "🔒 Unpublish IA-" + selectedIa + " (Revert to Draft)"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-confirm-lock"
+                    onClick={() => handlePublishIaMarks(selectedIa, true)}
+                    disabled={isPublishing || filteredRecords.length === 0}
+                    style={{
+                      background: "linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)",
+                      borderColor: "#60a5fa",
+                      padding: "8px 18px",
+                      fontSize: "0.88rem",
+                    }}
+                    title="Confirm and publish these marks so students can view them on their dashboard"
+                  >
+                    {isPublishing ? (
+                      <>
+                        <span className="ia-spinner" /> Publishing...
+                      </>
+                    ) : (
+                      <>📢 Publish IA-{selectedIa} Marks to Students</>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="btn-preset"
+                  onClick={() => handlePublishIaMarks(0, true)}
+                  disabled={isPublishing || filteredRecords.length === 0}
+                  title="Confirm & publish all 3 IAs simultaneously"
+                >
+                  📢 Publish All IAs
+                </button>
+              </div>
+            </div>
 
         {isLoadingRecords ? (
           <div className="ia-empty-state">
@@ -1557,6 +1697,8 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
               </tbody>
             </table>
           </div>
+        )}
+          </>
         )}
       </div>
 
