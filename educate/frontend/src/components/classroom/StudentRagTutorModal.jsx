@@ -279,9 +279,9 @@ const StudentRagTutorModal = ({
 
   return (
     <div className="rag-drawer-backdrop" onClick={onClose}>
-      <div className="rag-drawer-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="rag-drawer-panel flex flex-col h-screen max-h-screen overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* HEADER */}
-        <div className="rag-header">
+        <div className="rag-header flex-shrink-0">
           <div className="rag-header-left">
             <div className="rag-bot-avatar">🤖</div>
             <div>
@@ -309,7 +309,7 @@ const StudentRagTutorModal = ({
         </div>
 
         {/* MESSAGES AREA */}
-        <div className="rag-messages-area">
+        <div className="rag-messages-area flex-1 min-h-0 overflow-y-auto">
           {messages.map((msg, idx) => (
             <div key={idx} className={`rag-msg ${msg.sender}`}>
               <div className="rag-bubble">
@@ -369,7 +369,7 @@ const StudentRagTutorModal = ({
         </div>
 
         {/* QUICK PROMPTS */}
-        <div className="rag-quick-prompts-area">
+        <div className="rag-quick-prompts-area flex-shrink-0">
           {quickPrompts.map((p, idx) => (
             <button
               key={idx}
@@ -384,7 +384,7 @@ const StudentRagTutorModal = ({
         </div>
 
         {/* INPUT BAR */}
-        <div className="rag-input-bar">
+        <div className="rag-input-bar flex-shrink-0 border-t border-slate-700/60">
           <input
             type="text"
             className="rag-input"

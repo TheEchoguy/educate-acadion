@@ -1,5 +1,6 @@
 package com.acadion.backend.dto.intelligence;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,6 +15,7 @@ import java.util.Map;
 public class ModuleNotesStatusResponse {
     private String classroomId;
     private int totalIndexedModules;
+    private int totalChunks;
     private Map<String, ModuleInfo> modules;
 
     @Data
@@ -26,5 +28,20 @@ public class ModuleNotesStatusResponse {
         private String fileName;
         private int chunksCount;
         private String indexedAt;
+
+        @JsonProperty("chunks")
+        public int getChunks() {
+            return chunksCount;
+        }
+
+        @JsonProperty("chunkCount")
+        public int getChunkCount() {
+            return chunksCount;
+        }
+
+        @JsonProperty("count")
+        public int getCount() {
+            return chunksCount;
+        }
     }
 }

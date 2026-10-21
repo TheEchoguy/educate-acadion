@@ -847,8 +847,12 @@ def get_indexed_modules(classroom_id: str) -> Dict[str, Any]:
             "moduleNumber": m,
             "name": f"Module {m}",
             "filename": filename,
+            "fileName": filename,
             "chunks": chunks_count,
-            "status": status
+            "chunksCount": chunks_count,
+            "count": chunks_count,
+            "status": status,
+            "indexed": status == "READY"
         })
 
     return {

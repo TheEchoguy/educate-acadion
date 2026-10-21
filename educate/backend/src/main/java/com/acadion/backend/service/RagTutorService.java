@@ -146,21 +146,70 @@ public class RagTutorService {
             ResponseEntity<Map> response = restTemplate.getForEntity(statusUrl, Map.class);
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                Map<String, Object> modulesMap = (Map<String, Object>) body.get("modules");
-                int indexedCount = body.get("totalIndexedModules") instanceof Number ?
-                        ((Number) body.get("totalIndexedModules")).intValue() : 0;
+                Object rawModules = body.get("modules");
+                int indexedCount = 0;
+                int totalChunks = body.get("totalChunks") instanceof Number ?
+                        ((Number) body.get("totalChunks")).intValue() : 0;
 
                 Map<String, ModuleNotesStatusResponse.ModuleInfo> convertedModules = new HashMap<>();
-                if (modulesMap != null) {
+
+                if (rawModules instanceof java.util.List) {
+                    java.util.List<?> list = (java.util.List<?>) rawModules;
+                    for (Object item : list) {
+                        if (item instanceof Map) {
+                            Map<String, Object> m = (Map<String, Object>) item;
+                            int mNum = ((Number) m.getOrDefault("moduleNumber", 0)).intValue();
+                            boolean isIndexed = "READY".equalsIgnoreCase(String.valueOf(m.get("status"))) || Boolean.TRUE.equals(m.get("indexed"));
+                            String fName = m.get("fileName") != null ? String.valueOf(m.get("fileName")) : String.valueOf(m.getOrDefault("filename", ""));
+                            int chunks = 0;
+                            if (m.get("chunks") instanceof Number) {
+                                chunks = ((Number) m.get("chunks")).intValue();
+                            } else if (m.get("chunksCount") instanceof Number) {
+                                chunks = ((Number) m.get("chunksCount")).intValue();
+                            } else if (m.get("count") instanceof Number) {
+                                chunks = ((Number) m.get("count")).intValue();
+                            }
+                            if (isIndexed || chunks > 0) {
+                                indexedCount++;
+                                isIndexed = true;
+                            }
+
+                            convertedModules.put(String.valueOf(mNum), ModuleNotesStatusResponse.ModuleInfo.builder()
+                                    .moduleNumber(mNum)
+                                    .indexed(isIndexed)
+                                    .fileName(fName)
+                                    .chunksCount(chunks)
+                                    .indexedAt(String.valueOf(m.getOrDefault("indexedAt", "")))
+                                    .build());
+                        }
+                    }
+                } else if (rawModules instanceof Map) {
+                    Map<String, Object> modulesMap = (Map<String, Object>) rawModules;
                     for (Map.Entry<String, Object> entry : modulesMap.entrySet()) {
                         if (entry.getValue() instanceof Map) {
                             Map<String, Object> m = (Map<String, Object>) entry.getValue();
+                            int mNum = ((Number) m.getOrDefault("moduleNumber", Integer.parseInt(entry.getKey()))).intValue();
+                            boolean isIndexed = "READY".equalsIgnoreCase(String.valueOf(m.get("status"))) || Boolean.TRUE.equals(m.get("indexed"));
+                            String fName = m.get("fileName") != null ? String.valueOf(m.get("fileName")) : String.valueOf(m.getOrDefault("filename", ""));
+                            int chunks = 0;
+                            if (m.get("chunks") instanceof Number) {
+                                chunks = ((Number) m.get("chunks")).intValue();
+                            } else if (m.get("chunksCount") instanceof Number) {
+                                chunks = ((Number) m.get("chunksCount")).intValue();
+                            } else if (m.get("count") instanceof Number) {
+                                chunks = ((Number) m.get("count")).intValue();
+                            }
+                            if (isIndexed || chunks > 0) {
+                                indexedCount++;
+                                isIndexed = true;
+                            }
+
                             convertedModules.put(entry.getKey(), ModuleNotesStatusResponse.ModuleInfo.builder()
-                                    .moduleNumber(((Number) m.getOrDefault("moduleNumber", 0)).intValue())
-                                    .indexed(Boolean.TRUE.equals(m.get("indexed")))
-                                    .fileName((String) m.get("fileName"))
-                                    .chunksCount(((Number) m.getOrDefault("chunksCount", 0)).intValue())
-                                    .indexedAt((String) m.get("indexedAt"))
+                                    .moduleNumber(mNum)
+                                    .indexed(isIndexed)
+                                    .fileName(fName)
+                                    .chunksCount(chunks)
+                                    .indexedAt(String.valueOf(m.getOrDefault("indexedAt", "")))
                                     .build());
                         }
                     }
@@ -169,6 +218,7 @@ public class RagTutorService {
                 return ModuleNotesStatusResponse.builder()
                         .classroomId(classroomId)
                         .totalIndexedModules(indexedCount)
+                        .totalChunks(totalChunks)
                         .modules(convertedModules)
                         .build();
             }

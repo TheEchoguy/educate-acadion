@@ -103,6 +103,22 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/student/chat-tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
+      <Route
+        path="/student/rag-tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
+      <Route
         path="/teacher/tutor"
         element={
           <ErrorBoundary>
@@ -111,7 +127,23 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/teacher/chat-tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
+      <Route
         path="/tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
+      <Route
+        path="/chat-tutor"
         element={
           <ErrorBoundary>
             <ChatTutorPage />
