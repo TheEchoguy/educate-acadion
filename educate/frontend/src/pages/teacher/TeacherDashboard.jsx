@@ -21,98 +21,66 @@ function TeacherDashboard() {
 
   const teacherModules = [
     {
-      id: "classrooms",
-      title: "Classroom Hub",
-      tag: "STUDENT ROSTER & CONNECTIONS",
-      badgeColor: "purple",
-      icon: "🏫",
-      path: "/teacher/classrooms",
-      image: imgPapers,
-      description: "Manage academic classrooms, batch-enroll students via Excel/CSV rosters, and review join code requests.",
-      features: [
-        "Excel/CSV Batch Student Import",
-        "Unique 6-Character Join Code",
-        "Student Verification & Approval Gate",
-      ],
-      actionText: "Open Classrooms",
-    },
-    {
-      id: "create_paper",
-      title: "Question Paper Hub",
-      tag: "PAPER GENERATOR & EDITOR",
+      id: "papers_studio",
+      title: "Question Papers & Evaluation Studio",
+      tag: "QUESTION PAPERS & EVALUATION STUDIO",
       badgeColor: "purple",
       icon: "📝",
-      path: "/teacher/manage-papers",
+      path: "/teacher/papers",
       image: imgPapers,
-      description: "Generate AI question papers from PDF uploads, edit question banks, and publish exam papers for students.",
+      description: "Upload and extract question papers, configure IA blueprints, evaluate student answer submissions, and manage practice permissions.",
       features: [
-        "PDF Upload & Auto Question Extraction",
-        "Interactive Question Bank Editor",
-        "One-Click Exam Publication",
+        "AI Question Extraction & Blueprint Config",
+        "Practice Permissions & Self-Testing",
+        "Direct Answer Evaluation Studio",
       ],
-      actionText: "Manage Question Papers",
+      actionText: "Open Papers & Studio",
     },
     {
-      id: "evaluate",
-      title: "Evaluate Submissions",
-      tag: "AUTOMATED ANSWER GRADING",
-      badgeColor: "blue",
-      icon: "✍️",
-      path: "/teacher/evaluate",
-      image: imgEvaluate,
-      description: "Review student response scripts, grade answers, assign marks, and provide constructive feedback.",
+      id: "ia_marks",
+      title: "IA Split Marks & Ingestion",
+      tag: "DYNAMIC INGESTION & SUB-MARKS",
+      badgeColor: "green",
+      icon: "📊",
+      path: "/teacher/classrooms",
+      image: imgManual,
+      description: "Download dynamic IA templates, ingest question-wise sub-marks (1a, 1b...), and manage classroom marks sheets.",
       features: [
-        "AI-Assisted Answer Evaluation",
-        "Granular Question-wise Marking",
-        "Constructive Student Feedback",
+        "Unified Master Split-Up Sheet Ingestion",
+        "Sub-Question Breakdown (1a..4d @ 10M)",
+        "Dynamic Blank Excel Template Generation",
       ],
-      actionText: "Evaluate Responses",
+      actionText: "Open Marks & Ingestion",
     },
     {
-      id: "analytics",
-      title: "Class Analytics",
-      tag: "PERFORMANCE METRICS",
+      id: "class_performance",
+      title: "Class Performance & AI Risk Watchlist",
+      tag: "ML RISK CLASSIFIER & SHAP INSIGHTS",
       badgeColor: "amber",
-      icon: "📈",
+      icon: "🚨",
       path: "/teacher/analytics",
       image: imgAnalytics,
-      description: "View class pass percentage, score distributions, topic mastery insights, and student risk flags.",
+      description: "Analyze whole-class topic mastery heatmaps, module 1–5 drop rates, and SHAP-explained student risk predictions.",
       features: [
-        "Class Pass / Fail Trajectory",
-        "Topic Weak-Spot Analytics",
-        "Score Distribution Graphs",
+        "4-Level Multi-Scale Mastery Heatmaps",
+        "ML Student Risk Classifier & Watchlist",
+        "SHAP Explainable AI Academic Diagnosis",
       ],
-      actionText: "View Class Analytics",
-    },
-    {
-      id: "manual_marks",
-      title: "Manual Marks Entry",
-      tag: "INTERNAL ASSESSMENT",
-      badgeColor: "green",
-      icon: "📋",
-      path: "/teacher/manual-marks",
-      image: imgManual,
-      description: "Record offline IA test marks, lab scores, attendance ratings, and export department marksheets.",
-      features: [
-        "Offline IA Marks Recording",
-        "Department Marksheet Exports",
-        "Attendance & Lab Ratings",
-      ],
-      actionText: "Open Marks Entry",
+      actionText: "View Performance & Risk",
     },
     {
       id: "ppt_generator",
-      title: "AI PPT Generator",
-      tag: "SLIDE DECK & OUTLINE GENERATOR",
+      title: "AI PPT Generator & Studio",
+      tag: "AI PRESENTATION STUDIO",
       badgeColor: "purple",
-      icon: "📊",
+      icon: "✨",
       path: "/teacher/ppt-generator",
       image: imgPapers,
-      description: "Convert lecture notes into multi-part widescreen PowerPoint presentations with AI topic extraction, figure detection, and interactive visual editing.",
+      description: "Generate syllabus-aligned PowerPoint presentations and lecture decks from module notes.",
       features: [
         "Full Notes Upload & Topic Discovery",
-        "Multi-Part Series & Figure Extraction",
-        "Visual Slide Canvas Editor & Export",
+        "Multi-Part Widescreen Series Generation",
+        "Visual Slide Canvas Editor & PPTX Export",
       ],
       actionText: "Launch PPT Generator",
     },
@@ -158,7 +126,7 @@ function TeacherDashboard() {
           <div className="welcome-text-side">
             <span className="role-pill-purple">👨‍🏫 Faculty &amp; Teaching Portal</span>
             <h1>Welcome back, <span className="highlight-text">{teacherName}</span> 👋</h1>
-            <p className="subtext">Upload question papers with AI extraction, grade student responses, analyze class reports, and record internal marks.</p>
+            <p className="subtext">Upload question papers with AI extraction, configure IA blueprints, evaluate student responses, and monitor ML student risk watchlists.</p>
           </div>
           <div className="user-chips-side">
             <span className="clean-meta-chip">Department: {teacherDept}</span>
@@ -250,77 +218,63 @@ function TeacherDashboard() {
         {/* CLEAN SOLID DARK MODULE CARDS GRID BELOW */}
         <div className="grid-section-header">
           <h2>Faculty Workspace Modules</h2>
-          <p>Direct workspace cards for question paper management, answer evaluation, class analytics, and IA marks entry.</p>
+          <p>Consolidated workspace cards for question paper management, IA split marks ingestion, whole-class performance analytics, and lecture deck generation.</p>
         </div>
 
         <div className="clean-modules-grid">
-          {/* Card 1: Question Papers */}
-          <div className="clean-grid-card border-purple" onClick={() => navigate("/teacher/manage-papers")}>
+          {/* Card 1: Question Papers & Evaluation Studio */}
+          <div className="clean-grid-card border-purple" onClick={() => navigate("/teacher/papers")}>
             <div className="card-top-bar">
-              <div className="card-badge purple">QUESTION PAPERS</div>
+              <div className="card-badge purple">PAPERS &amp; EVALUATION</div>
               <span className="card-arrow">→</span>
             </div>
-            <h3>📝 Question Paper Hub</h3>
-            <p>Upload PDF question papers, edit questions, and publish exam papers.</p>
+            <h3>📝 Question Papers &amp; Evaluation Studio</h3>
+            <p>Upload and extract question papers, configure IA blueprints, evaluate student answer submissions, and manage practice permissions.</p>
             <div className="card-footer-meta">
-              <span>• PDF Parsing</span>
-              <span>• Editor</span>
+              <span>• Paper Extraction &amp; Blueprints</span>
+              <span>• Practice &amp; Grading Studio</span>
             </div>
           </div>
 
-          {/* Card 2: Evaluate Responses */}
-          <div className="clean-grid-card border-blue" onClick={() => navigate("/teacher/evaluate")}>
+          {/* Card 2: IA Split Marks & Ingestion */}
+          <div className="clean-grid-card border-green" onClick={() => navigate("/teacher/classrooms")}>
             <div className="card-top-bar">
-              <div className="card-badge blue">GRADING</div>
+              <div className="card-badge green">IA MARKS &amp; INGESTION</div>
               <span className="card-arrow">→</span>
             </div>
-            <h3>✍️ Evaluate Submissions</h3>
-            <p>Grade student answers, assign marks, and provide constructive feedback.</p>
+            <h3>📊 IA Split Marks &amp; Ingestion</h3>
+            <p>Download dynamic IA templates, ingest question-wise sub-marks (1a, 1b...), and manage classroom marks sheets.</p>
             <div className="card-footer-meta">
-              <span>• Question Marking</span>
-              <span>• Feedback</span>
+              <span>• Dynamic Blank Templates</span>
+              <span>• 1a..4d Sub-Marks Ingestion</span>
             </div>
           </div>
 
-          {/* Card 3: Class Analytics */}
+          {/* Card 3: Class Performance & AI Risk Watchlist */}
           <div className="clean-grid-card border-amber" onClick={() => navigate("/teacher/analytics")}>
             <div className="card-top-bar">
-              <div className="card-badge amber">ANALYTICS</div>
+              <div className="card-badge amber">ANALYTICS &amp; ML RISK</div>
               <span className="card-arrow">→</span>
             </div>
-            <h3>📈 Class Performance</h3>
-            <p>Analyze pass percentage, score distribution, and topic weak spots.</p>
+            <h3>🚨 Class Performance &amp; AI Risk Watchlist</h3>
+            <p>Analyze whole-class topic mastery heatmaps, module 1–5 drop rates, and SHAP-explained student risk predictions.</p>
             <div className="card-footer-meta">
-              <span>• Pass Trajectory</span>
-              <span>• Weak Spots</span>
+              <span>• 4-Level Mastery Heatmaps</span>
+              <span>• SHAP Explainable AI</span>
             </div>
           </div>
 
-          {/* Card 4: Manual Marks Entry */}
-          <div className="clean-grid-card border-green" onClick={() => navigate("/teacher/manual-marks")}>
-            <div className="card-top-bar">
-              <div className="card-badge green">IA MARKS</div>
-              <span className="card-arrow">→</span>
-            </div>
-            <h3>📋 Manual Marks Entry</h3>
-            <p>Record offline IA test marks, lab ratings, and export marksheets.</p>
-            <div className="card-footer-meta">
-              <span>• Offline IA</span>
-              <span>• Export CSV</span>
-            </div>
-          </div>
-
-          {/* Card 5: AI PPT Generator */}
+          {/* Card 4: AI PPT Generator & Studio */}
           <div className="clean-grid-card border-purple" onClick={() => navigate("/teacher/ppt-generator")}>
             <div className="card-top-bar">
-              <div className="card-badge purple">PPT GENERATOR</div>
+              <div className="card-badge purple">AI PPT STUDIO</div>
               <span className="card-arrow">→</span>
             </div>
-            <h3>📊 AI PPT Generator</h3>
-            <p>Upload lecture notes, discover topics, edit slides in real-time, and download presentations.</p>
+            <h3>✨ AI PPT Generator &amp; Studio</h3>
+            <p>Generate syllabus-aligned PowerPoint presentations and lecture decks from module notes.</p>
             <div className="card-footer-meta">
               <span>• Multi-Part Series</span>
-              <span>• Visual Editor</span>
+              <span>• Visual Slide Editor</span>
             </div>
           </div>
         </div>

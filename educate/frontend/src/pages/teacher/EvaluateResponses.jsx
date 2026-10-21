@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { jwtDecode } from "jwt-decode";
 import {
@@ -18,6 +18,7 @@ import "./EvaluateResponses.css";
 
 function EvaluateResponses() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Extract Teacher Email from localStorage or Token
   const token = localStorage.getItem("token") || "";
@@ -50,10 +51,10 @@ function EvaluateResponses() {
   // Verification Form State
   const [verifyPassword, setVerifyPassword] = useState("");
   const [verifySubject, setVerifySubject] = useState(
-    sessionStorage.getItem("teacher_verified_subject") || ""
+    location.state?.subject || sessionStorage.getItem("teacher_verified_subject") || ""
   );
   const [verifySemester, setVerifySemester] = useState(
-    sessionStorage.getItem("teacher_verified_semester") || "6"
+    location.state?.semester || sessionStorage.getItem("teacher_verified_semester") || "6"
   );
   const [verifyLoading, setVerifyLoading] = useState(false);
 
@@ -63,8 +64,8 @@ function EvaluateResponses() {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL"); // ALL, PENDING, EVALUATED
-  const [selectedSemester, setSelectedSemester] = useState(verifySemester || "ALL");
-  const [selectedSubject, setSelectedSubject] = useState(verifySubject || "ALL");
+  const [selectedSemester, setSelectedSemester] = useState(location.state?.semester || verifySemester || "ALL");
+  const [selectedSubject, setSelectedSubject] = useState(location.state?.subject || verifySubject || "ALL");
 
   // Active Evaluation Modal State
   const [activeModalResponse, setActiveModalResponse] = useState(null);

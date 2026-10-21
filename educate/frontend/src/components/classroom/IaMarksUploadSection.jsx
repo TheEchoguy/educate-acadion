@@ -125,25 +125,53 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
           { code: "4b", maxMarks: 10, questionNumber: "4" },
         ];
 
+  const sanitizeBlueprint = (bp) => {
+    if (!bp || !Array.isArray(bp.questions)) return bp;
+    const grouped = {};
+    const cleanList = [];
+    for (const q of bp.questions) {
+      const qn = String(q.questionNumber || "").trim();
+      if (!["1", "2", "3", "4"].includes(qn)) continue;
+      const sub = String(q.subQuestion || "").toLowerCase().trim();
+      if (!["a", "b", "c", "d"].includes(sub)) continue;
+      if (!grouped[qn]) grouped[qn] = new Set();
+      if (grouped[qn].has(sub) || grouped[qn].size >= 4) continue;
+      grouped[qn].add(sub);
+      cleanList.push({
+        ...q,
+        questionNumber: qn,
+        subQuestion: sub,
+        code: `${qn}${sub}`,
+        maxMarks: q.maxMarks > 0 ? q.maxMarks : 10.0,
+      });
+    }
+    cleanList.sort((a, b) => a.code.localeCompare(b.code));
+    return { ...bp, questions: cleanList };
+  };
+
   const calculateStudentTotal = (usn) => {
     const qMarks = manualMarks[usn.toUpperCase()] || {};
     const m1a = parseFloat(qMarks["1a"]) || 0;
     const m1b = parseFloat(qMarks["1b"]) || 0;
     const m1c = parseFloat(qMarks["1c"]) || 0;
+    const m1d = parseFloat(qMarks["1d"]) || 0;
     const m2a = parseFloat(qMarks["2a"]) || 0;
     const m2b = parseFloat(qMarks["2b"]) || 0;
     const m2c = parseFloat(qMarks["2c"]) || 0;
+    const m2d = parseFloat(qMarks["2d"]) || 0;
     const m3a = parseFloat(qMarks["3a"]) || 0;
     const m3b = parseFloat(qMarks["3b"]) || 0;
     const m3c = parseFloat(qMarks["3c"]) || 0;
+    const m3d = parseFloat(qMarks["3d"]) || 0;
     const m4a = parseFloat(qMarks["4a"]) || 0;
     const m4b = parseFloat(qMarks["4b"]) || 0;
     const m4c = parseFloat(qMarks["4c"]) || 0;
+    const m4d = parseFloat(qMarks["4d"]) || 0;
 
-    const q1 = m1a + m1b + m1c;
-    const q2 = m2a + m2b + m2c;
-    const q3 = m3a + m3b + m3c;
-    const q4 = m4a + m4b + m4c;
+    const q1 = m1a + m1b + m1c + m1d;
+    const q2 = m2a + m2b + m2c + m2d;
+    const q3 = m3a + m3b + m3c + m3d;
+    const q4 = m4a + m4b + m4c + m4d;
 
     const partA = Math.max(q1, q2);
     const partB = Math.max(q3, q4);
@@ -209,7 +237,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
     try {
       setIsLoadingBlueprint(true);
       const data = await getBlueprint(classroomId, iaNum);
-      setBlueprint(data);
+      setBlueprint(sanitizeBlueprint(data));
     } catch (err) {
       console.error("Failed to load blueprint:", err);
     } finally {
@@ -224,10 +252,11 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
       setIsParsingPaper(true);
       setFeedback(null);
       const updated = await parseQuestionPaper(classroomId, paperFile, selectedIa);
-      setBlueprint(updated);
+      const cleanBp = sanitizeBlueprint(updated);
+      setBlueprint(cleanBp);
       setFeedback({
         type: "success",
-        message: `Successfully extracted blueprint from '${paperFile.name}'! (${updated.questions?.length || 0} sub-questions identified: ${updated.questions?.map(q => q.code).join(", ")}).`,
+        message: `Successfully extracted blueprint from '${paperFile.name}'! (${cleanBp.questions?.length || 0} sub-questions identified: ${cleanBp.questions?.map(q => q.code).join(", ")}).`,
       });
       setPaperFile(null);
       const input = document.getElementById("ia-paper-file-input");
@@ -277,7 +306,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
         q3Count: count,
         q4Count: count,
       });
-      setBlueprint(res);
+      setBlueprint(sanitizeBlueprint(res));
       setFeedback({
         type: "success",
         message: `Switched layout to ${count * 4} questions (${count} sub-questions per main question @ ${count === 2 ? "10M each" : "5M, 5M, 10M"}).`,
@@ -297,11 +326,11 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
     if (!blueprint) return;
     const currentQuestions = blueprint.questions || [];
     const existing = currentQuestions.filter((q) => q.questionNumber === String(qNum));
-    if (existing.length >= 3) {
-      alert(`Maximum 3 sub-questions allowed for Q${qNum} (${qNum}a, ${qNum}b, ${qNum}c).`);
+    if (existing.length >= 4) {
+      alert(`Maximum 4 sub-questions allowed for Q${qNum} (${qNum}a, ${qNum}b, ${qNum}c, ${qNum}d).`);
       return;
     }
-    const nextChar = String.fromCharCode(97 + existing.length); // 'a', 'b', 'c'
+    const nextChar = String.fromCharCode(97 + existing.length); // 'a', 'b', 'c', 'd'
     const part = (qNum === "1" || qNum === "2") ? "PART-A" : "PART-B";
     const choiceGroup = (qNum === "1" || qNum === "2") ? "Q1_OR_Q2" : "Q3_OR_Q4";
     const co = (qNum === "1" || qNum === "2")
@@ -355,7 +384,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
       setIsSavingBlueprint(true);
       setFeedback(null);
       const res = await updateBlueprint(classroomId, blueprint, selectedIa, applyToAll, false);
-      setBlueprint(res);
+      setBlueprint(sanitizeBlueprint(res));
       setFeedback({
         type: "success",
         message: `Blueprint draft saved for IA-${selectedIa}${applyToAll ? " (propagated to all 3 IAs)" : ""}!`,
@@ -376,7 +405,7 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
       setIsConfirmingBlueprint(true);
       setFeedback(null);
       const res = await updateBlueprint(classroomId, blueprint, selectedIa, applyToAll, true);
-      setBlueprint(res);
+      setBlueprint(sanitizeBlueprint(res));
       setFeedback({
         type: "success",
         message: `✅ Blueprint Confirmed & Locked for IA-${selectedIa}${applyToAll ? " (Applied to IA-1, IA-2, and IA-3)" : ""}! Downloadable Excel blank templates and the marks parser are now dynamically synchronized to these exact question columns.`,
@@ -892,16 +921,16 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
                   partName: "PART A",
                   partBadge: "PART A (Choice Group Q1_OR_Q2) • Answer Q1 OR Q2",
                   mainQuestions: [
-                    { num: "1", title: "Question 1", sub: blueprint.questions.filter((q) => q.questionNumber === "1") },
-                    { num: "2", title: "Question 2", sub: blueprint.questions.filter((q) => q.questionNumber === "2") },
+                    { num: "1", title: "Question 1", sub: (blueprint.questions || []).filter((q) => q.questionNumber === "1" && ["a", "b", "c", "d"].includes(q.subQuestion?.toLowerCase())).slice(0, 4) },
+                    { num: "2", title: "Question 2", sub: (blueprint.questions || []).filter((q) => q.questionNumber === "2" && ["a", "b", "c", "d"].includes(q.subQuestion?.toLowerCase())).slice(0, 4) },
                   ],
                 },
                 {
                   partName: "PART B",
                   partBadge: "PART B (Choice Group Q3_OR_Q4) • Answer Q3 OR Q4",
                   mainQuestions: [
-                    { num: "3", title: "Question 3", sub: blueprint.questions.filter((q) => q.questionNumber === "3") },
-                    { num: "4", title: "Question 4", sub: blueprint.questions.filter((q) => q.questionNumber === "4") },
+                    { num: "3", title: "Question 3", sub: (blueprint.questions || []).filter((q) => q.questionNumber === "3" && ["a", "b", "c", "d"].includes(q.subQuestion?.toLowerCase())).slice(0, 4) },
+                    { num: "4", title: "Question 4", sub: (blueprint.questions || []).filter((q) => q.questionNumber === "4" && ["a", "b", "c", "d"].includes(q.subQuestion?.toLowerCase())).slice(0, 4) },
                   ],
                 },
               ].map((partSection, pIdx) => (
@@ -927,8 +956,8 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
                             type="button"
                             className="btn-add-subq"
                             onClick={() => handleAddSubQuestion(mq.num)}
-                            title={`Add sub-question (${mq.num}c)`}
-                            disabled={mq.sub.length >= 3}
+                            title={mq.sub.length >= 4 ? "Maximum 4 sub-questions reached" : `Add sub-question (${mq.num}${String.fromCharCode(97 + mq.sub.length)})`}
+                            disabled={mq.sub.length >= 4}
                           >
                             + Add Sub-Question
                           </button>

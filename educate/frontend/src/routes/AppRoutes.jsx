@@ -66,6 +66,7 @@ function AppRoutes() {
       <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
       <Route path="/teacher/upload-paper" element={<UploadPaper />} />
       <Route path="/teacher/manage-papers" element={<ManagePapers />} />
+      <Route path="/teacher/papers" element={<ManagePapers />} />
       <Route path="/teacher/create-paper" element={<CreateQuestionPaper />} />
       <Route path="/teacher/edit-paper/:id" element={<EditPaper />} />
       <Route path="/teacher/evaluate" element={<EvaluateResponses />} />
