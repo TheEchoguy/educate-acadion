@@ -37,6 +37,10 @@ import SyllabusTrackingWorkspacePage from "../pages/teacher/SyllabusTrackingWork
 import SyllabusSchedulingWorkspacePage from "../pages/teacher/SyllabusSchedulingWorkspacePage";
 import EvaluationSchemeWorkspacePage from "../pages/teacher/EvaluationSchemeWorkspacePage";
 import IaMarksWorkspacePage from "../pages/teacher/IaMarksWorkspacePage";
+import ClassroomCurriculumWorkspacePage from "../pages/teacher/ClassroomCurriculumWorkspacePage";
+import ClassPerformanceWorkspacePage from "../pages/teacher/ClassPerformanceWorkspacePage";
+import RagTutorWorkspacePage from "../pages/teacher/RagTutorWorkspacePage";
+import ClassroomFeaturePicker from "../pages/teacher/ClassroomFeaturePicker";
 import TeacherPptGenerator from "../pages/teacher/TeacherPptGenerator";
 import QuizGenerator from "../pages/teacher/QuizGenerator";
 import StudentClassrooms from "../pages/student/StudentClassrooms";
@@ -67,10 +71,14 @@ function AppRoutes() {
       <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
       <Route path="/teacher/upload-paper" element={<UploadPaper />} />
       <Route path="/teacher/manage-papers" element={<ManagePapers />} />
+      <Route path="/teacher/papers" element={<ManagePapers />} />
+      <Route path="/teacher/papers/create" element={<CreateQuestionPaper />} />
       <Route path="/teacher/create-paper" element={<CreateQuestionPaper />} />
       <Route path="/teacher/edit-paper/:id" element={<EditPaper />} />
       <Route path="/teacher/evaluate" element={<EvaluateResponses />} />
-      <Route path="/teacher/analytics" element={<TeacherAnalytics />} />
+      <Route path="/teacher/analytics" element={<ClassroomFeaturePicker featureKey="analytics" />} />
+      <Route path="/teacher/ia-marks" element={<ClassroomFeaturePicker featureKey="ia-marks" />} />
+      <Route path="/teacher/rag-tutor" element={<ClassroomFeaturePicker featureKey="rag-tutor" />} />
       <Route path="/teacher/manual-marks" element={<ManualMarksEntry />} />
       <Route path="/teacher/paper-analysis" element={<UploadedPaperAnalysis />} />
       <Route path="/teacher/paper-analysis/:id" element={<UploadedPaperAnalysis />} />
@@ -79,11 +87,14 @@ function AppRoutes() {
       <Route path="/teacher/classrooms/:id" element={<ClassroomWorkspaceSelection />} />
       <Route path="/teacher/classrooms/:id/workspaces" element={<ClassroomWorkspaceSelection />} />
       <Route path="/teacher/classrooms/:id/management" element={<ClassroomManagementWorkspacePage />} />
-      <Route path="/teacher/classrooms/:id/syllabus-tracking" element={<SyllabusTrackingWorkspacePage />} />
-      <Route path="/teacher/classrooms/:id/syllabus-scheduling" element={<SyllabusSchedulingWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/curriculum" element={<ClassroomCurriculumWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/syllabus-tracking" element={<ClassroomCurriculumWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/syllabus-scheduling" element={<ClassroomCurriculumWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/evaluation-scheme" element={<EvaluationSchemeWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/ia-marks" element={<IaMarksWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/intelligence" element={<IaMarksWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/analytics" element={<ClassPerformanceWorkspacePage />} />
+      <Route path="/teacher/classrooms/:id/rag-tutor" element={<RagTutorWorkspacePage />} />
       <Route path="/teacher/ppt-generator" element={<TeacherPptGenerator />} />
       <Route path="/teacher/quiz-generator" element={<QuizGenerator />} />
 

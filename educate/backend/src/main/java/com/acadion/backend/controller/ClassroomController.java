@@ -205,7 +205,7 @@ public class ClassroomController {
     }
 
     // 12. Regenerate Join Code (Teacher only)
-    @PostMapping("/{id}/join-code/regenerate")
+    @PostMapping(value = {"/{id}/join-code/regenerate", "/{id}/regenerate-code"})
     public ResponseEntity<RegenerateJoinCodeResponse> regenerateJoinCode(
             @PathVariable("id") String id,
             Principal principal

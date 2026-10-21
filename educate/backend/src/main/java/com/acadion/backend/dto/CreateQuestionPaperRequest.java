@@ -91,6 +91,15 @@ public class CreateQuestionPaperRequest {
         // Correct answer option (A, B, C, D or text)
         private String correctAnswer;
 
+        // "A" | "B" | "C" | "D"
+        private String correctOption;
+
+        // Prompt stem
+        private String prompt;
+
+        // Module number
+        private Integer module;
+
         // Solution explanation / rationale
         private String explanation;
     }

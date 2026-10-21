@@ -82,18 +82,6 @@ function Navbar() {
                   >
                     Classrooms
                   </button>
-                  <button
-                    className={`nav-pill-btn ${location.pathname.startsWith("/teacher/ppt-generator") ? "active" : ""}`}
-                    onClick={() => navigate("/teacher/ppt-generator")}
-                  >
-                    PPT Generator
-                  </button>
-                  <button
-                    className={`nav-pill-btn ${location.pathname.startsWith("/teacher/quiz-generator") ? "active" : ""}`}
-                    onClick={() => navigate("/teacher/quiz-generator")}
-                  >
-                    Quiz Generator
-                  </button>
                 </>
               )}
             </div>

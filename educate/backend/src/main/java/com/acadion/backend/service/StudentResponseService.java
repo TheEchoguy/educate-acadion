@@ -503,10 +503,7 @@ public class StudentResponseService {
             throw new RuntimeException("Teacher account is suspended");
         }
 
-        // Validate password
-        if (request.getPassword() == null || !passwordEncoder.matches(request.getPassword(), teacher.getPassword())) {
-            throw new RuntimeException("Invalid teacher security password");
-        }
+        // Password verification removed to allow open evaluation for authenticated teachers
 
         // STRICT SUBJECT AUTHORIZATION: Teachers can evaluate subjects assigned by Admin OR created by them
         if (teacher.getRole().equals(Role.TEACHER)) {

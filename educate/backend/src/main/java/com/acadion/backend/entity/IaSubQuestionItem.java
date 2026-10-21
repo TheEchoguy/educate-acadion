@@ -19,4 +19,12 @@ public class IaSubQuestionItem {
     private int moduleNumber;      // 1 to 5
     private String co;             // "CO1".."CO5"
     private String topicName;
+    private String questionText;
+
+    @Builder.Default
+    private String questionType = "THEORY"; // "THEORY" or "MCQ"
+    private String prompt;
+    private java.util.List<String> options;
+    private String correctOption;
+    private String explanation;
 }

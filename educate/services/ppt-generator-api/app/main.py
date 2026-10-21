@@ -36,6 +36,8 @@ from app.models import (
 from app.ppt_generator import PPTGenerator
 from app.api import app
 
+# Expose FastAPI application instance for ASGI servers (e.g. uvicorn app.main:app)
+from app.api import app
 
 def create_arg_parser() -> argparse.ArgumentParser:
     """Construct CLI argument parser with document ingestion options."""
