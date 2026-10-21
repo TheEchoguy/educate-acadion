@@ -1,0 +1,31 @@
+# ==============================================================================
+# Acadion Backend Local Developer Overrides (Ignored by Git)
+# Copy this file to application-local.properties in the same directory.
+# Location: educate/backend/src/main/resources/application-local.properties
+# ==============================================================================
+
+# MongoDB Connection String
+SPRING_DATA_MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/acadiondb?retryWrites=true&w=majority
+SPRING_DATA_MONGODB_DATABASE=acadiondb
+
+# JWT Secret Key (Required: Minimum 256-bit secure secret key)
+APP_JWT_SECRET=AcadionSecretKeyForJwtAuthenticationSuperSecureKey2026
+APP_JWT_EXPIRATION=86400000
+
+# Brevo / SMTP Email Service Configuration (Optional)
+SPRING_MAIL_HOST=smtp-relay.brevo.com
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=
+SPRING_MAIL_PASSWORD=
+APP_MAIL_FROM=Acadion <studentquizportal01@gmail.com>
+
+# Multimodal AI Model Configuration (Optional: Google Gemini)
+GEMINI_API_KEY=
+
+# OpenRouter AI Configuration (Optional)
+OPENROUTER_API_KEY=
+AI_OPENROUTER_MODEL=openrouter/free
+AI_RECOMMENDATION_PROVIDER=AUTO
+
+# OCR Tessdata Path
+TESSDATA_PATH=tessdata
