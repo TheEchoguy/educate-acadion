@@ -19,7 +19,6 @@ function StudentDashboard() {
 
   // Classroom Live Integration
   const [enrolledClassrooms, setEnrolledClassrooms] = useState([]);
-  const [loadingClassrooms, setLoadingClassrooms] = useState(false);
   const [joinCodeInput, setJoinCodeInput] = useState("");
   const [joiningClassroom, setJoiningClassroom] = useState(false);
 
@@ -122,32 +121,40 @@ function StudentDashboard() {
     },
   ];
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const storedEmail = sessionStorage.getItem("email") || localStorage.getItem("email");
-        const storedUsn = sessionStorage.getItem("usn") || localStorage.getItem("usn");
-        const data = await getMyProfile(storedEmail, storedUsn);
-        if (data) setProfile(data);
-      } catch (err) {
-        console.log("Could not load student profile", err);
-      }
-    };
-    fetchProfile();
-    loadClassrooms();
-  }, []);
-
   const loadClassrooms = async () => {
     try {
-      setLoadingClassrooms(true);
       const data = await getStudentClassrooms();
       setEnrolledClassrooms(data || []);
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoadingClassrooms(false);
     }
   };
+
+  useEffect(() => {
+    let ignore = false;
+    const initData = async () => {
+      try {
+        const storedEmail = sessionStorage.getItem("email") || localStorage.getItem("email");
+        const storedUsn = sessionStorage.getItem("usn") || localStorage.getItem("usn");
+        const data = await getMyProfile(storedEmail, storedUsn);
+        if (!ignore && data) setProfile(data);
+      } catch (err) {
+        console.log("Could not load student profile", err);
+      }
+
+      try {
+        const classrooms = await getStudentClassrooms();
+        if (!ignore && classrooms) setEnrolledClassrooms(classrooms);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    initData();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const handleJoinClassroom = async (e) => {
     e.preventDefault();
@@ -275,10 +282,20 @@ function StudentDashboard() {
         <div className="topic-showcase-banner">
           <div
             className="showcase-reel-track"
-            style={{ transform: `translateX(-${activeModuleSlide * 25}%)` }}
+            style={{
+              width: `${studentModules.length * 100}%`,
+              transform: `translateX(-${(activeModuleSlide * 100) / studentModules.length}%)`,
+            }}
           >
             {studentModules.map((mod) => (
-              <div key={mod.id} className="showcase-reel-item">
+              <div
+                key={mod.id}
+                className="showcase-reel-item"
+                style={{
+                  width: `${100 / studentModules.length}%`,
+                  flex: `0 0 ${100 / studentModules.length}%`,
+                }}
+              >
                 <div
                   className="topic-photo-slide active-zoom"
                   style={{ backgroundImage: `url(${mod.image})` }}

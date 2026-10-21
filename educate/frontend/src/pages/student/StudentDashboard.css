@@ -99,7 +99,6 @@
 /* SLOW, ELEGANT HORIZONTAL REEL TRACK (1.3s SMOOTH CAMERA MOTION ACROSS DESKTOP) */
 .showcase-reel-track {
   display: flex;
-  width: 400%; /* 4 MODULE SLIDES LAID OUT SIDE-BY-SIDE */
   height: 100%;
   min-height: 440px;
   transition: transform 1.3s cubic-bezier(0.65, 0, 0.35, 1);
@@ -107,12 +106,12 @@
 }
 
 .showcase-reel-item {
-  width: 25%; /* EACH SLIDE OCCUPIES EXACT 100% OF BANNER VIEWPORT */
   height: 100%;
   min-height: 440px;
   position: relative;
   overflow: hidden;
   display: flex;
+  flex-shrink: 0;
 }
 
 .topic-photo-slide {
