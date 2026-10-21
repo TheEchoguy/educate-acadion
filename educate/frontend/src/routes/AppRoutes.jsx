@@ -40,6 +40,7 @@ import IaMarksWorkspacePage from "../pages/teacher/IaMarksWorkspacePage";
 import StudentClassrooms from "../pages/student/StudentClassrooms";
 import StudentClassroomWorkspace from "../pages/student/StudentClassroomWorkspace";
 import ChatTutorPage from "../pages/student/ChatTutorPage";
+import ErrorBoundary from "../components/common/ErrorBoundary";
 
 function AppRoutes() {
   return (
@@ -91,8 +92,30 @@ function AppRoutes() {
       <Route path="/student/results" element={<MyResults />} />
       <Route path="/student/performance" element={<StudentPerformance />} />
       <Route path="/student/practice" element={<PracticePapers />} />
-      <Route path="/student/tutor" element={<ChatTutorPage />} />
-      <Route path="/tutor" element={<ChatTutorPage />} />
+      <Route
+        path="/student/tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
+      <Route
+        path="/teacher/tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
+      <Route
+        path="/tutor"
+        element={
+          <ErrorBoundary>
+            <ChatTutorPage />
+          </ErrorBoundary>
+        }
+      />
     </Routes>
   );
 }

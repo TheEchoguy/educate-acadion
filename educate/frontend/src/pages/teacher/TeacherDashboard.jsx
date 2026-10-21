@@ -433,7 +433,7 @@ function TeacherDashboard() {
       </div>
 
       {/* Floating Chatbot Launch Widget */}
-      <FloatingChatbotWidget targetPath="/student/tutor" />
+      <FloatingChatbotWidget targetPath="/teacher/tutor" />
     </div>
   );
 }

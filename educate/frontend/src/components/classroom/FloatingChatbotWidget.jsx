@@ -2,12 +2,24 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./FloatingChatbotWidget.css";
 
-function FloatingChatbotWidget({ defaultClassroomId = null, targetPath = "/student/tutor" }) {
+function FloatingChatbotWidget({ defaultClassroomId = null, targetPath = null }) {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
 
+  const storedRole = (
+    sessionStorage.getItem("role") ||
+    localStorage.getItem("role") ||
+    ""
+  ).toUpperCase();
+  const isTeacher =
+    storedRole.includes("TEACHER") ||
+    storedRole.includes("INSTRUCTOR") ||
+    storedRole.includes("FACULTY");
+
+  const resolvedPath = targetPath || (isTeacher ? "/teacher/tutor" : "/student/tutor");
+
   const handleOpenChat = (promptQuery = null) => {
-    let url = targetPath;
+    let url = resolvedPath;
     const params = new URLSearchParams();
     if (defaultClassroomId) {
       params.append("classroomId", defaultClassroomId);

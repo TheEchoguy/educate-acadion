@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   getStudentClassrooms,
+  getTeacherClassrooms,
   askRagTutor,
   getModuleNotesStatus,
 } from "../../services/classroomService";
@@ -11,6 +12,17 @@ import "./ChatTutorPage.css";
 function ChatTutorPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // Role detection
+  const storedRole = (
+    sessionStorage.getItem("role") ||
+    localStorage.getItem("role") ||
+    ""
+  ).toUpperCase();
+  const isTeacher =
+    storedRole.includes("TEACHER") ||
+    storedRole.includes("INSTRUCTOR") ||
+    storedRole.includes("FACULTY");
 
   // Classroom Selection State
   const [classrooms, setClassrooms] = useState([]);
@@ -41,13 +53,16 @@ function ChatTutorPage() {
     scrollToBottom();
   }, [messages, isLoading]);
 
-  // Load Enrolled Classrooms
+  // Load Enrolled / Taught Classrooms based on user role
   useEffect(() => {
     let active = true;
-    getStudentClassrooms()
-      .then((data) => {
+
+    const fetchClassrooms = async () => {
+      try {
+        const fetchFn = isTeacher ? getTeacherClassrooms : getStudentClassrooms;
+        const data = await fetchFn();
         if (active) {
-          const clsList = data || [];
+          const clsList = Array.isArray(data) ? data : [];
           setClassrooms(clsList);
           if (clsList.length > 0 && !selectedClassroomId) {
             setSelectedClassroomId(String(clsList[0].id));
@@ -55,24 +70,33 @@ function ChatTutorPage() {
           } else if (selectedClassroomId) {
             const found = clsList.find((c) => String(c.id) === String(selectedClassroomId));
             if (found) setSelectedClassroom(found);
+          } else {
+            setSelectedClassroomId("1");
           }
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.warn("Could not fetch classrooms, defaulting to general mode", err);
-        // Fallback default
-        setSelectedClassroomId("1");
-      });
+        if (active) {
+          setClassrooms([]);
+          if (!selectedClassroomId) {
+            setSelectedClassroomId("1");
+          }
+        }
+      }
+    };
+
+    fetchClassrooms();
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [isTeacher]);
 
   // Sync selectedClassroom when selectedClassroomId changes
   useEffect(() => {
-    if (classrooms.length > 0 && selectedClassroomId) {
-      const found = classrooms.find((c) => String(c.id) === String(selectedClassroomId));
+    const list = Array.isArray(classrooms) ? classrooms : [];
+    if (list.length > 0 && selectedClassroomId) {
+      const found = list.find((c) => String(c.id) === String(selectedClassroomId));
       setSelectedClassroom(found || null);
     }
     if (selectedClassroomId) {
@@ -84,7 +108,7 @@ function ChatTutorPage() {
     try {
       setLoadingStatus(true);
       const res = await getModuleNotesStatus(cid);
-      setNotesStatus(res);
+      setNotesStatus(res || null);
     } catch (err) {
       console.warn("Notes status fetch error", err);
       // Fallback mock status to display complete module readiness
@@ -104,11 +128,46 @@ function ChatTutorPage() {
     }
   };
 
+  // Convert modules structure (Map or Array) into guaranteed Array
+  const getModulesArray = (status) => {
+    const defaultModules = [
+      { moduleNumber: 1, name: "Introduction to IoT", filename: "IoT_Module1_Notes.pdf", chunks: 74, status: "READY" },
+      { moduleNumber: 2, name: "IoT Networking & Protocols", filename: "IoT_Module2_Notes.pdf", chunks: 86, status: "READY" },
+      { moduleNumber: 3, name: "Design & System Management (SNMP/NETCONF)", filename: "IoT_Module3_Notes.pdf", chunks: 68, status: "READY" },
+      { moduleNumber: 4, name: "Cloud & Data Analytics", filename: "IoT_Module4_Notes.pdf", chunks: 79, status: "READY" },
+      { moduleNumber: 5, name: "IoT Security & Case Studies", filename: "IoT_Module5_Notes.pdf", chunks: 75, status: "READY" },
+    ];
+
+    if (!status || !status.modules) {
+      return defaultModules;
+    }
+
+    if (Array.isArray(status.modules)) {
+      return status.modules;
+    }
+
+    if (typeof status.modules === "object") {
+      const arr = Object.entries(status.modules).map(([key, val]) => {
+        const mNum = val?.moduleNumber || parseInt(key, 10) || 1;
+        return {
+          moduleNumber: mNum,
+          name: val?.name || `Module ${mNum}`,
+          filename: val?.fileName || val?.filename || `IoT_Module${mNum}_Notes.pdf`,
+          chunks: val?.chunksCount || val?.chunks || 0,
+          status: val?.indexed || val?.status === "READY" ? "READY" : "NOT_INDEXED",
+        };
+      });
+      return arr.length > 0 ? arr : defaultModules;
+    }
+
+    return defaultModules;
+  };
+
   // If initial query was passed in searchParams, trigger it automatically once classroom is ready
   const initialTriggerRef = useRef(false);
   useEffect(() => {
     const q = searchParams.get("q");
-    if (q && !initialTriggerRef.current && (selectedClassroomId || classrooms.length > 0)) {
+    if (q && !initialTriggerRef.current && (selectedClassroomId || (Array.isArray(classrooms) && classrooms.length > 0))) {
       initialTriggerRef.current = true;
       handleSendMessage(q);
     }
@@ -142,10 +201,10 @@ function ChatTutorPage() {
       const botMsg = {
         id: "b_" + Date.now(),
         sender: "bot",
-        text: res.answer || "No relevant academic text found for this query in the ingested course notes.",
-        groundedModule: res.groundedModule || (selectedModule ? `Module ${selectedModule}` : null),
-        groundedSection: res.groundedSection || "Curriculum VTU Notes",
-        sources: res.sources || [],
+        text: res?.answer || "No relevant academic text found for this query in the ingested course notes.",
+        groundedModule: res?.groundedModule || (selectedModule ? `Module ${selectedModule}` : null),
+        groundedSection: res?.groundedSection || "Curriculum VTU Notes",
+        sources: Array.isArray(res?.sources) ? res.sources : [],
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
@@ -172,17 +231,15 @@ function ChatTutorPage() {
     }
   };
 
-  // Simple Markdown Formatter
+  // Simple Markdown Formatter with bullet points and code block support
   const renderFormattedText = (rawText) => {
     if (!rawText) return null;
 
-    // Split paragraphs
-    const lines = rawText.split("\n");
-    return lines.map((line, idx) => {
+    const lines = (rawText || "").split("\n");
+    return (lines || []).map((line, idx) => {
       let trimmed = line.trim();
       if (!trimmed) return <div key={idx} style={{ height: "8px" }} />;
 
-      // Header 3
       if (trimmed.startsWith("### ")) {
         return (
           <h4 key={idx} style={{ color: "#38bdf8", margin: "12px 0 6px 0", fontSize: "0.98rem", fontWeight: 700 }}>
@@ -190,7 +247,6 @@ function ChatTutorPage() {
           </h4>
         );
       }
-      // Header 2 / 1
       if (trimmed.startsWith("## ") || trimmed.startsWith("# ")) {
         return (
           <h3 key={idx} style={{ color: "#60a5fa", margin: "16px 0 8px 0", fontSize: "1.08rem", fontWeight: 800 }}>
@@ -199,7 +255,6 @@ function ChatTutorPage() {
         );
       }
 
-      // Bullet points
       if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
         const bulletText = trimmed.substring(2);
         return (
@@ -210,7 +265,6 @@ function ChatTutorPage() {
         );
       }
 
-      // Numbered items (1. 2.)
       const numMatch = trimmed.match(/^([0-9]+\.)\s+(.*)/);
       if (numMatch) {
         return (
@@ -231,8 +285,8 @@ function ChatTutorPage() {
 
   // Helper for **bold** and `code`
   const parseInlineMarkdown = (text) => {
-    const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
-    return parts.map((part, i) => {
+    const parts = (text || "").split(/(\*\*.*?\*\*|`.*?`)/g);
+    return (parts || []).map((part, i) => {
       if (part.startsWith("**") && part.endsWith("**")) {
         return <strong key={i} style={{ color: "#f8fafc", fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
       }
@@ -250,6 +304,10 @@ function ChatTutorPage() {
     { title: "Security Challenges in IoT", desc: "Module 5: 6 core vulnerabilities and mitigation strategies", query: "What are the 6 primary security challenges in IoT deployment and how are they mitigated?" },
   ];
 
+  const safeClassrooms = Array.isArray(classrooms) ? classrooms : [];
+  const safeMessages = Array.isArray(messages) ? messages : [];
+  const safeModulesList = getModulesArray(notesStatus);
+
   return (
     <div className="chat-tutor-viewport">
       {/* HEADER NAVBAR */}
@@ -258,7 +316,7 @@ function ChatTutorPage() {
           <button
             type="button"
             className="chat-back-btn"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(isTeacher ? "/teacher/dashboard" : "/student/dashboard")}
           >
             ← Back to Dashboard
           </button>
@@ -279,6 +337,9 @@ function ChatTutorPage() {
                 <span className="grounded-citation-badge" style={{ fontSize: "0.68rem" }}>
                   RAG ENGINE 2.0
                 </span>
+                <span style={{ fontSize: "0.72rem", color: isTeacher ? "#a855f7" : "#38bdf8", background: "rgba(255,255,255,0.08)", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
+                  {isTeacher ? "FACULTY ACCESS" : "STUDENT ACCESS"}
+                </span>
               </h1>
               <div className="chat-tutor-meta-sub">
                 <span className="chat-live-pulse-dot" />
@@ -289,16 +350,16 @@ function ChatTutorPage() {
         </div>
 
         <div className="chat-tutor-header-right">
-          {classrooms.length > 0 ? (
+          {safeClassrooms.length > 0 ? (
             <select
               className="classroom-select-dropdown"
               value={selectedClassroomId}
               onChange={(e) => setSelectedClassroomId(e.target.value)}
-              title="Select Enrolled Subject / Classroom"
+              title="Select Subject / Classroom"
             >
-              {classrooms.map((c) => (
+              {safeClassrooms.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.subjectCode} - {c.name}
+                  {c.subjectCode || "COURSE"} - {c.name}
                 </option>
               ))}
             </select>
@@ -308,7 +369,7 @@ function ChatTutorPage() {
             </div>
           )}
 
-          {messages.length > 0 && (
+          {safeMessages.length > 0 && (
             <button
               type="button"
               className="chat-clear-btn"
@@ -380,13 +441,7 @@ function ChatTutorPage() {
               <span style={{ color: "#10b981", fontSize: "0.7rem" }}>ChromaDB Ready</span>
             </div>
             <div className="notes-status-card">
-              {(notesStatus?.modules || [
-                { moduleNumber: 1, name: "Intro to IoT", chunks: 74 },
-                { moduleNumber: 2, name: "Protocols & Networking", chunks: 86 },
-                { moduleNumber: 3, name: "System Mgmt (SNMP)", chunks: 68 },
-                { moduleNumber: 4, name: "Cloud & Analytics", chunks: 79 },
-                { moduleNumber: 5, name: "IoT Security & Case Studies", chunks: 75 },
-              ]).map((mod, idx) => (
+              {safeModulesList.map((mod, idx) => (
                 <div key={idx} className="notes-status-item">
                   <span>✓ Module {mod.moduleNumber}: {mod.name}</span>
                   <span className="chunk-count">{mod.chunks} chunks</span>
@@ -422,7 +477,7 @@ function ChatTutorPage() {
         {/* MAIN CHAT CANVAS */}
         <main className="chat-tutor-main">
           <div className="chat-messages-scroll">
-            {messages.length === 0 ? (
+            {safeMessages.length === 0 ? (
               <div className="chat-welcome-hero">
                 <div className="chat-welcome-icon">🎓</div>
                 <h2>Your Academic RAG Study Tutor</h2>
@@ -448,15 +503,15 @@ function ChatTutorPage() {
                 </div>
               </div>
             ) : (
-              messages.map((msg, index) => (
-                <div key={msg.id} className={`chat-bubble-row ${msg.sender}`}>
+              safeMessages.map((msg, index) => (
+                <div key={msg.id || index} className={`chat-bubble-row ${msg.sender}`}>
                   <div className="chat-bubble-avatar">
-                    {msg.sender === "user" ? "ME" : "AI"}
+                    {msg.sender === "user" ? (isTeacher ? "FAC" : "ME") : "AI"}
                   </div>
 
                   <div className="chat-bubble-content-wrap">
                     <div className="chat-bubble-meta">
-                      <span>{msg.sender === "user" ? "You (Student)" : "Acadion Study Tutor"}</span>
+                      <span>{msg.sender === "user" ? (isTeacher ? "Faculty Instructor" : "You (Student)") : "Acadion Study Tutor"}</span>
                       <span>•</span>
                       <span>{msg.timestamp}</span>
                       {msg.groundedModule && (
@@ -474,7 +529,7 @@ function ChatTutorPage() {
                           {renderFormattedText(msg.text)}
 
                           {/* Sources Accordion */}
-                          {msg.sources && msg.sources.length > 0 && (
+                          {Array.isArray(msg.sources) && msg.sources.length > 0 && (
                             <div className="chat-sources-accordion">
                               <button
                                 type="button"
@@ -492,9 +547,9 @@ function ChatTutorPage() {
                                   {msg.sources.map((src, sIdx) => (
                                     <div key={sIdx} className="chat-source-item">
                                       <div className="source-breadcrumb">
-                                        [Module {src.module || "?"} | Section: {src.section || "General"} | Chunk #{src.chunk_id || sIdx + 1}]
+                                        [Module {src.module || "?"} | Page: {src.page || "1"} | Chunk #{src.chunk_id || sIdx + 1}]
                                       </div>
-                                      <div>{src.text || src.content || JSON.stringify(src)}</div>
+                                      <div>{src.content || src.text || JSON.stringify(src)}</div>
                                     </div>
                                   ))}
                                 </div>
