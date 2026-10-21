@@ -20,8 +20,8 @@ function EvaluateResponses() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Extract Teacher Email from localStorage or Token
-  const token = localStorage.getItem("token") || "";
+  // Extract Teacher Email from sessionStorage, localStorage or Token
+  const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
   let decodedEmail = "";
   let decodedName = "";
   let decodedRole = "";
@@ -34,8 +34,8 @@ function EvaluateResponses() {
     } catch (e) {}
   }
 
-  const teacherEmail = localStorage.getItem("email") || decodedEmail;
-  const teacherName = localStorage.getItem("name") || decodedName || "Faculty Member";
+  const teacherEmail = sessionStorage.getItem("email") || localStorage.getItem("email") || decodedEmail;
+  const teacherName = sessionStorage.getItem("name") || localStorage.getItem("name") || decodedName || "Faculty Member";
 
   // Open Assessment Evaluation: Direct access without password/PIN verification
   const [isVerified, setIsVerified] = useState(true);

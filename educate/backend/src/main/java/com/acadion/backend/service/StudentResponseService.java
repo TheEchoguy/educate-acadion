@@ -6,6 +6,7 @@ import com.acadion.backend.entity.Role;
 import com.acadion.backend.entity.StudentResponse;
 import com.acadion.backend.entity.User;
 import com.acadion.backend.mail.EmailSenderService;
+import com.acadion.backend.repository.QuestionPaperRepository;
 import com.acadion.backend.repository.StudentResponseRepository;
 import com.acadion.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 public class StudentResponseService {
 
     private final QuestionPaperService questionPaperService;
+    private final QuestionPaperRepository questionPaperRepository;
     private final StudentResponseRepository studentResponseRepository;
     private final PredictionService predictionService;
     private final UserRepository userRepository;
@@ -37,12 +39,54 @@ public class StudentResponseService {
 
         boolean isOffline = "OFFLINE_MANUAL".equalsIgnoreCase(request.getSubmissionMode());
         boolean isExplicitPractice = Boolean.TRUE.equals(request.getIsPractice()) || "PRACTICE".equalsIgnoreCase(request.getSubmissionMode());
-        boolean isPaperAllowedForPractice = paper != null && (Boolean.TRUE.equals(paper.getAllowedForPractice()) || "PRACTICE".equalsIgnoreCase(paper.getPaperCategory()));
-        boolean isPracticePaper = isExplicitPractice || isPaperAllowedForPractice;
+        boolean isPracticeSubmission = isExplicitPractice;
+        String canonicalPaperId = (paper != null && paper.getPaperId() != null && !paper.getPaperId().isBlank())
+                ? paper.getPaperId()
+                : request.getPaperId();
 
-        List<StudentResponse> existingList = studentResponseRepository.findByUsnOrderBySubmittedAtAsc(request.getUsn())
+        // Robust student user resolution
+        String effectiveUsn = request.getUsn() != null ? request.getUsn().trim() : "";
+        User resolvedStudent = null;
+        if (!effectiveUsn.isEmpty() && !effectiveUsn.equalsIgnoreCase("STUDENT")) {
+            resolvedStudent = userRepository.findByUsn(effectiveUsn).orElse(null);
+            if (resolvedStudent == null) {
+                resolvedStudent = userRepository.findByEmail(effectiveUsn).orElse(null);
+            }
+        }
+
+        if (resolvedStudent == null) {
+            try {
+                org.springframework.security.core.Authentication auth =
+                        org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated() && auth.getName() != null && !auth.getName().equalsIgnoreCase("anonymousUser")) {
+                    resolvedStudent = userRepository.findByEmail(auth.getName()).orElse(null);
+                    if (resolvedStudent == null) {
+                        resolvedStudent = userRepository.findByUsn(auth.getName()).orElse(null);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (resolvedStudent != null) {
+            if (resolvedStudent.getUsn() != null && !resolvedStudent.getUsn().isBlank()) {
+                effectiveUsn = resolvedStudent.getUsn().trim();
+            } else if (effectiveUsn.isEmpty() || effectiveUsn.equalsIgnoreCase("STUDENT")) {
+                effectiveUsn = resolvedStudent.getEmail();
+            }
+        }
+
+        if (effectiveUsn.isEmpty()) {
+            effectiveUsn = "STUDENT";
+        }
+
+        List<StudentResponse> existingList = studentResponseRepository.findByUsnOrderBySubmittedAtAsc(effectiveUsn)
                 .stream()
-                .filter(r -> r.getPaperId().equalsIgnoreCase(request.getPaperId()))
+                .filter(r -> r.getPaperId() != null && (
+                        r.getPaperId().equalsIgnoreCase(request.getPaperId()) ||
+                        r.getPaperId().equalsIgnoreCase(canonicalPaperId) ||
+                        (paper != null && paper.getId() != null && r.getPaperId().equalsIgnoreCase(paper.getId())) ||
+                        (paper != null && paper.getSubjectCode() != null && r.getPaperId().equalsIgnoreCase(paper.getSubjectCode()))
+                ))
                 .toList();
 
         // 1. OFFLINE_MANUAL submission by teacher (Written classroom exams)
@@ -122,7 +166,7 @@ public class StudentResponseService {
 
         StudentResponse existingResponse = existingOnlineList.isEmpty() ? null : existingOnlineList.get(existingOnlineList.size() - 1);
 
-        if (!isPracticePaper && existingResponse != null && !existingResponse.isReExamGranted()) {
+        if (!isPracticeSubmission && existingResponse != null && !existingResponse.isReExamGranted()) {
             throw new RuntimeException("Exam already submitted. Contact your faculty if a re-exam attempt is required.");
         }
 
@@ -192,19 +236,23 @@ public class StudentResponseService {
                 ? paper.getMaxMarks()
                 : (paper != null && paper.getTotalMarks() != null && paper.getTotalMarks() > 0 ? paper.getTotalMarks() : maxMarks);
 
+        String effectivePaperCategory = isPracticeSubmission ? "PRACTICE" : (paper != null && paper.getPaperCategory() != null ? paper.getPaperCategory() : "ASSESSMENT");
+        boolean isEvalCompleted = allMcqEvaluated && !isPracticeSubmission;
+        String evalBy = isEvalCompleted ? "AI Auto-Evaluator (MCQ)" : (isPracticeSubmission ? "Self / Peer Review Required" : null);
+
         StudentResponse response;
-        if (existingResponse != null && (existingResponse.isReExamGranted() || isPracticePaper)) {
+        if (existingResponse != null && (existingResponse.isReExamGranted() || isPracticeSubmission)) {
             // Processing Re-Exam or Practice Retake
             int nextAttempt = (existingResponse.getAttemptCount() != null ? existingResponse.getAttemptCount() : 1) + 1;
             existingResponse.setAttemptCount(nextAttempt);
             existingResponse.setReExamGranted(false);
             existingResponse.setSubmissionMode(isExplicitPractice ? "PRACTICE" : "ONLINE");
-            existingResponse.setIncludeInOverallPercentage(!isPracticePaper);
-            existingResponse.setPaperCategory(isPracticePaper ? "PRACTICE" : (paper != null ? paper.getPaperCategory() : "ASSESSMENT"));
-            existingResponse.setPractice(isPracticePaper);
-            existingResponse.setEvaluationCompleted(allMcqEvaluated && !isPracticePaper);
-            if (allMcqEvaluated) {
-                existingResponse.setEvaluatedBy(isPracticePaper ? "Self / Peer Review Required" : "AI Auto-Evaluator (MCQ)");
+            existingResponse.setIncludeInOverallPercentage(!isPracticeSubmission);
+            existingResponse.setPaperCategory(effectivePaperCategory);
+            existingResponse.setPractice(isPracticeSubmission);
+            existingResponse.setEvaluationCompleted(isEvalCompleted);
+            if (isEvalCompleted || isPracticeSubmission) {
+                existingResponse.setEvaluatedBy(evalBy);
                 existingResponse.setEvaluatedAt(LocalDateTime.now());
             }
             existingResponse.setResponses(answers);
@@ -214,18 +262,19 @@ public class StudentResponseService {
             response = existingResponse;
         } else {
             response = StudentResponse.builder()
-                    .usn(request.getUsn())
-                    .paperId(request.getPaperId())
+                    .usn(effectiveUsn)
+                    .studentId(resolvedStudent != null ? resolvedStudent.getId() : null)
+                    .paperId(canonicalPaperId)
                     .submissionMode(isExplicitPractice ? "PRACTICE" : "ONLINE")
-                    .includeInOverallPercentage(!isPracticePaper)
-                    .paperCategory(isPracticePaper ? "PRACTICE" : (paper != null ? paper.getPaperCategory() : "ASSESSMENT"))
-                    .isPractice(isPracticePaper)
+                    .includeInOverallPercentage(!isPracticeSubmission)
+                    .paperCategory(effectivePaperCategory)
+                    .isPractice(isPracticeSubmission)
                     .responses(answers)
                     .attemptCount(1)
                     .reExamGranted(false)
-                    .evaluationCompleted(allMcqEvaluated && !isPracticePaper)
-                    .evaluatedBy(allMcqEvaluated ? (isPracticePaper ? "Self / Peer Review Required" : "AI Auto-Evaluator (MCQ)") : null)
-                    .evaluatedAt(allMcqEvaluated ? LocalDateTime.now() : null)
+                    .evaluationCompleted(isEvalCompleted)
+                    .evaluatedBy(evalBy)
+                    .evaluatedAt(isEvalCompleted ? LocalDateTime.now() : null)
                     .submittedAt(LocalDateTime.now())
                     .totalMarks(round(totalMarks))
                     .maxMarks(round(paperEffectiveMax))
@@ -406,16 +455,35 @@ public class StudentResponseService {
     // 1. TEACHER SECURITY VERIFICATION & SUBJECT CONFIRMATION GATE
     // =========================================================================
     public Map<String, Object> getMySubjects(String email) {
-        User teacher = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Teacher account not found"));
+        if (email == null || email.isBlank()) {
+            Map<String, Object> empty = new HashMap<>();
+            empty.put("assignedSubjects", Collections.emptyList());
+            return empty;
+        }
+
+        User teacher = userRepository.findByEmail(email).orElse(null);
+
+        Set<String> allAssigned = new LinkedHashSet<>();
+        if (teacher != null && teacher.getAssignedSubjects() != null) {
+            allAssigned.addAll(teacher.getAssignedSubjects());
+        }
+
+        try {
+            List<QuestionPaper> createdPapers = questionPaperRepository.findByCreatedByIgnoreCase(email);
+            for (QuestionPaper p : createdPapers) {
+                if (p.getSubject() != null && !p.getSubject().isBlank()) {
+                    allAssigned.add(p.getSubject().trim());
+                }
+            }
+        } catch (Exception ignored) {}
 
         Map<String, Object> res = new HashMap<>();
-        res.put("name", teacher.getName());
-        res.put("email", teacher.getEmail());
-        res.put("employeeId", teacher.getEmployeeId());
-        res.put("department", teacher.getTeacherDepartment());
-        res.put("role", teacher.getRole().name());
-        res.put("assignedSubjects", teacher.getAssignedSubjects() != null ? teacher.getAssignedSubjects() : new ArrayList<>());
+        res.put("name", teacher != null ? teacher.getName() : "");
+        res.put("email", teacher != null ? teacher.getEmail() : email);
+        res.put("employeeId", teacher != null ? teacher.getEmployeeId() : "");
+        res.put("department", teacher != null ? teacher.getTeacherDepartment() : "");
+        res.put("role", teacher != null && teacher.getRole() != null ? teacher.getRole().name() : "TEACHER");
+        res.put("assignedSubjects", new ArrayList<>(allAssigned));
         return res;
     }
 
@@ -437,11 +505,20 @@ public class StudentResponseService {
 
         // Password verification removed to allow open evaluation for authenticated teachers
 
-        // STRICT SUBJECT AUTHORIZATION: Teachers can only evaluate subjects assigned to them by Admin
+        // STRICT SUBJECT AUTHORIZATION: Teachers can evaluate subjects assigned by Admin OR created by them
         if (teacher.getRole().equals(Role.TEACHER)) {
-            List<String> assigned = teacher.getAssignedSubjects();
-            if (assigned == null || assigned.isEmpty()) {
-                throw new RuntimeException("Unauthorized: No teaching subjects have been allocated to your account yet. Please contact the administrator for subject allocation.");
+            Set<String> assigned = new LinkedHashSet<>(teacher.getAssignedSubjects() != null ? teacher.getAssignedSubjects() : Collections.emptyList());
+            try {
+                List<QuestionPaper> createdPapers = questionPaperRepository.findByCreatedByIgnoreCase(teacher.getEmail());
+                for (QuestionPaper p : createdPapers) {
+                    if (p.getSubject() != null && !p.getSubject().isBlank()) {
+                        assigned.add(p.getSubject().trim());
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            if (assigned.isEmpty()) {
+                throw new RuntimeException("Unauthorized: No teaching subjects have been allocated to your account or created by you yet. Please contact the administrator.");
             }
 
             if (request.getSubject() != null && !request.getSubject().trim().isEmpty() && !request.getSubject().equalsIgnoreCase("ALL")) {
@@ -498,6 +575,12 @@ public class StudentResponseService {
             } catch (Exception ignored) {}
 
             User student = userRepository.findByUsn(resp.getUsn()).orElse(null);
+            if (student == null && resp.getUsn() != null && !resp.getUsn().isBlank()) {
+                student = userRepository.findByEmail(resp.getUsn().trim()).orElse(null);
+            }
+            if (student == null && resp.getStudentId() != null && !resp.getStudentId().isBlank()) {
+                student = userRepository.findById(resp.getStudentId()).orElse(null);
+            }
 
             // Filter conditions
             if (paperId != null && !paperId.trim().isEmpty() && !paperId.equalsIgnoreCase("ALL")) {
@@ -507,8 +590,10 @@ public class StudentResponseService {
             }
 
             if (subject != null && !subject.trim().isEmpty() && !subject.equalsIgnoreCase("ALL")) {
-                String paperSubject = paper != null ? paper.getSubject() : "";
-                if (!paperSubject.toLowerCase().contains(subject.toLowerCase().trim())) {
+                String paperSubject = paper != null && paper.getSubject() != null ? paper.getSubject() : "";
+                String paperCode = paper != null && paper.getSubjectCode() != null ? paper.getSubjectCode() : "";
+                String qSub = subject.toLowerCase().trim();
+                if (!paperSubject.toLowerCase().contains(qSub) && !paperCode.toLowerCase().contains(qSub)) {
                     continue;
                 }
             }
@@ -517,10 +602,10 @@ public class StudentResponseService {
                 boolean semMatches = false;
                 if (student != null && student.getSemester() != null && student.getSemester().equals(semester)) {
                     semMatches = true;
-                } else if (paper != null && paper.getSemester() != null) {
-                    if (paper.getSemester().contains(String.valueOf(semester))) {
-                        semMatches = true;
-                    }
+                } else if (paper != null && paper.getSemester() != null && paper.getSemester().contains(String.valueOf(semester))) {
+                    semMatches = true;
+                } else if (paper != null && paper.getAssignedSemester() != null && paper.getAssignedSemester().contains(String.valueOf(semester))) {
+                    semMatches = true;
                 }
                 if (!semMatches) {
                     continue;
@@ -544,7 +629,7 @@ public class StudentResponseService {
                     .paperId(resp.getPaperId())
                     .subject(paper != null ? paper.getSubject() : resp.getPaperId())
                     .subjectCode(paper != null ? paper.getSubjectCode() : null)
-                    .internalNo(paper != null ? paper.getInternalNo() : 1)
+                    .internalNo((paper != null && paper.getInternalNo() != null) ? paper.getInternalNo() : 1)
                     .submittedAt(resp.getSubmittedAt())
                     .totalMarks(totalM)
                     .maxMarks(maxM)

@@ -12,6 +12,7 @@ import {
   reorderSyllabusItems,
   publishSyllabus,
 } from "../../services/syllabusService";
+import { getActivePlan } from "../../services/syllabusSchedulingService";
 
 import SyllabusOverviewSection from "./SyllabusOverviewSection";
 import SyllabusTopicsSection from "./SyllabusTopicsSection";
@@ -37,6 +38,7 @@ export default function TeacherSyllabusManagement({
 
   // Syllabus Data
   const [items, setItems] = useState([]);
+  const [activePlan, setActivePlan] = useState(null);
   const [coverage, setCoverage] = useState(null);
   const [versions, setVersions] = useState([]);
   const [revisionStats, setRevisionStats] = useState(null);
@@ -56,17 +58,19 @@ export default function TeacherSyllabusManagement({
     if (showLoadingSpinner) setLoading(true);
     setError(null);
     try {
-      const [itemsRes, coverageRes, versionsRes, revRes] = await Promise.allSettled([
+      const [itemsRes, coverageRes, versionsRes, revRes, planRes] = await Promise.allSettled([
         getSyllabusItems(classroomId),
         getCoverageAnalytics(classroomId),
         getPublishedVersions(classroomId),
         getRevisionAggregate(classroomId),
+        getActivePlan(classroomId),
       ]);
 
       setItems(itemsRes.status === "fulfilled" ? itemsRes.value || [] : []);
       setCoverage(coverageRes.status === "fulfilled" ? coverageRes.value || null : null);
       setVersions(versionsRes.status === "fulfilled" ? versionsRes.value || [] : []);
       setRevisionStats(revRes.status === "fulfilled" ? revRes.value || null : null);
+      setActivePlan(planRes.status === "fulfilled" ? planRes.value || null : null);
     } catch (err) {
       console.error(err);
       setError("Failed to load classroom syllabus data");
@@ -84,12 +88,14 @@ export default function TeacherSyllabusManagement({
         getCoverageAnalytics(classroomId),
         getPublishedVersions(classroomId),
         getRevisionAggregate(classroomId),
-      ]).then(([itemsRes, coverageRes, versionsRes, revRes]) => {
+        getActivePlan(classroomId),
+      ]).then(([itemsRes, coverageRes, versionsRes, revRes, planRes]) => {
         if (!active) return;
         setItems(itemsRes.status === "fulfilled" ? itemsRes.value || [] : []);
         setCoverage(coverageRes.status === "fulfilled" ? coverageRes.value || null : null);
         setVersions(versionsRes.status === "fulfilled" ? versionsRes.value || [] : []);
         setRevisionStats(revRes.status === "fulfilled" ? revRes.value || null : null);
+        setActivePlan(planRes.status === "fulfilled" ? planRes.value || null : null);
         setLoading(false);
       }).catch((err) => {
         console.error(err);
@@ -145,8 +151,13 @@ export default function TeacherSyllabusManagement({
       setItems((prev) =>
         prev.map((it) => (it.id === itemId ? { ...it, status: newStatus } : it))
       );
-      // Reload analytics to recalculate coverage
-      getCoverageAnalytics(classroomId).then((cov) => setCoverage(cov)).catch(() => {});
+      // Reload fresh analytics and items from backend
+      const [freshItems, freshCov] = await Promise.all([
+        getSyllabusItems(classroomId),
+        getCoverageAnalytics(classroomId)
+      ]);
+      if (freshItems) setItems(freshItems);
+      if (freshCov) setCoverage(freshCov);
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to update status");
@@ -235,7 +246,7 @@ export default function TeacherSyllabusManagement({
             className={`tsm-subtab-btn ${activeSection === "schedule" ? "active" : ""}`}
             onClick={() => setActiveSection("schedule")}
           >
-            🗓️ Schedule & Resources
+            🗓️ Schedule & Resources {activePlan?.sessions?.length ? `(${activePlan.sessions.length} sessions)` : ""}
           </button>
           <button
             type="button"
@@ -308,6 +319,7 @@ export default function TeacherSyllabusManagement({
           {activeSection === "overview" && (
             <SyllabusOverviewSection
               items={items}
+              activePlan={activePlan}
               coverage={coverage}
               versions={versions}
               revisionStats={revisionStats}
@@ -331,12 +343,15 @@ export default function TeacherSyllabusManagement({
               onDeleteTopic={handleDeleteTopic}
               onStatusChange={handleStatusChange}
               onReorder={handleReorder}
+              onNavigateToScheduling={onNavigateToScheduling}
             />
           )}
 
           {activeSection === "schedule" && (
             <SyllabusScheduleSection
+              classroomId={classroomId}
               items={items}
+              activePlan={activePlan}
               onEditTopic={handleOpenEditTopic}
               initialFilter={scheduleFilter}
             />

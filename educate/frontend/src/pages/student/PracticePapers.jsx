@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import { jwtDecode } from "jwt-decode";
 import { getAllPapers } from "../../services/paperService";
 import {
   getStudentResults,
@@ -15,9 +16,18 @@ import "./PracticePapers.css";
 
 function PracticePapers() {
   const navigate = useNavigate();
-  const usn = localStorage.getItem("usn") || "";
-  const studentName = localStorage.getItem("name") || "Student";
-  const studentSem = localStorage.getItem("semester") || "6";
+
+  let tokenUsn = "";
+  const authToken = sessionStorage.getItem("token") || localStorage.getItem("token");
+  if (authToken) {
+    try {
+      const decoded = jwtDecode(authToken);
+      tokenUsn = decoded.usn || "";
+    } catch (e) {}
+  }
+  const usn = sessionStorage.getItem("usn") || localStorage.getItem("usn") || tokenUsn;
+  const studentName = sessionStorage.getItem("name") || localStorage.getItem("name") || "Student";
+  const studentSem = sessionStorage.getItem("semester") || localStorage.getItem("semester") || "6";
 
   const [activeTab, setActiveTab] = useState("PRACTICE_LIST"); // PRACTICE_LIST, MY_ATTEMPTS, PEER_REVIEWS
   const [practicePapers, setPracticePapers] = useState([]);
@@ -57,11 +67,17 @@ function PracticePapers() {
   const fetchPracticeData = async () => {
     try {
       setLoading(true);
-      const papers = await getAllPapers();
+      const papers = await getAllPapers({ role: "STUDENT" });
       // STRICT FILTER: Papers allowed for practice by teacher or with category PRACTICE
-      const practiceList = (papers || []).filter(
-        (p) => p.allowedForPractice === true || p.paperCategory === "PRACTICE"
-      );
+      const seenIds = new Set();
+      const practiceList = (papers || [])
+        .filter((p) => p.allowedForPractice === true || p.paperCategory === "PRACTICE")
+        .filter((p) => {
+          const uid = p.id || p.paperId;
+          if (uid && seenIds.has(uid)) return false;
+          if (uid) seenIds.add(uid);
+          return true;
+        });
       setPracticePapers(practiceList);
 
       if (usn) {
@@ -349,14 +365,15 @@ function PracticePapers() {
                 </div>
               ) : (
                 <div className="practice-grid">
-                  {filteredPracticePapers.map((paper) => {
+                  {filteredPracticePapers.map((paper, idx) => {
                     const attempts = mySubmissions.filter(
                       (s) => s.paperId?.toLowerCase() === paper.paperId?.toLowerCase()
                     );
                     const latestSubmission = attempts[attempts.length - 1];
+                    const targetExamId = paper.paperId || paper.id;
 
                     return (
-                      <div className="practice-card" key={paper.paperId}>
+                      <div className="practice-card" key={paper.id || `${targetExamId}-${idx}`}>
                         <div className="practice-card-header">
                           <span className="paper-cat-badge">
                             {paper.paperCategory === "QUIZ" ? "🔘 MCQ Quiz" : "🎯 Practice Paper"}
@@ -401,7 +418,7 @@ function PracticePapers() {
 
                         <button
                           className="practice-now-btn"
-                          onClick={() => navigate(`/student/attend/${paper.paperId}?mode=practice`)}
+                          onClick={() => navigate(`/student/attend/${targetExamId}?mode=practice`)}
                         >
                           {attempts.length > 0 ? "🔁 Practice Again (Retake)" : "🎯 Start Practice Paper"}
                         </button>

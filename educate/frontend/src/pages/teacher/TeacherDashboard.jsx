@@ -443,6 +443,25 @@ function TeacherDashboard() {
               <span>• Direct Widescreen PPTX Export</span>
             </div>
           </div>
+
+          {/* Tool Card 3: AI MCQ Quiz Generator */}
+          <div
+            className="standalone-tool-card border-purple"
+            onClick={() => navigate("/teacher/quiz-generator")}
+          >
+            <div className="tool-card-head">
+              <span className="tool-badge purple">MCQ QUIZ GENERATOR</span>
+              <span className="tool-arrow">→</span>
+            </div>
+            <h3>🎯 AI MCQ Quiz Generator</h3>
+            <p>
+              Generate academic quizzes from topics or notes with OpenRouter AI, review &amp; publish for student practice.
+            </p>
+            <div className="tool-meta-row">
+              <span>• Topic &amp; Notes AI</span>
+              <span>• Live Review &amp; Publish</span>
+            </div>
+          </div>
         </div>
 
         {/* CREATE CLASSROOM MODAL */}

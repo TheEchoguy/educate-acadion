@@ -62,17 +62,17 @@ function Login() {
       sessionStorage.setItem("token", token);
       sessionStorage.setItem("role", role || "");
       sessionStorage.setItem("usn", decoded.usn || "");
-      sessionStorage.setItem("semester", decoded.semester || "");
+      sessionStorage.setItem("semester", decoded.semester != null ? String(decoded.semester) : "");
       sessionStorage.setItem("department", decoded.studentDepartment || "");
 
-      // Clear shared localStorage so multiple tabs never conflict
-      localStorage.removeItem("name");
-      localStorage.removeItem("email");
-      localStorage.removeItem("token");
-      localStorage.removeItem("role");
-      localStorage.removeItem("usn");
-      localStorage.removeItem("semester");
-      localStorage.removeItem("department");
+      // Also sync to localStorage as reliable fallback for tabs and components
+      localStorage.setItem("name", decoded.name || "User");
+      localStorage.setItem("email", decoded.sub || cleanEmail || "");
+      localStorage.setItem("token", token);
+      localStorage.setItem("role", role || "");
+      localStorage.setItem("usn", decoded.usn || "");
+      localStorage.setItem("semester", decoded.semester != null ? String(decoded.semester) : "");
+      localStorage.setItem("department", decoded.studentDepartment || "");
 
       login(token, role);
 

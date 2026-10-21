@@ -42,6 +42,7 @@ import ClassPerformanceWorkspacePage from "../pages/teacher/ClassPerformanceWork
 import RagTutorWorkspacePage from "../pages/teacher/RagTutorWorkspacePage";
 import ClassroomFeaturePicker from "../pages/teacher/ClassroomFeaturePicker";
 import TeacherPptGenerator from "../pages/teacher/TeacherPptGenerator";
+import QuizGenerator from "../pages/teacher/QuizGenerator";
 import StudentClassrooms from "../pages/student/StudentClassrooms";
 import StudentClassroomWorkspace from "../pages/student/StudentClassroomWorkspace";
 import ChatTutorPage from "../pages/student/ChatTutorPage";
@@ -95,12 +96,14 @@ function AppRoutes() {
       <Route path="/teacher/classrooms/:id/analytics" element={<ClassPerformanceWorkspacePage />} />
       <Route path="/teacher/classrooms/:id/rag-tutor" element={<RagTutorWorkspacePage />} />
       <Route path="/teacher/ppt-generator" element={<TeacherPptGenerator />} />
+      <Route path="/teacher/quiz-generator" element={<QuizGenerator />} />
 
       <Route path="/student/dashboard" element={<StudentDashboard />} />
       <Route path="/student/classrooms" element={<StudentClassrooms />} />
       <Route path="/student/classrooms/:id" element={<StudentClassroomWorkspace />} />
       <Route path="/student/classrooms/:id/syllabus" element={<StudentClassroomWorkspace />} />
       <Route path="/student/exams" element={<AvailableExams />} />
+      <Route path="/student/attend/:id" element={<AttendExam />} />
       <Route path="/student/attend-exam/:id" element={<AttendExam />} />
       <Route path="/student/results" element={<MyResults />} />
       <Route path="/student/performance" element={<StudentPerformance />} />

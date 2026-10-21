@@ -119,8 +119,17 @@ export const getPlans = async (classroomId) => {
   return res.data;
 };
 
-export const getActivePlan = async (classroomId) => {
-  const res = await axios.get(`${API_BASE}/${classroomId}/scheduling/plans/active`, getAuthHeaders());
+export const getActivePlan = async (classroomId, planId = null) => {
+  const config = getAuthHeaders();
+  if (planId) {
+    config.params = { planId };
+  }
+  const res = await axios.get(`${API_BASE}/${classroomId}/scheduling/plans/active`, config);
+  return res.data;
+};
+
+export const getPlanById = async (classroomId, planId) => {
+  const res = await axios.get(`${API_BASE}/${classroomId}/scheduling/plans/${planId}`, getAuthHeaders());
   return res.data;
 };
 
@@ -129,10 +138,21 @@ export const approvePlan = async (classroomId, planId) => {
   return res.data;
 };
 
-export const recordSessionOutcome = async (classroomId, sessionId, outcome, teacherNotes = "") => {
+export const recordSessionOutcome = async (classroomId, sessionId, outcomeOrPayload, teacherNotes = "", portionsCovered = "", remainingPortion = "") => {
+  let payload;
+  if (typeof outcomeOrPayload === "object" && outcomeOrPayload !== null) {
+    payload = outcomeOrPayload;
+  } else {
+    payload = {
+      outcome: outcomeOrPayload,
+      teacherNotes,
+      portionsCovered,
+      remainingPortion,
+    };
+  }
   const res = await axios.patch(
     `${API_BASE}/${classroomId}/scheduling/sessions/${sessionId}/outcome`,
-    { outcome, teacherNotes },
+    payload,
     getAuthHeaders()
   );
   return res.data;
@@ -148,10 +168,10 @@ export const deleteSession = async (classroomId, sessionId) => {
   return res.data;
 };
 
-export const previewReschedule = async (classroomId, sessionId) => {
+export const previewReschedule = async (classroomId, sessionId, customParams = {}) => {
   const res = await axios.post(
     `${API_BASE}/${classroomId}/scheduling/sessions/${sessionId}/reschedule-preview`,
-    {},
+    customParams,
     getAuthHeaders()
   );
   return res.data;

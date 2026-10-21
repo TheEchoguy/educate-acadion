@@ -34,6 +34,7 @@ from app.models import (
     UnsupportedFileTypeError,
 )
 from app.ppt_generator import PPTGenerator
+from app.api import app
 
 # Expose FastAPI application instance for ASGI servers (e.g. uvicorn app.main:app)
 from app.api import app

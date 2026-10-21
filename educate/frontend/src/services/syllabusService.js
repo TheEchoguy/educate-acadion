@@ -123,6 +123,11 @@ export const deleteAssessmentMapping = async (classroomId, mappingId) => {
   return response.data;
 };
 
+export const analyzeTopicAssessment = async (classroomId, payload) => {
+  const response = await API.post(`/classrooms/${classroomId}/syllabus/assessment-analysis`, payload);
+  return response.data;
+};
+
 // =============================================================================
 // 5. EXPORTS & FILE DOWNLOADS
 // =============================================================================

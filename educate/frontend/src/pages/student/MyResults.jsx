@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import { jwtDecode } from "jwt-decode";
 import { getStudentResults } from "../../services/responseService";
 import { getAllPapers } from "../../services/paperService";
 import { exportEvaluatedSubmissionPdf } from "../../utils/pdfGenerator";
@@ -17,7 +18,18 @@ function MyResults() {
   const fetchResults = async () => {
     try {
       setLoading(true);
-      const usn = localStorage.getItem("usn");
+      let usn = "";
+      const authToken = sessionStorage.getItem("token") || localStorage.getItem("token");
+      if (authToken) {
+        try {
+          const decoded = jwtDecode(authToken);
+          if (decoded.usn && decoded.usn.trim()) usn = decoded.usn.trim();
+          else if (decoded.sub && decoded.sub.trim()) usn = decoded.sub.trim();
+        } catch (e) {}
+      }
+      if (!usn) {
+        usn = sessionStorage.getItem("usn") || localStorage.getItem("usn");
+      }
       if (!usn) {
         toast.error("USN not found. Please log in again.");
         return;

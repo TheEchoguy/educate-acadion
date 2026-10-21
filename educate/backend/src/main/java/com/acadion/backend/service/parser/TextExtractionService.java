@@ -133,6 +133,19 @@ public class TextExtractionService {
                     .extractTextFromImage(file);
         }
 
+        // ===================================
+        // TXT FILE (Plain Text Notes)
+        // ===================================
+
+        if (fileName.endsWith(".txt") || (file.getContentType() != null && file.getContentType().startsWith("text/plain"))) {
+            try {
+                return new String(file.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            } catch (Exception e) {
+                log.error("Failed to extract text from TXT: {}", e.getMessage());
+                throw new IOException("Failed to extract text from TXT: " + e.getMessage(), e);
+            }
+        }
+
         log.warn("Unsupported file type: {}", fileName);
         return "";
     }

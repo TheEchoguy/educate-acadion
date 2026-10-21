@@ -65,6 +65,19 @@ public class QuestionPaper {
     @Builder.Default
     private Boolean allowedForPractice = false;
 
+    // PUBLICATION STATUS: DRAFT, PUBLISHED, ARCHIVED
+    @Builder.Default
+    private String publicationStatus = "PUBLISHED";
+
+    // SOURCE MODE: TOPIC, NOTES, TOPIC_NOTES, MANUAL, UPLOADED
+    private String sourceMode;
+
+    // DIFFICULTY: EASY, MEDIUM, HARD
+    private String difficulty;
+
+    // TOPIC / SUBJECT FOCUS
+    private String topic;
+
     private String assignedSemester;
 
     private String createdBy;

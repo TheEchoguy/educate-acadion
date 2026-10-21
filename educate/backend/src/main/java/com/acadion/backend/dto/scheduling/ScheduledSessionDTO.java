@@ -38,5 +38,12 @@ public class ScheduledSessionDTO {
     private SessionStatus status;
     private LocalDateTime actualOutcomeDate;
     private String teacherNotes;
+    private String portionsCovered;
+    private String remainingPortion;
+    private Integer carriedForwardFromSessionNumber;
+    private Integer carriedForwardToSessionNumber;
+    private boolean isCarriedForward;
     private boolean isLocked;
+    @Builder.Default
+    private java.util.List<String> coveredTopics = new java.util.ArrayList<>();
 }

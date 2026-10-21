@@ -669,6 +669,16 @@ function UploadedPaperAnalysis() {
                       <span className={`format-type-pill ${isMcq ? "mcq-pill" : "theory-pill"}`}>
                         {isMcq ? "🎯 Objective MCQ" : "📑 Theory Assessment"}
                       </span>
+                      {paper.sourceMode && (
+                        <span className="format-type-pill" style={{ background: "rgba(168, 85, 247, 0.15)", color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.3)" }}>
+                          🤖 {paper.sourceMode === "NOTES" ? "Notes Quiz" : paper.sourceMode === "TOPIC_AND_NOTES" ? "Topic+Notes Quiz" : "Topic Quiz"}
+                        </span>
+                      )}
+                      {paper.publicationStatus === "DRAFT" && (
+                        <span className="format-type-pill" style={{ background: "rgba(245, 158, 11, 0.15)", color: "#fbbf24", border: "1px solid rgba(245, 158, 11, 0.3)" }}>
+                          📝 Draft
+                        </span>
+                      )}
                       {paper.subjectCode && <span className="code-tag">{paper.subjectCode}</span>}
                       <span className="internal-tag">🏷️ {getExamTypeLabel(paper)}</span>
                     </div>
@@ -788,14 +798,42 @@ function UploadedPaperAnalysis() {
                             {q.options.map((opt, oIdx) => {
                               const optLetter = String.fromCharCode(65 + oIdx);
                               const cleanText = opt.replace(/^[A-Da-d][\)\.]\s*/, "");
+                              const isCorrect = q.correctAnswer && (
+                                optLetter === q.correctAnswer ||
+                                cleanText.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase() ||
+                                opt.trim().toLowerCase() === String(q.correctAnswer).trim().toLowerCase()
+                              );
 
                               return (
-                                <div className="mcq-option-tile-view" key={oIdx}>
-                                  <span className="mcq-opt-char">{optLetter}</span>
+                                <div
+                                  className="mcq-option-tile-view"
+                                  key={oIdx}
+                                  style={isCorrect ? {
+                                    borderColor: "rgba(16, 185, 129, 0.5)",
+                                    background: "rgba(16, 185, 129, 0.12)",
+                                  } : {}}
+                                >
+                                  <span
+                                    className="mcq-opt-char"
+                                    style={isCorrect ? { background: "#10b981", color: "#ffffff" } : {}}
+                                  >
+                                    {optLetter}
+                                  </span>
                                   <span className="mcq-opt-val">{cleanText}</span>
+                                  {isCorrect && (
+                                    <span style={{ marginLeft: "auto", fontSize: "0.75rem", color: "#34d399", fontWeight: 700 }}>
+                                      ✓ Correct
+                                    </span>
+                                  )}
                                 </div>
                               );
                             })}
+                          </div>
+                        )}
+
+                        {q.explanation && (
+                          <div style={{ marginTop: 10, padding: "8px 12px", background: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.25)", borderRadius: 8, fontSize: "0.85rem", color: "#93c5fd" }}>
+                            <strong>💡 Explanation:</strong> {q.explanation}
                           </div>
                         )}
 

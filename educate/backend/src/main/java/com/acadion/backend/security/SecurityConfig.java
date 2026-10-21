@@ -65,6 +65,10 @@ public class SecurityConfig {
                         ).authenticated()
 
                         .requestMatchers(
+                                "/api/quiz-generator/**"
+                        ).hasAnyAuthority("TEACHER", "ROLE_TEACHER", "ADMIN", "ROLE_ADMIN")
+
+                        .requestMatchers(
                                 "/api/admin/**"
                         ).permitAll()
 

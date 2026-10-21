@@ -6,13 +6,124 @@
   font-family: inherit;
 }
 
-.attend-loading {
+.attend-loading,
+.attend-loading-wrapper {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #0b0f19;
+  color: #94a3b8;
+  font-size: 1.05rem;
+}
+
+.attend-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: attendSpin 0.9s linear infinite;
+}
+
+@keyframes attendSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.attend-loading-text {
+  color: #94a3b8;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+/* Error / Not Found Wrapper */
+.attend-error-wrapper {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 32px 20px;
+  background: #0b0f19;
+  font-family: inherit;
+}
+
+.attend-error-card {
+  max-width: 520px;
+  width: 100%;
+  background: #111827;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 18px;
+  padding: 36px 32px;
+  text-align: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.attend-error-icon {
+  font-size: 3rem;
+  margin-bottom: 14px;
+}
+
+.attend-error-title {
+  color: #f8fafc;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+}
+
+.attend-error-message {
   color: #94a3b8;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.attend-error-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.attend-back-btn {
+  padding: 10px 22px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.attend-back-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.attend-retry-btn {
+  padding: 10px 22px;
+  background: #2563eb;
+  border: 1px solid #3b82f6;
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.attend-retry-btn:hover {
+  background: #1d4ed8;
+}
+
+.attend-paperid-chip {
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
 }
 
 .attend-nav-bar {

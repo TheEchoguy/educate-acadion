@@ -4,6 +4,7 @@ import com.acadion.backend.dto.scheduling.*;
 import com.acadion.backend.entity.Classroom;
 import com.acadion.backend.entity.ClassroomMembership;
 import com.acadion.backend.entity.Role;
+import com.acadion.backend.entity.SyllabusItem;
 import com.acadion.backend.entity.User;
 import com.acadion.backend.entity.scheduling.*;
 import com.acadion.backend.repository.ClassroomMembershipRepository;
@@ -95,9 +96,17 @@ public class SyllabusSchedulingIntegrationTest {
         );
         executionService = new ScheduleExecutionService(
                 planRepository, sessionRepository, rescheduleRecordRepository, timetableSlotRepository,
-                calendarEventRepository, milestoneRepository, classroomRepository, userRepository, notificationService, scheduleGenerator
+                calendarEventRepository, milestoneRepository, classroomRepository, userRepository,
+                syllabusItemRepository, notificationService, scheduleGenerator
         );
         exportService = new SyllabusSchedulingExportService(executionService);
+
+        lenient().when(syllabusItemRepository.save(any(SyllabusItem.class))).thenAnswer(inv -> {
+            SyllabusItem it = inv.getArgument(0);
+            if (it.getId() == null) it.setId("syl_" + UUID.randomUUID().toString().substring(0, 8));
+            return it;
+        });
+        lenient().when(syllabusItemRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
 
         teacher = User.builder()
                 .id("teacher_1")
@@ -154,7 +163,9 @@ public class SyllabusSchedulingIntegrationTest {
         assertTrue(res.getCalendarEvents().isEmpty(), "No fabricated calendar events");
 
         // Verify active plan is null
-        when(planRepository.findFirstByClassroomIdAndStatusOrderByVersionNumberDesc("cls_bda", SchedulePlanStatus.APPROVED))
+        lenient().when(planRepository.findFirstByClassroomIdAndStatusOrderByVersionNumberDesc("cls_bda", SchedulePlanStatus.DRAFT))
+                .thenReturn(Optional.empty());
+        lenient().when(planRepository.findFirstByClassroomIdAndStatusOrderByVersionNumberDesc("cls_bda", SchedulePlanStatus.APPROVED))
                 .thenReturn(Optional.empty());
         when(planRepository.findByClassroomIdOrderByVersionNumberDesc("cls_bda")).thenReturn(new ArrayList<>());
 
@@ -590,6 +601,8 @@ public class SyllabusSchedulingIntegrationTest {
                 .status(SessionStatus.SCHEDULED)
                 .build();
 
+        lenient().when(planRepository.findFirstByClassroomIdAndStatusOrderByVersionNumberDesc("cls_bda", SchedulePlanStatus.DRAFT))
+                .thenReturn(Optional.empty());
         when(planRepository.findFirstByClassroomIdAndStatusOrderByVersionNumberDesc("cls_bda", SchedulePlanStatus.APPROVED))
                 .thenReturn(Optional.of(plan));
         when(sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc("plan_1"))
@@ -1542,5 +1555,262 @@ public class SyllabusSchedulingIntegrationTest {
         assertEquals("Invited Guest Lecture: Cloud Storage at Scale", sLocked.getTopicTitle());
         assertEquals("Industry Case Studies", sLocked.getSubtopic());
         assertTrue(sLocked.isLocked());
+    }
+
+    @Test
+    @DisplayName("30. IntelligentSubtopicDecomposer generates meaningful single-line 5-6 word subtopics without Part 1/2")
+    void testSubtopicDecomposition_GeneratesMeaningfulSingleLineSubtopicsWithoutPartLabels() {
+        IntelligentSubtopicDecomposer decomposer = new IntelligentSubtopicDecomposer(null);
+
+        ModuleOutlineDTO mod1 = ModuleOutlineDTO.builder()
+                .moduleNumber(1)
+                .moduleTitle("Introduction to Internet of Things")
+                .estimatedHours(4)
+                .topics(List.of("Introduction", "Physical design of IOT"))
+                .subtopics(Collections.emptyList())
+                .build();
+
+        List<IntelligentSubtopicDecomposer.SessionFocus> focuses = decomposer.decomposeModule(mod1, Collections.emptyList());
+        assertEquals(4, focuses.size());
+
+        for (IntelligentSubtopicDecomposer.SessionFocus f : focuses) {
+            assertNotNull(f.getSubtopic());
+            assertFalse(f.getSubtopic().isBlank());
+            assertFalse(f.getSubtopic().contains("Part 1"), "Subtopic must not contain 'Part 1': " + f.getSubtopic());
+            assertFalse(f.getSubtopic().contains("Part 2"), "Subtopic must not contain 'Part 2': " + f.getSubtopic());
+            assertFalse(f.getSubtopic().contains("\n"), "Subtopic must be single-line: " + f.getSubtopic());
+
+            int wordCount = f.getSubtopic().trim().split("\\s+").length;
+            assertTrue(wordCount >= 3 && wordCount <= 8, "Subtopic word count should be concise (~5-6 words): " + f.getSubtopic() + " (" + wordCount + " words)");
+
+            assertTrue("TEACHER_REVIEW_SUGGESTION".equals(f.getSubtopicSource()) || "OFFICIAL_SYLLABUS".equals(f.getSubtopicSource()));
+        }
+
+        IntelligentSubtopicDecomposer.SessionFocus s3 = focuses.get(2);
+        IntelligentSubtopicDecomposer.SessionFocus s4 = focuses.get(3);
+        assertEquals("Physical design of IOT", s3.getTopicTitle());
+        assertEquals("Physical design of IOT", s4.getTopicTitle());
+        assertNotEquals(s3.getSubtopic(), s4.getSubtopic(), "Subtopics for multiple sessions of same topic must be distinct!");
+    }
+
+    @Test
+    @DisplayName("31. Repeated schedule generation does not duplicate syllabus items and maintains count synchronization")
+    void testRepeatedScheduleGeneration_DoesNotDuplicateSyllabusItems() {
+        classroom.setSchedulingInputsVerified(true);
+        when(classroomRepository.findById("cls_bda")).thenReturn(Optional.of(classroom));
+
+        List<TimetableSlot> slots = List.of(
+                TimetableSlot.builder().classroomId("cls_bda").subjectCode("BCS714D").dayOfWeek(DayOfWeek.MONDAY).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(10, 0)).approved(true).build(),
+                TimetableSlot.builder().classroomId("cls_bda").subjectCode("BCS714D").dayOfWeek(DayOfWeek.TUESDAY).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(10, 0)).approved(true).build(),
+                TimetableSlot.builder().classroomId("cls_bda").subjectCode("BCS714D").dayOfWeek(DayOfWeek.WEDNESDAY).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(10, 0)).approved(true).build(),
+                TimetableSlot.builder().classroomId("cls_bda").subjectCode("BCS714D").dayOfWeek(DayOfWeek.THURSDAY).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(10, 0)).approved(true).build()
+        );
+        when(timetableSlotRepository.findByClassroomIdAndApprovedTrue("cls_bda")).thenReturn(slots);
+        List<AcademicCalendarEvent> calEvents = List.of(
+                AcademicCalendarEvent.builder().classroomId("cls_bda").eventName("Semester Commencement").startDate(LocalDate.of(2026, 7, 20)).isTeachingDay(true).approved(true).build(),
+                AcademicCalendarEvent.builder().classroomId("cls_bda").eventName("Term End").startDate(LocalDate.of(2026, 9, 25)).isTeachingDay(true).approved(true).build()
+        );
+        when(calendarEventRepository.findByClassroomIdAndApprovedTrue("cls_bda")).thenReturn(calEvents);
+        when(milestoneRepository.findByClassroomIdAndApprovedTrueOrderByStartDateAsc("cls_bda")).thenReturn(Collections.emptyList());
+
+        List<ClassroomModuleOutline> outlines = new ArrayList<>();
+        int[] topicCounts = {5, 10, 14, 9, 7};
+        for (int m = 1; m <= 5; m++) {
+            List<String> topics = new ArrayList<>();
+            for (int t = 1; t <= topicCounts[m - 1]; t++) {
+                topics.add(String.format("Module %d Concept Topic %d", m, t));
+            }
+            outlines.add(ClassroomModuleOutline.builder()
+                    .classroomId("cls_bda")
+                    .moduleNumber(m)
+                    .moduleTitle("Curriculum Unit " + m)
+                    .estimatedHours(8)
+                    .topics(topics)
+                    .approved(true)
+                    .build());
+        }
+        when(moduleOutlineRepository.findByClassroomIdOrderByModuleNumberAsc("cls_bda")).thenReturn(outlines);
+
+        List<SyllabusItem> inMemorySyllabusItems = new ArrayList<>();
+        when(syllabusItemRepository.findByClassroomIdOrderByOrderIndexAscCreatedAtAsc("cls_bda")).thenAnswer(inv -> new ArrayList<>(inMemorySyllabusItems));
+        when(syllabusItemRepository.save(any(SyllabusItem.class))).thenAnswer(inv -> {
+            SyllabusItem it = inv.getArgument(0);
+            if (it.getId() == null) it.setId("syl_" + UUID.randomUUID());
+            inMemorySyllabusItems.removeIf(existing -> existing.getId().equals(it.getId()));
+            inMemorySyllabusItems.add(it);
+            return it;
+        });
+        when(syllabusItemRepository.saveAll(any())).thenAnswer(inv -> {
+            Iterable<SyllabusItem> items = inv.getArgument(0);
+            for (SyllabusItem it : items) {
+                if (it.getId() == null) it.setId("syl_" + UUID.randomUUID());
+                inMemorySyllabusItems.removeIf(existing -> existing.getId().equals(it.getId()));
+                inMemorySyllabusItems.add(it);
+            }
+            return items;
+        });
+        lenient().doAnswer(inv -> {
+            Iterable<SyllabusItem> toDelete = inv.getArgument(0);
+            for (SyllabusItem d : toDelete) {
+                inMemorySyllabusItems.removeIf(it -> it.getId().equals(d.getId()));
+            }
+            return null;
+        }).when(syllabusItemRepository).deleteAll(any());
+
+        when(planRepository.findByClassroomIdOrderByVersionNumberDesc("cls_bda")).thenReturn(Collections.emptyList());
+        when(planRepository.save(any(TeachingSchedulePlan.class))).thenAnswer(inv -> {
+            TeachingSchedulePlan p = inv.getArgument(0);
+            p.setId("plan_gen_v1");
+            return p;
+        });
+        when(sessionRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        GenerateScheduleRequest req = GenerateScheduleRequest.builder()
+                .termStartDate(LocalDate.of(2026, 7, 20))
+                .termEndDate(LocalDate.of(2026, 9, 25))
+                .allowPastDates(true)
+                .build();
+
+        // First Generation Run
+        SchedulePlanResponse plan1 = scheduleGenerator.generateDraftSchedule("cls_bda", req, "asha@dbit.ac.in");
+        assertNotNull(plan1);
+        assertEquals(40, plan1.getTotalPlannedSessions(), "Should schedule exactly 40 teaching sessions for 40 module hours");
+        assertEquals(45, plan1.getTotalUniqueTopics(), "Should accurately report 45 unique syllabus topics");
+        assertEquals(45, inMemorySyllabusItems.size(), "Should have created exactly 45 unique syllabus items");
+
+        // Second Generation Run (Regeneration)
+        TeachingSchedulePlan existingPlanV1 = TeachingSchedulePlan.builder()
+                .id("plan_gen_v1")
+                .classroomId("cls_bda")
+                .versionNumber(1)
+                .status(SchedulePlanStatus.DRAFT)
+                .build();
+        when(planRepository.findByClassroomIdOrderByVersionNumberDesc("cls_bda")).thenReturn(List.of(existingPlanV1));
+        when(sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc("plan_gen_v1")).thenReturn(
+                plan1.getSessions().stream().map(dto -> ScheduledSession.builder()
+                        .id(dto.getId())
+                        .planId("plan_gen_v1")
+                        .sessionNumber(dto.getSessionNumber())
+                        .topicTitle(dto.getTopicTitle())
+                        .subtopic(dto.getSubtopic())
+                        .subtopicSource(dto.getSubtopicSource())
+                        .status(dto.getStatus())
+                        .build()).collect(Collectors.toList())
+        );
+        when(planRepository.save(any(TeachingSchedulePlan.class))).thenAnswer(inv -> {
+            TeachingSchedulePlan p = inv.getArgument(0);
+            p.setId("plan_gen_v2");
+            return p;
+        });
+
+        SchedulePlanResponse plan2 = scheduleGenerator.generateDraftSchedule("cls_bda", req, "asha@dbit.ac.in");
+        assertNotNull(plan2);
+        assertEquals(2, plan2.getVersionNumber(), "Plan version should increment to v2");
+        assertEquals(40, plan2.getTotalPlannedSessions(), "Plan should still contain 40 scheduled sessions");
+        assertEquals(45, plan2.getTotalUniqueTopics(), "Plan should still report 45 unique syllabus topics");
+        assertEquals(45, inMemorySyllabusItems.size(), "Repeated generation must NOT duplicate syllabus items: count must remain 45!");
+    }
+
+    @Test
+    @DisplayName("32. Regeneration preserves teacher-edited subtopics, notes, and recorded outcomes")
+    void testPreserveTeacherEditedSubtopicsAndOutcomesOnRegeneration() {
+        classroom.setSchedulingInputsVerified(true);
+        when(classroomRepository.findById("cls_bda")).thenReturn(Optional.of(classroom));
+
+        List<TimetableSlot> slots = List.of(
+                TimetableSlot.builder().classroomId("cls_bda").subjectCode("BCS714D").dayOfWeek(DayOfWeek.MONDAY).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(10, 0)).approved(true).build(),
+                TimetableSlot.builder().classroomId("cls_bda").subjectCode("BCS714D").dayOfWeek(DayOfWeek.TUESDAY).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(10, 0)).approved(true).build()
+        );
+        when(timetableSlotRepository.findByClassroomIdAndApprovedTrue("cls_bda")).thenReturn(slots);
+        List<AcademicCalendarEvent> calEvents = List.of(
+                AcademicCalendarEvent.builder().classroomId("cls_bda").eventName("Semester Commencement").startDate(LocalDate.of(2026, 7, 20)).isTeachingDay(true).approved(true).build(),
+                AcademicCalendarEvent.builder().classroomId("cls_bda").eventName("Term End").startDate(LocalDate.of(2026, 7, 27)).isTeachingDay(true).approved(true).build()
+        );
+        when(calendarEventRepository.findByClassroomIdAndApprovedTrue("cls_bda")).thenReturn(calEvents);
+        when(milestoneRepository.findByClassroomIdAndApprovedTrueOrderByStartDateAsc("cls_bda")).thenReturn(Collections.emptyList());
+
+        ClassroomModuleOutline mod1 = ClassroomModuleOutline.builder()
+                .classroomId("cls_bda")
+                .moduleNumber(1)
+                .moduleTitle("Introduction to Storage")
+                .estimatedHours(2)
+                .topics(List.of("Storage Systems", "Flash and Disk Storage"))
+                .approved(true)
+                .build();
+        when(moduleOutlineRepository.findByClassroomIdOrderByModuleNumberAsc("cls_bda")).thenReturn(List.of(mod1));
+
+        TeachingSchedulePlan planV1 = TeachingSchedulePlan.builder()
+                .id("plan_v1")
+                .classroomId("cls_bda")
+                .versionNumber(1)
+                .status(SchedulePlanStatus.APPROVED)
+                .build();
+        when(planRepository.findByClassroomIdOrderByVersionNumberDesc("cls_bda")).thenReturn(List.of(planV1));
+
+        ScheduledSession priorS1 = ScheduledSession.builder()
+                .id("prior_s1")
+                .planId("plan_v1")
+                .sessionNumber(1)
+                .sessionDate(LocalDate.of(2026, 7, 20))
+                .topicTitle("Storage Systems")
+                .subtopic("Custom Teacher Storage Lab: NVMe Benchmarks")
+                .subtopicSource("TEACHER_EDITED")
+                .teacherNotes("Brought physical PCIe NVMe drives to lab")
+                .portionsCovered("Pages 10 to 45")
+                .status(SessionStatus.COMPLETED)
+                .build();
+
+        when(sessionRepository.findByPlanIdOrderBySessionDateAscSessionNumberAsc("plan_v1")).thenReturn(List.of(priorS1));
+        when(planRepository.save(any(TeachingSchedulePlan.class))).thenAnswer(inv -> {
+            TeachingSchedulePlan p = inv.getArgument(0);
+            p.setId("plan_v2");
+            return p;
+        });
+        when(sessionRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        GenerateScheduleRequest req = GenerateScheduleRequest.builder()
+                .termStartDate(LocalDate.of(2026, 7, 20))
+                .termEndDate(LocalDate.of(2026, 7, 27))
+                .allowPastDates(true)
+                .build();
+
+        SchedulePlanResponse planV2 = scheduleGenerator.generateDraftSchedule("cls_bda", req, "asha@dbit.ac.in");
+        assertNotNull(planV2);
+        ScheduledSessionDTO s1 = planV2.getSessions().get(0);
+
+        assertEquals("Storage Systems", s1.getTopicTitle());
+        assertEquals("Custom Teacher Storage Lab: NVMe Benchmarks", s1.getSubtopic(), "Must preserve teacher edited subtopic");
+        assertEquals("TEACHER_EDITED", s1.getSubtopicSource(), "Must preserve TEACHER_EDITED source");
+        assertEquals("Brought physical PCIe NVMe drives to lab", s1.getTeacherNotes(), "Must preserve teacher notes");
+        assertEquals(SessionStatus.COMPLETED, s1.getStatus(), "Must preserve COMPLETED outcome");
+        assertEquals("Pages 10 to 45", s1.getPortionsCovered(), "Must preserve portions covered");
+    }
+
+    @Test
+    @DisplayName("33. AI-provider-unavailable fallback produces deterministic source-grounded subtopics")
+    void testAIFallback_WhenAIAbsent_ProducesDeterministicSourceGroundedSubtopics() {
+        IntelligentSubtopicDecomposer fallbackDecomposer = new IntelligentSubtopicDecomposer(null);
+
+        ModuleOutlineDTO mod = ModuleOutlineDTO.builder()
+                .moduleNumber(2)
+                .moduleTitle("IoT Network and Cloud Architecture")
+                .estimatedHours(3)
+                .topics(List.of("Cloud Computing for IoT"))
+                .subtopics(Collections.emptyList())
+                .build();
+
+        List<IntelligentSubtopicDecomposer.SessionFocus> focuses = fallbackDecomposer.decomposeModule(mod, Collections.emptyList());
+        assertEquals(3, focuses.size());
+
+        for (int i = 0; i < 3; i++) {
+            IntelligentSubtopicDecomposer.SessionFocus f = focuses.get(i);
+            assertNotNull(f.getSubtopic());
+            assertEquals("TEACHER_REVIEW_SUGGESTION", f.getSubtopicSource(), "Fallback must clearly distinguish generated suggestion");
+            assertFalse(f.getSubtopic().contains("Part " + (i + 1)));
+            assertFalse(f.getSubtopic().contains("\n"));
+        }
+
+        Set<String> distinctSubtopics = focuses.stream().map(IntelligentSubtopicDecomposer.SessionFocus::getSubtopic).collect(Collectors.toSet());
+        assertEquals(3, distinctSubtopics.size(), "Each session must have a distinct learning subtopic");
     }
 }

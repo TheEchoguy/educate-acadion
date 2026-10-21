@@ -33,6 +33,11 @@ public class CreateQuestionPaperRequest {
 
     private Boolean allowedForPractice;
 
+    private String publicationStatus; // DRAFT, PUBLISHED, ARCHIVED
+    private String sourceMode; // TOPIC, NOTES, TOPIC_NOTES, MANUAL, UPLOADED
+    private String difficulty; // EASY, MEDIUM, HARD
+    private String topic;
+
     private String assignedSemester;
 
     private String createdBy;
