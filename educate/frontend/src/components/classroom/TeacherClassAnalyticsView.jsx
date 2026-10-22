@@ -220,6 +220,7 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [topicFilter, setTopicFilter] = useState("ALL"); // ALL | WEAK | STRONG
   const [selectedQuestionView, setSelectedQuestionView] = useState("Overall"); // "Overall" | "Q1" | "Q2" | "Q3" | "Q4"
+  const [selectedSubQuestion, setSelectedSubQuestion] = useState(null); // e.g. "1a", "2b"
 
   // Drilldown Modal State
   const [selectedStudentUsn, setSelectedStudentUsn] = useState(null);
@@ -395,6 +396,82 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
     });
     return Object.values(qMap);
   }, [summary]);
+
+  // Derive compact sub-question items (1a, 1b, 2a, 2b, 3a, 3b, 4a, 4b)
+  const subQuestionsData = useMemo(() => {
+    const list = [];
+    questionsData.forEach((q) => {
+      const qNum = q.questionNumber;
+      const num = qNum.replace(/^Q/i, "");
+
+      if (q.subQuestionA) {
+        const att = q.subQuestionA.attemptedCount ?? 0;
+        const weak = q.subQuestionA.weakCount ?? 0;
+        const weakPct = att > 0 ? (weak / att) * 100 : 0;
+        const maxM = q.subQuestionA.maxMarks > 0 ? q.subQuestionA.maxMarks : 10.0;
+        const avgScore = q.subQuestionA.averageScore ?? 0;
+        const avgPct = maxM > 0 ? (avgScore / maxM) * 100 : 0;
+
+        list.push({
+          code: (q.subQuestionA.code || `${num}a`).toLowerCase(),
+          displayCode: (q.subQuestionA.code || `${num}a`).toUpperCase(),
+          parentQuestion: qNum,
+          moduleNumber: q.moduleNumber,
+          attemptedCount: att,
+          weakCount: weak,
+          weakPercentage: Number(weakPct.toFixed(1)),
+          averageScore: Number(avgScore.toFixed(1)),
+          averagePercentage: Number(avgPct.toFixed(1)),
+          maxMarks: maxM,
+          topicName: q.subQuestionA.topicName || `Question ${num}a`,
+        });
+      }
+
+      if (q.subQuestionB) {
+        const att = q.subQuestionB.attemptedCount ?? 0;
+        const weak = q.subQuestionB.weakCount ?? 0;
+        const weakPct = att > 0 ? (weak / att) * 100 : 0;
+        const maxM = q.subQuestionB.maxMarks > 0 ? q.subQuestionB.maxMarks : 10.0;
+        const avgScore = q.subQuestionB.averageScore ?? 0;
+        const avgPct = maxM > 0 ? (avgScore / maxM) * 100 : 0;
+
+        list.push({
+          code: (q.subQuestionB.code || `${num}b`).toLowerCase(),
+          displayCode: (q.subQuestionB.code || `${num}b`).toUpperCase(),
+          parentQuestion: qNum,
+          moduleNumber: q.moduleNumber,
+          attemptedCount: att,
+          weakCount: weak,
+          weakPercentage: Number(weakPct.toFixed(1)),
+          averageScore: Number(avgScore.toFixed(1)),
+          averagePercentage: Number(avgPct.toFixed(1)),
+          maxMarks: maxM,
+          topicName: q.subQuestionB.topicName || `Question ${num}b`,
+        });
+      }
+    });
+
+    if (list.length === 0) {
+      ["1a", "1b", "2a", "2b", "3a", "3b", "4a", "4b"].forEach((code) => {
+        const qNum = "Q" + code.charAt(0);
+        list.push({
+          code,
+          displayCode: code.toUpperCase(),
+          parentQuestion: qNum,
+          moduleNumber: code.startsWith("1") || code.startsWith("2") ? 1 : 2,
+          attemptedCount: 0,
+          weakCount: 0,
+          weakPercentage: 0,
+          averageScore: 0,
+          averagePercentage: 0,
+          maxMarks: 10.0,
+          topicName: `Sub-question ${code}`,
+        });
+      });
+    }
+
+    return list;
+  }, [questionsData]);
 
   const currentQuestionData = useMemo(() => {
     if (selectedQuestionView === "Overall") return null;
@@ -587,45 +664,55 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
         </div>
 
         <div className="tca-analytics-split-layout">
-          {/* LEFT: COMPACT HEATMAP */}
+          {/* LEFT: COMPACT SUB-QUESTION HEATMAP */}
           <div className="tca-compact-heatmap-col">
             <div className="tca-col-header">
               <span className="tca-col-title">Diagnostic Heatmap</span>
-              <span className="tca-col-hint">Click box to inspect</span>
+              <span className="tca-col-hint">Click tile to inspect</span>
             </div>
 
-            <div className="tca-compact-heatmap-grid">
-              {questionsData.map((q) => {
-                const isSelected = selectedQuestionView === q.questionNumber;
-                const weakCount = q.weakCount || 0;
+            <div className="tca-subq-heatmap-grid">
+              {subQuestionsData.map((sub) => {
+                const isDirectlySelected = selectedSubQuestion === sub.code;
+                const isParentSelected = selectedQuestionView === sub.parentQuestion;
                 let heatClass = "heat-strong";
-                if (q.attemptedCount === 0) {
+                if (sub.attemptedCount === 0) {
                   heatClass = "heat-unattempted";
-                } else if (weakCount > 0 && ((weakCount / q.attemptedCount) >= 0.4 || q.averagePercentage < 50)) {
+                } else if (sub.averagePercentage < 50 || sub.weakPercentage > 40) {
                   heatClass = "heat-weak";
-                } else if (weakCount > 0 || q.averagePercentage < 75) {
+                } else if (sub.averagePercentage < 75 || sub.weakPercentage >= 20) {
                   heatClass = "heat-mod";
                 }
 
                 return (
                   <button
-                    key={q.questionNumber}
+                    key={sub.code}
                     type="button"
-                    className={`tca-compact-heat-box ${heatClass} ${isSelected ? "selected-box" : ""}`}
-                    onClick={() => setSelectedQuestionView(q.questionNumber)}
-                    title={`Question ${q.questionNumber}: ${weakCount} student(s) scored <50% (${q.attemptedCount} attempted)`}
+                    className={`tca-subq-heat-tile ${heatClass} ${isDirectlySelected ? "selected-tile" : isParentSelected ? "parent-selected" : ""}`}
+                    onClick={() => {
+                      setSelectedQuestionView(sub.parentQuestion);
+                      setSelectedSubQuestion(sub.code);
+                    }}
+                    title={`Sub-question ${sub.displayCode} (${sub.parentQuestion}): ${sub.averagePercentage.toFixed(1)}% class average (${sub.averageScore}/${sub.maxMarks} marks) • ${sub.attemptedCount} attempted, ${sub.weakCount} weak (<50%)`}
                   >
-                    <span className="tca-box-qnum">{q.questionNumber}</span>
-                    <span className="tca-box-count">{weakCount}</span>
+                    <span className="tca-subq-code">{sub.displayCode}</span>
+                    <div className="tca-subq-metric-stack">
+                      <span className="tca-subq-stat">
+                        {sub.attemptedCount > 0 ? `${Math.round(sub.averagePercentage)}%` : "—"}
+                      </span>
+                      <span className="tca-subq-substat">
+                        {sub.attemptedCount > 0 ? (sub.weakCount > 0 ? `${sub.weakCount} weak` : "0 weak") : "0 attempts"}
+                      </span>
+                    </div>
                   </button>
                 );
               })}
             </div>
 
             <div className="tca-heatmap-legend-mini">
-              <span className="tca-legend-tag"><span className="dot dot-green" /> &lt;20% weak</span>
-              <span className="tca-legend-tag"><span className="dot dot-amber" /> 20–40% weak</span>
-              <span className="tca-legend-tag"><span className="dot dot-red" /> &gt;40% weak</span>
+              <span className="tca-legend-tag"><span className="dot dot-green" /> &ge;75% Strong</span>
+              <span className="tca-legend-tag"><span className="dot dot-amber" /> 50–74% Mod</span>
+              <span className="tca-legend-tag"><span className="dot dot-red" /> &lt;50% Weak</span>
             </div>
           </div>
 
@@ -643,7 +730,10 @@ const TeacherClassAnalyticsView = ({ classroomId, classroomName }) => {
                   id="q-view-select"
                   className="tca-dropdown-select"
                   value={selectedQuestionView}
-                  onChange={(e) => setSelectedQuestionView(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedQuestionView(e.target.value);
+                    setSelectedSubQuestion(null);
+                  }}
                 >
                   <option value="Overall">Overall</option>
                   <option value="Q1">Q1</option>

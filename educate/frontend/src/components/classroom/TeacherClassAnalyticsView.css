@@ -372,21 +372,22 @@
   color: #94a3b8;
 }
 
+.tca-subq-heatmap-grid,
 .tca-compact-heatmap-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 10px;
 }
 
+.tca-subq-heat-tile,
 .tca-compact-heat-box {
-  min-height: 86px;
-  padding: 14px 10px;
-  border-radius: 12px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-radius: 10px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 8px;
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -394,53 +395,83 @@
   background: transparent;
 }
 
+.tca-subq-heat-tile:hover,
 .tca-compact-heat-box:hover {
   transform: translateY(-2px);
-  filter: brightness(1.12);
+  filter: brightness(1.15);
 }
 
+.tca-subq-code,
 .tca-box-qnum {
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   font-weight: 800;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 
+.tca-subq-metric-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.tca-subq-stat,
 .tca-box-count {
-  font-size: 1.55rem;
-  font-weight: 900;
-  line-height: 1;
+  font-size: 0.92rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  opacity: 0.98;
 }
 
-/* Colored States */
+.tca-subq-substat {
+  font-size: 0.68rem;
+  font-weight: 600;
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* Colored States based on Weakness Thresholds (<20%, 20-40%, >40%) */
+.tca-subq-heat-tile.heat-strong,
 .tca-compact-heat-box.heat-strong {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(5, 150, 105, 0.28));
   border-color: rgba(16, 185, 129, 0.45);
   color: #34d399;
 }
 
+.tca-subq-heat-tile.heat-mod,
 .tca-compact-heat-box.heat-mod {
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(217, 119, 6, 0.28));
   border-color: rgba(245, 158, 11, 0.45);
   color: #fbbf24;
 }
 
+.tca-subq-heat-tile.heat-weak,
 .tca-compact-heat-box.heat-weak {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.32));
   border-color: rgba(239, 68, 68, 0.55);
   color: #f87171;
 }
 
+.tca-subq-heat-tile.heat-unattempted,
 .tca-compact-heat-box.heat-unattempted {
   background: rgba(30, 41, 59, 0.4);
   border-color: rgba(255, 255, 255, 0.08);
   color: #64748b;
 }
 
+.tca-subq-heat-tile.selected-tile,
 .tca-compact-heat-box.selected-box {
   outline: 2px solid #38bdf8;
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
   transform: translateY(-2px);
+}
+
+.tca-subq-heat-tile.parent-selected {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.12);
 }
 
 .tca-heatmap-legend-mini {
