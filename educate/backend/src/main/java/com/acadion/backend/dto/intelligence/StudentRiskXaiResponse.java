@@ -25,8 +25,26 @@ public class StudentRiskXaiResponse {
     private String topRiskFactor;
     private List<String> studentActionPlan;
     private String teacherIntervention;
+    private List<QuestionSubPartMisconceptionDTO> subQuestionMisconceptions;
     private Map<String, Object> metrics;
     private String evaluationSource;     // "PYTHON_ML_SHAP" or "LOCAL_FALLBACK_RULE_ENGINE"
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class QuestionSubPartMisconceptionDTO {
+        private String questionCode;       // "1b", "2a"
+        private String topicName;
+        private int moduleNumber;
+        private double marksLost;
+        private double marksObtained;
+        private double maxMarks;
+        private double percentage;
+        private boolean wasAttempted;      // true if student attempted this question
+        private String status;            // "WEAK", "MODERATE", "STRONG", "NOT_ATTEMPTED"
+        private String remediationTopic;
+    }
 
     @Data
     @Builder

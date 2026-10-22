@@ -1,8 +1,10 @@
 package com.acadion.backend.service;
 
 import com.acadion.backend.dto.intelligence.ClassroomAnalyticsSummaryDTO;
+import com.acadion.backend.dto.intelligence.ClassroomAnalyticsSummaryDTO.QuestionAnalytics;
 import com.acadion.backend.dto.intelligence.ClassroomAnalyticsSummaryDTO.StudentClassSummaryItem;
 import com.acadion.backend.dto.intelligence.ClassroomAnalyticsSummaryDTO.StudentDistribution;
+import com.acadion.backend.dto.intelligence.ClassroomAnalyticsSummaryDTO.SubQuestionAnalytics;
 import com.acadion.backend.dto.intelligence.ClassroomAnalyticsSummaryDTO.TopicClassPerformance;
 import com.acadion.backend.dto.intelligence.StudentFourLevelAnalyticsDTO;
 import com.acadion.backend.dto.intelligence.StudentFourLevelAnalyticsDTO.ModuleAnalytics;
@@ -68,6 +70,7 @@ public class HierarchicalAnalyticsService {
         for (int m = 1; m <= 5; m++) {
             moduleTotals.put(m, new double[]{0.0, 0.0});
         }
+        Set<Integer> testedModulesInRecords = new HashSet<>();
 
         double sumIaTotals = 0.0;
         int publishedIaCount = 0;
@@ -86,31 +89,39 @@ public class HierarchicalAnalyticsService {
             }
 
             if (blueprint.getQuestions() != null) {
+                Set<String> attemptedQuestions = evaluateAttemptedQuestions(rec, blueprint);
+
                 for (IaSubQuestionItem q : blueprint.getQuestions()) {
                     String code = q.getCode().toLowerCase();
                     double marksObtained = marksMap.getOrDefault(code, marksMap.getOrDefault(code.toUpperCase(), 0.0));
                     double maxMarks = maxMap.getOrDefault(code, maxMap.getOrDefault(code.toUpperCase(), q.getMaxMarks() > 0 ? q.getMaxMarks() : 10.0));
-                    double pct = maxMarks > 0 ? Math.min(100.0, Math.round((marksObtained / maxMarks) * 100.0 * 10.0) / 10.0) : 0.0;
 
-                    boolean attempted = marksObtained > 0;
-                    if (!attempted && rec.getAttemptedChoiceGroups() != null) {
-                        String chosen = rec.getAttemptedChoiceGroups().get(q.getChoiceGroup());
-                        if (chosen != null && chosen.equalsIgnoreCase("Q" + q.getQuestionNumber())) {
-                            attempted = true; // Attempted but scored 0
-                        }
-                    }
+                    String mainQ = "Q" + q.getQuestionNumber();
+                    boolean attempted = attemptedQuestions.contains(mainQ);
+                    testedModulesInRecords.add(q.getModuleNumber());
 
+                    double pct;
                     String status;
                     String recommendation;
-                    if (pct >= 75.0) {
-                        status = "STRONG";
-                        recommendation = "Strong mastery. Ready for advanced university exam problem-solving.";
-                    } else if (pct >= 50.0) {
-                        status = "MODERATE";
-                        recommendation = "Moderate understanding. Review key definitions and practice previous year numericals.";
+
+                    if (attempted) {
+                        pct = maxMarks > 0 ? Math.min(100.0, Math.round((marksObtained / maxMarks) * 100.0 * 10.0) / 10.0) : 0.0;
+                        if (pct >= 75.0) {
+                            status = "STRONG";
+                            recommendation = "Strong mastery. Ready for advanced university exam problem-solving.";
+                        } else if (pct >= 50.0) {
+                            status = "MODERATE";
+                            recommendation = "Moderate understanding. Review key definitions and practice previous year numericals.";
+                        } else {
+                            status = "WEAK";
+                            recommendation = "Critical diagnostic gap. Revisit foundational concepts and seek faculty revision.";
+                        }
                     } else {
-                        status = "WEAK";
-                        recommendation = "Critical diagnostic gap. Revisit foundational concepts and seek faculty revision.";
+                        // Alternative choice question not chosen by student: DO NOT default to WEAK
+                        marksObtained = 0.0;
+                        pct = 0.0;
+                        status = "NOT_ATTEMPTED";
+                        recommendation = "Alternative choice question not attempted in this test.";
                     }
 
                     level1Topics.add(TopicAnalytics.builder()
@@ -127,7 +138,7 @@ public class HierarchicalAnalyticsService {
                             .recommendation(recommendation)
                             .build());
 
-                    // Accumulate for Level 2 Module breakdown
+                    // Accumulate for Level 2 Module breakdown strictly from the attempted question
                     int mod = q.getModuleNumber();
                     if (mod >= 1 && mod <= 5 && attempted) {
                         double[] cur = moduleTotals.get(mod);
@@ -158,17 +169,30 @@ public class HierarchicalAnalyticsService {
 
             final int modNum = m;
             long totalModTopics = level1Topics.stream().filter(t -> t.getModuleNumber() == modNum).count();
-            long weakModTopics = level1Topics.stream().filter(t -> t.getModuleNumber() == modNum && "WEAK".equals(t.getStatus())).count();
+            // Count weak topics strictly from attempted topics that scored < 50%
+            long weakModTopics = level1Topics.stream()
+                    .filter(t -> t.getModuleNumber() == modNum && "WEAK".equals(t.getStatus()))
+                    .count();
 
             String modStatus;
-            if (max == 0) {
-                modStatus = "NOT_ASSESSED";
-            } else if (pct >= 75.0) {
-                modStatus = "STRONG";
-            } else if (pct >= 50.0) {
-                modStatus = "MODERATE";
+            if (max > 0) {
+                if (pct >= 75.0) {
+                    modStatus = "STRONG";
+                } else if (pct >= 50.0) {
+                    modStatus = "MODERATE";
+                } else {
+                    modStatus = "WEAK";
+                }
             } else {
-                modStatus = "WEAK";
+                // If this module was tested in any IA blueprint evaluated:
+                if (testedModulesInRecords.contains(m)) {
+                    // Student attended neither question from this tested module -> explicitly WEAK
+                    modStatus = "WEAK";
+                    max = 20.0;
+                    pct = 0.0;
+                } else {
+                    modStatus = "NOT_ASSESSED";
+                }
             }
 
             level2Modules.put(m, ModuleAnalytics.builder()
@@ -327,6 +351,42 @@ public class HierarchicalAnalyticsService {
 
         List<StudentClassSummaryItem> studentSummaries = new ArrayList<>();
 
+        // Track per-question stats for Q1, Q2, Q3, Q4
+        Map<String, List<Double>> questionScores = new LinkedHashMap<>();
+        Map<String, List<Double>> questionSubScoresA = new LinkedHashMap<>();
+        Map<String, List<Double>> questionSubScoresB = new LinkedHashMap<>();
+        Map<String, String> questionSubCodeA = new HashMap<>();
+        Map<String, String> questionSubCodeB = new HashMap<>();
+        Map<String, String> questionSubTopicA = new HashMap<>();
+        Map<String, String> questionSubTopicB = new HashMap<>();
+        Map<String, Integer> questionModuleMap = new HashMap<>();
+
+        for (String qId : Arrays.asList("Q1", "Q2", "Q3", "Q4")) {
+            questionScores.put(qId, new ArrayList<>());
+            questionSubScoresA.put(qId, new ArrayList<>());
+            questionSubScoresB.put(qId, new ArrayList<>());
+        }
+        questionModuleMap.put("Q1", 1);
+        questionModuleMap.put("Q2", 1);
+        questionModuleMap.put("Q3", 2);
+        questionModuleMap.put("Q4", 2);
+
+        // Prepopulate default question topics from blueprint
+        IaQuestionBlueprint defaultBp = paperParserService.getOrCreateDefaultBlueprint(classroomId, 1);
+        if (defaultBp != null && defaultBp.getQuestions() != null) {
+            for (IaSubQuestionItem q : defaultBp.getQuestions()) {
+                String qId = "Q" + q.getQuestionNumber();
+                String sub = q.getSubQuestion() != null ? q.getSubQuestion().toLowerCase() : "";
+                if ("a".equals(sub)) {
+                    questionSubCodeA.put(qId, q.getCode().toUpperCase());
+                    questionSubTopicA.put(qId, q.getTopicName());
+                } else if ("b".equals(sub)) {
+                    questionSubCodeB.put(qId, q.getCode().toUpperCase());
+                    questionSubTopicB.put(qId, q.getTopicName());
+                }
+            }
+        }
+
         for (Map.Entry<String, List<StudentIaMarksRecord>> entry : recordsByUsn.entrySet()) {
             String usn = entry.getKey();
             List<StudentIaMarksRecord> studentRecs = entry.getValue();
@@ -351,6 +411,21 @@ public class HierarchicalAnalyticsService {
                 Map<String, Double> marks = r.getQuestionMarks() != null ? r.getQuestionMarks() : Collections.emptyMap();
                 Map<String, Double> maxMap = r.getMaxMarksPerQuestion() != null ? r.getMaxMarksPerQuestion() : Collections.emptyMap();
 
+                Set<String> attemptedQuestions = evaluateAttemptedQuestions(r, bp);
+
+                // Collect QuestionAnalytics metrics for Q1, Q2, Q3, Q4 strictly for attempted questions
+                for (String qId : Arrays.asList("Q1", "Q2", "Q3", "Q4")) {
+                    if (attemptedQuestions.contains(qId)) {
+                        String num = qId.substring(1);
+                        double scoreA = getSubQuestionScore(marks, num + "a");
+                        double scoreB = getSubQuestionScore(marks, num + "b");
+                        double totalQ = scoreA + scoreB;
+                        questionScores.get(qId).add(totalQ);
+                        questionSubScoresA.get(qId).add(scoreA);
+                        questionSubScoresB.get(qId).add(scoreB);
+                    }
+                }
+
                 if (bp.getQuestions() != null) {
                     for (IaSubQuestionItem q : bp.getQuestions()) {
                         String code = q.getCode().toLowerCase();
@@ -358,11 +433,15 @@ public class HierarchicalAnalyticsService {
                         double max = maxMap.getOrDefault(code, maxMap.getOrDefault(code.toUpperCase(), q.getMaxMarks() > 0 ? q.getMaxMarks() : 10.0));
                         double pct = max > 0 ? (score / max) * 100.0 : 0.0;
 
-                        TopicAggregator agg = topicMap.computeIfAbsent(q.getCode().toUpperCase() + "||" + q.getTopicName(),
-                                k -> new TopicAggregator(q.getCode().toUpperCase(), q.getTopicName(), q.getModuleNumber(), q.getCo()));
-                        agg.addScore(score, max);
+                        String mainQ = "Q" + q.getQuestionNumber();
+                        boolean wasAttempted = attemptedQuestions.contains(mainQ);
 
-                        if (score > 0 || (r.getAttemptedChoiceGroups() != null && ("Q" + q.getQuestionNumber()).equalsIgnoreCase(r.getAttemptedChoiceGroups().get(q.getChoiceGroup())))) {
+                        // Only accumulate topic metrics if student actually attempted this question
+                        if (wasAttempted) {
+                            TopicAggregator agg = topicMap.computeIfAbsent(q.getCode().toUpperCase() + "||" + q.getTopicName(),
+                                    k -> new TopicAggregator(q.getCode().toUpperCase(), q.getTopicName(), q.getModuleNumber(), q.getCo()));
+                            agg.addScore(score, max);
+
                             double[] mArr = moduleAggs.get(q.getModuleNumber());
                             if (mArr != null) {
                                 mArr[0] += score;
@@ -464,6 +543,98 @@ public class HierarchicalAnalyticsService {
 
         studentSummaries.sort(Comparator.comparing(StudentClassSummaryItem::getUsn));
 
+        // Assemble interactive QuestionAnalytics for Q1, Q2, Q3, Q4
+        Map<String, QuestionAnalytics> questionAnalyticsMap = new LinkedHashMap<>();
+        List<QuestionAnalytics> questionAnalyticsList = new ArrayList<>();
+
+        for (String qId : Arrays.asList("Q1", "Q2", "Q3", "Q4")) {
+            List<Double> qScores = questionScores.get(qId);
+            List<Double> subA = questionSubScoresA.get(qId);
+            List<Double> subB = questionSubScoresB.get(qId);
+
+            int attCount = qScores.size();
+            int weakCount = (int) qScores.stream().filter(s -> s < 10.0).count();
+            double avgScore = attCount > 0 ? (qScores.stream().mapToDouble(Double::doubleValue).sum() / attCount) : 0.0;
+            double avgPct = Math.min(100.0, (avgScore / 20.0) * 100.0);
+
+            String qStatus;
+            if (attCount == 0) {
+                qStatus = "NOT_ATTEMPTED";
+            } else if (avgPct >= 75.0) {
+                qStatus = "STRONG";
+            } else if (avgPct >= 50.0) {
+                qStatus = "MODERATE";
+            } else {
+                qStatus = "WEAK";
+            }
+
+            Map<String, Integer> brackets = new LinkedHashMap<>();
+            int bLow = 0;   // < 10 marks (< 50%)
+            int bMed = 0;   // 10 - 14 marks (50 - 74%)
+            int bHigh = 0;  // 15 - 20 marks (>= 75%)
+            for (double sc : qScores) {
+                if (sc < 10.0) bLow++;
+                else if (sc < 15.0) bMed++;
+                else bHigh++;
+            }
+            brackets.put("< 10 Marks (<50%)", bLow);
+            brackets.put("10-14 Marks (50-74%)", bMed);
+            brackets.put("15-20 Marks (≥75%)", bHigh);
+
+            // Sub question A
+            String num = qId.substring(1);
+            String codeA = questionSubCodeA.getOrDefault(qId, num + "a");
+            String topicA = questionSubTopicA.getOrDefault(qId, "Sub-question " + num + "a");
+            double avgA = !subA.isEmpty() ? (subA.stream().mapToDouble(Double::doubleValue).sum() / subA.size()) : 0.0;
+            int weakA = (int) subA.stream().filter(s -> s < 5.0).count();
+
+            SubQuestionAnalytics subQObjA = SubQuestionAnalytics.builder()
+                    .code(codeA)
+                    .topicName(topicA)
+                    .averageScore(Math.round(avgA * 10.0) / 10.0)
+                    .maxMarks(10.0)
+                    .attemptedCount(subA.size())
+                    .weakCount(weakA)
+                    .lowThreshold(4.0)
+                    .mediumThreshold(7.5)
+                    .highThreshold(10.0)
+                    .build();
+
+            // Sub question B
+            String codeB = questionSubCodeB.getOrDefault(qId, num + "b");
+            String topicB = questionSubTopicB.getOrDefault(qId, "Sub-question " + num + "b");
+            double avgB = !subB.isEmpty() ? (subB.stream().mapToDouble(Double::doubleValue).sum() / subB.size()) : 0.0;
+            int weakB = (int) subB.stream().filter(s -> s < 5.0).count();
+
+            SubQuestionAnalytics subQObjB = SubQuestionAnalytics.builder()
+                    .code(codeB)
+                    .topicName(topicB)
+                    .averageScore(Math.round(avgB * 10.0) / 10.0)
+                    .maxMarks(10.0)
+                    .attemptedCount(subB.size())
+                    .weakCount(weakB)
+                    .lowThreshold(4.0)
+                    .mediumThreshold(7.5)
+                    .highThreshold(10.0)
+                    .build();
+
+            QuestionAnalytics qa = QuestionAnalytics.builder()
+                    .questionNumber(qId)
+                    .moduleNumber(questionModuleMap.getOrDefault(qId, 1))
+                    .attemptedCount(attCount)
+                    .weakCount(weakCount)
+                    .averageScore(Math.round(avgScore * 10.0) / 10.0)
+                    .averagePercentage(Math.round(avgPct * 10.0) / 10.0)
+                    .status(qStatus)
+                    .scoreBrackets(brackets)
+                    .subQuestionA(subQObjA)
+                    .subQuestionB(subQObjB)
+                    .build();
+
+            questionAnalyticsMap.put(qId, qa);
+            questionAnalyticsList.add(qa);
+        }
+
         return ClassroomAnalyticsSummaryDTO.builder()
                 .classroomId(classroomId)
                 .subjectCode(classroom.getSubjectCode() != null ? classroom.getSubjectCode() : "BCS701")
@@ -475,7 +646,105 @@ public class HierarchicalAnalyticsService {
                 .studentDistribution(dist)
                 .lowestPerformingTopics(lowestTopics)
                 .studentSummaries(studentSummaries)
+                .questionAnalytics(questionAnalyticsMap)
+                .questionList(questionAnalyticsList)
                 .build();
+    }
+
+    /**
+     * Evaluates question attempt pairing for an IA record based on VTU mutual-exclusion rules:
+     * - Q1 (1a, 1b) OR Q2 (2a, 2b) -> Module 1
+     * - Q3 (3a, 3b) OR Q4 (4a, 4b) -> Module 2
+     * Specifically, if a student attends 1 and 4, then 2 and 3 are automatically considered not attempted.
+     * Returns a set of attempted main question identifiers: e.g. ["Q1", "Q4"]
+     */
+    private Set<String> evaluateAttemptedQuestions(StudentIaMarksRecord rec, IaQuestionBlueprint blueprint) {
+        Set<String> attempted = new HashSet<>();
+        Map<String, Double> marks = rec.getQuestionMarks() != null ? rec.getQuestionMarks() : Collections.emptyMap();
+        Map<String, String> choiceTags = rec.getAttemptedChoiceGroups() != null ? rec.getAttemptedChoiceGroups() : Collections.emptyMap();
+
+        // 1. Evaluate Module 1 Pair: Q1 vs Q2
+        double q1Score = getSubQuestionScore(marks, "1a") + getSubQuestionScore(marks, "1b") + getSubQuestionScore(marks, "1c");
+        double q2Score = getSubQuestionScore(marks, "2a") + getSubQuestionScore(marks, "2b") + getSubQuestionScore(marks, "2c");
+        boolean q1HasPositive = q1Score > 0;
+        boolean q2HasPositive = q2Score > 0;
+        boolean q1Tagged = "Q1".equalsIgnoreCase(choiceTags.get("Q1_OR_Q2"));
+        boolean q2Tagged = "Q2".equalsIgnoreCase(choiceTags.get("Q1_OR_Q2"));
+        boolean q1ExplicitKey = hasAnyKey(marks, "1a", "1b");
+        boolean q2ExplicitKey = hasAnyKey(marks, "2a", "2b");
+
+        if (q1HasPositive && !q2HasPositive) {
+            attempted.add("Q1");
+        } else if (q2HasPositive && !q1HasPositive) {
+            attempted.add("Q2");
+        } else if (q1HasPositive && q2HasPositive) {
+            // Both attended: pick higher score, other is redundant
+            if (q1Score >= q2Score) {
+                attempted.add("Q1");
+            } else {
+                attempted.add("Q2");
+            }
+        } else {
+            // Neither has score > 0
+            if (q1Tagged) {
+                attempted.add("Q1");
+            } else if (q2Tagged) {
+                attempted.add("Q2");
+            } else if (q1ExplicitKey && !q2ExplicitKey) {
+                attempted.add("Q1");
+            } else if (q2ExplicitKey && !q1ExplicitKey) {
+                attempted.add("Q2");
+            }
+        }
+
+        // 2. Evaluate Module 2 Pair: Q3 vs Q4
+        double q3Score = getSubQuestionScore(marks, "3a") + getSubQuestionScore(marks, "3b") + getSubQuestionScore(marks, "3c");
+        double q4Score = getSubQuestionScore(marks, "4a") + getSubQuestionScore(marks, "4b") + getSubQuestionScore(marks, "4c");
+        boolean q3HasPositive = q3Score > 0;
+        boolean q4HasPositive = q4Score > 0;
+        boolean q3Tagged = "Q3".equalsIgnoreCase(choiceTags.get("Q3_OR_Q4"));
+        boolean q4Tagged = "Q4".equalsIgnoreCase(choiceTags.get("Q3_OR_Q4"));
+        boolean q3ExplicitKey = hasAnyKey(marks, "3a", "3b");
+        boolean q4ExplicitKey = hasAnyKey(marks, "4a", "4b");
+
+        if (q3HasPositive && !q4HasPositive) {
+            attempted.add("Q3");
+        } else if (q4HasPositive && !q3HasPositive) {
+            attempted.add("Q4");
+        } else if (q3HasPositive && q4HasPositive) {
+            if (q3Score >= q4Score) {
+                attempted.add("Q3");
+            } else {
+                attempted.add("Q4");
+            }
+        } else {
+            if (q3Tagged) {
+                attempted.add("Q3");
+            } else if (q4Tagged) {
+                attempted.add("Q4");
+            } else if (q3ExplicitKey && !q4ExplicitKey) {
+                attempted.add("Q3");
+            } else if (q4ExplicitKey && !q3ExplicitKey) {
+                attempted.add("Q4");
+            }
+        }
+
+        return attempted;
+    }
+
+    private double getSubQuestionScore(Map<String, Double> marks, String code) {
+        if (marks == null || code == null) return 0.0;
+        return marks.getOrDefault(code.toLowerCase(), marks.getOrDefault(code.toUpperCase(), 0.0));
+    }
+
+    private boolean hasAnyKey(Map<String, Double> marks, String... codes) {
+        if (marks == null || codes == null) return false;
+        for (String c : codes) {
+            if (marks.containsKey(c.toLowerCase()) || marks.containsKey(c.toUpperCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static class TopicAggregator {

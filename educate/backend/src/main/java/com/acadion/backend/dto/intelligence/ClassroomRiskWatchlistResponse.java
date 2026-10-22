@@ -20,6 +20,25 @@ public class ClassroomRiskWatchlistResponse {
     private int onTrackCount;
     private double classHealthScore;      // 0.0 to 100.0 (100 is optimal)
     private List<StudentRiskWatchlistItem> watchlist;
+    private List<CohortRiskDriverDTO> cohortRiskDrivers;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CohortRiskDriverDTO {
+        private String driverKey;
+        private String driverName;
+        private String description;
+        private double impactPercentage; // e.g. 42.5%
+        private int affectedStudentsCount;
+        private String severity; // "CRITICAL", "MODERATE", "LOW"
+        private List<String> affectedStudentUsns;
+        private List<String> affectedStudentNames;
+        private List<String> clusteredConcepts;
+        private String commonMistakePattern;
+        private double averageScoreDeficit; // e.g. -6.5 marks average deficit
+    }
 
     @Data
     @Builder
