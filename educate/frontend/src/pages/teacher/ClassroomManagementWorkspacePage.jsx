@@ -14,6 +14,7 @@ import {
 } from "../../services/classroomService";
 import ClassroomHeader from "../../components/classroom/ClassroomHeader";
 import EvaluationSchemeConfig from "../../components/classroom/EvaluationSchemeConfig";
+import ClassroomAnnouncementsSection from "../../components/classroom/ClassroomAnnouncementsSection";
 import "./ClassroomWorkspace.css";
 
 export default function ClassroomManagementWorkspacePage() {
@@ -25,14 +26,14 @@ export default function ClassroomManagementWorkspacePage() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Subtab: "members" | "import" | "scheme"
+  // Subtab: "members" | "import" | "scheme" | "announcements"
   const urlSubtab = searchParams.get("subtab") || searchParams.get("tab");
   const [managementTab, setManagementTab] = useState(
-    urlSubtab && ["members", "import", "scheme"].includes(urlSubtab) ? urlSubtab : "members"
+    urlSubtab && ["members", "import", "scheme", "announcements"].includes(urlSubtab) ? urlSubtab : "members"
   );
 
   useEffect(() => {
-    if (urlSubtab && ["members", "import", "scheme"].includes(urlSubtab)) {
+    if (urlSubtab && ["members", "import", "scheme", "announcements"].includes(urlSubtab)) {
       setManagementTab(urlSubtab);
     }
   }, [urlSubtab]);
@@ -305,6 +306,13 @@ export default function ClassroomManagementWorkspacePage() {
                 >
                   ⚖️ Evaluation Scheme Configuration
                 </button>
+                <button
+                  type="button"
+                  className={`subtab-btn ${managementTab === "announcements" ? "active" : ""}`}
+                  onClick={() => handleSubTabChange("announcements")}
+                >
+                  📢 Noticeboard &amp; Resources
+                </button>
               </div>
 
               {/* SUBTAB 1: ENROLLED STUDENTS */}
@@ -507,7 +515,7 @@ export default function ClassroomManagementWorkspacePage() {
                           <tbody>
                             {parsedRoster.students.map((s, idx) => (
                               <tr key={s.usn || s.email || idx}>
-                                <td className="sl-no-cell">{s.rowNumber || idx + 1}</td>
+                                <td className="sl-no-cell"># {s.rowNumber || idx + 1}</td>
                                 <td>
                                   <span className="usn-badge">{s.usn || "N/A"}</span>
                                 </td>
@@ -552,6 +560,13 @@ export default function ClassroomManagementWorkspacePage() {
               {managementTab === "scheme" && (
                 <div style={{ padding: "8px 0" }}>
                   <EvaluationSchemeConfig classroomId={id} isTeacher={true} />
+                </div>
+              )}
+
+              {/* SUBTAB 4: CLASSROOM NOTICEBOARD & RESOURCE BROADCAST */}
+              {managementTab === "announcements" && (
+                <div style={{ padding: "8px 0" }}>
+                  <ClassroomAnnouncementsSection classroomId={id} isTeacher={true} />
                 </div>
               )}
             </div>

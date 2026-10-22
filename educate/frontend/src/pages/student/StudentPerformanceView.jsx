@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import {
   getMyPerformance,
   getMyFourLevelAnalytics,
@@ -8,6 +9,8 @@ import StudentRagTutorModal from "../../components/classroom/StudentRagTutorModa
 import "./StudentPerformanceView.css";
 
 const StudentPerformanceView = ({ classroomId }) => {
+  const params = useParams();
+  const effectiveClassroomId = classroomId || params?.classroomId || params?.id;
   const [fourLevelData, setFourLevelData] = useState(null);
   const [performance, setPerformance] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -24,13 +27,13 @@ const StudentPerformanceView = ({ classroomId }) => {
 
   useEffect(() => {
     let active = true;
-    if (classroomId) {
+    if (effectiveClassroomId) {
       setLoading(true);
       setError(null);
 
       Promise.allSettled([
-        getMyFourLevelAnalytics(classroomId),
-        getMyPerformance(classroomId),
+        getMyFourLevelAnalytics(effectiveClassroomId),
+        getMyPerformance(effectiveClassroomId),
       ])
         .then(([flRes, perfRes]) => {
           if (!active) return;
@@ -68,7 +71,7 @@ const StudentPerformanceView = ({ classroomId }) => {
     return () => {
       active = false;
     };
-  }, [classroomId]);
+  }, [effectiveClassroomId]);
 
   if (loading) {
     return (

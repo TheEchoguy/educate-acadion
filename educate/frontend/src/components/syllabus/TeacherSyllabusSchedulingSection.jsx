@@ -2158,7 +2158,7 @@ export default function TeacherSyllabusSchedulingSection({ classroom, onNavigate
                                   }}
                                 >
                                   {session.subtopicSource === "AI_GENERATED"
-                                    ? "✨ AI Focus"
+                                    ? "🎯 AI Focus"
                                     : session.subtopicSource === "TEACHER_EDITED"
                                     ? "✏️ Teacher Focus"
                                     : session.subtopicSource === "TEACHER_REVIEW_SUGGESTION"

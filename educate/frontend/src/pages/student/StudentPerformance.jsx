@@ -1,240 +1,205 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { getStudentTrend } from "../../services/analyticsService";
-import { getStudentResults } from "../../services/responseService";
+import { getStudentClassrooms } from "../../services/classroomService";
+import StudentPerformanceView from "./StudentPerformanceView";
 import "./StudentPerformance.css";
 
 function StudentPerformance() {
   const navigate = useNavigate();
-  const [analytics, setAnalytics] = useState(null);
-  const [studentResults, setStudentResults] = useState([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [classrooms, setClassrooms] = useState([]);
+  const [selectedClassroomId, setSelectedClassroomId] = useState(searchParams.get("classroomId") || "");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadPerformance();
+    loadClassrooms();
   }, []);
 
-  const loadPerformance = async () => {
+  const loadClassrooms = async () => {
     try {
       setLoading(true);
-      const usn = sessionStorage.getItem("usn") || localStorage.getItem("usn");
-      if (!usn) {
-        toast.error("USN not found");
-        return;
+      const data = await getStudentClassrooms();
+      const list = data || [];
+      setClassrooms(list);
+
+      const requestedId = searchParams.get("classroomId");
+      if (requestedId && list.some((c) => c.id === requestedId)) {
+        setSelectedClassroomId(requestedId);
+      } else if (list.length > 0) {
+        setSelectedClassroomId(list[0].id);
       }
-
-      const [trendData, resultsData] = await Promise.all([
-        getStudentTrend(usn).catch(() => null),
-        getStudentResults(usn).catch(() => []),
-      ]);
-
-      setAnalytics(trendData);
-      setStudentResults(resultsData || []);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load analytics");
+    } catch (err) {
+      console.error("Failed to load student enrolled classrooms:", err);
+      toast.error("Could not load your enrolled classrooms");
     } finally {
       setLoading(false);
     }
   };
 
-  // Calculations for Theory, MCQ, and Offline Breakdown
-  const isMcqResult = (r) => {
-    if (!r) return false;
-    if (r.paperCategory === "QUIZ" || r.paperFormat === "MCQ") return true;
-    if (r.paperId && r.paperId.toUpperCase().includes("MCQ")) return true;
-    return false;
+  const handleSelectClassroom = (id) => {
+    setSelectedClassroomId(id);
+    setSearchParams({ classroomId: id });
   };
-
-  const onlineTheoryResults = studentResults.filter(
-    (r) => r.submissionMode !== "OFFLINE_MANUAL" && !isMcqResult(r) && r.includeInOverallPercentage !== false
-  );
-  const onlineMcqResults = studentResults.filter(
-    (r) => r.submissionMode !== "OFFLINE_MANUAL" && isMcqResult(r) && r.includeInOverallPercentage !== false
-  );
-  const offlineResults = studentResults.filter(
-    (r) => r.submissionMode === "OFFLINE_MANUAL" && r.includeInOverallPercentage !== false
-  );
-
-  const calcAveragePct = (list) => {
-    if (!list || list.length === 0) return 0;
-    const sum = list.reduce((acc, r) => {
-      const maxM = r.maxMarks || 40;
-      const totalM = r.totalMarks != null ? r.totalMarks : 0;
-      return acc + (maxM > 0 ? (totalM / maxM) * 100 : 0);
-    }, 0);
-    return Math.round((sum / list.length) * 10) / 10;
-  };
-
-  const theoryAvg = calcAveragePct(onlineTheoryResults);
-  const mcqAvg = calcAveragePct(onlineMcqResults);
-  const offlineAvg = calcAveragePct(offlineResults);
-  const allApplicable = [...onlineTheoryResults, ...onlineMcqResults, ...offlineResults];
-  const overallAvg = calcAveragePct(allApplicable);
 
   return (
     <div className="performance-page">
+      {/* TOP BAR */}
       <div className="performance-top-bar">
-        <button className="back-btn" onClick={() => navigate("/student/dashboard")}>
+        <button
+          type="button"
+          className="back-btn"
+          onClick={() => navigate("/student/dashboard")}
+        >
           ← Back To Dashboard
         </button>
+
+        {classrooms.length > 1 && (
+          <div className="performance-course-picker" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span className="picker-label" style={{ fontSize: "0.85rem", color: "#94a3b8" }}>Select Course:</span>
+            <select
+              className="course-select-input"
+              style={{
+                background: "#1e293b",
+                border: "1px solid #334155",
+                borderRadius: "8px",
+                color: "#f8fafc",
+                padding: "6px 12px",
+                fontSize: "0.85rem",
+                outline: "none",
+                cursor: "pointer",
+              }}
+              value={selectedClassroomId}
+              onChange={(e) => handleSelectClassroom(e.target.value)}
+            >
+              {classrooms.map((cls) => {
+                const rawName = (cls.name || cls.subjectName || "").toLowerCase();
+                const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
+                const code = cls.courseCode || cls.subjectCode || inferredCode;
+                return (
+                  <option key={cls.id} value={cls.id}>
+                    {code}: {cls.name || cls.subjectName} (Sem {cls.semester}-{cls.section})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
       </div>
 
-      <div className="performance-header">
-        <h1>Student Performance & Predictive Analytics</h1>
-        <p>Comprehensive evaluation combining online theory exams, objective MCQ quizzes, classroom written tests, and performance trends.</p>
+      {/* HEADER */}
+      <div className="performance-header" style={{ marginBottom: "24px" }}>
+        <div
+          className="badge-academic-intel"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "4px 12px",
+            background: "rgba(56, 189, 248, 0.15)",
+            border: "1px solid rgba(56, 189, 248, 0.35)",
+            borderRadius: "9999px",
+            fontSize: "0.78rem",
+            fontWeight: 700,
+            color: "#38bdf8",
+            marginBottom: "12px",
+          }}
+        >
+          🤖 4-LEVEL ACADEMIC INTELLIGENCE &amp; EXPLAINABLE AI (XAI)
+        </div>
+        <h1>Continuous Assessment &amp; Risk Diagnostics</h1>
+        <p>
+          Continuous Internal Evaluation (CIE) progress tracking, question-by-question topic mastery,
+          Module 1 to 5 syllabus heatmaps, and SHAP-explained grade risk attribution.
+        </p>
+
+        {/* COURSE TABS ROW */}
+        {classrooms.length > 0 && (
+          <div
+            className="performance-course-tabs"
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              marginTop: "18px",
+            }}
+          >
+            {classrooms.map((cls) => {
+              const rawName = (cls.name || cls.subjectName || "").toLowerCase();
+              const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
+              const code = cls.courseCode || cls.subjectCode || inferredCode;
+              const isSelected = cls.id === selectedClassroomId;
+
+              return (
+                <button
+                  key={cls.id}
+                  type="button"
+                  className={`course-tab-pill ${isSelected ? "active" : ""}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "8px 16px",
+                    borderRadius: "10px",
+                    border: isSelected ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                    background: isSelected ? "rgba(56, 189, 248, 0.18)" : "rgba(255, 255, 255, 0.04)",
+                    color: isSelected ? "#ffffff" : "#94a3b8",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={() => handleSelectClassroom(cls.id)}
+                >
+                  <span style={{ color: isSelected ? "#38bdf8" : "#cbd5e1" }}>{code}</span>
+                  <span>{cls.name || cls.subjectName}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {loading ? (
-        <div className="loading-msg">Loading student performance data...</div>
+        <div className="loading-msg" style={{ textAlign: "center", padding: "60px 20px" }}>
+          <div className="spinner" style={{ margin: "0 auto 16px" }} />
+          Loading your enrolled courses &amp; academic intelligence suite...
+        </div>
+      ) : classrooms.length === 0 ? (
+        <div className="sp-empty-card" style={{ maxWidth: "600px", margin: "40px auto", textAlign: "center" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "16px" }}>🏫</div>
+          <h3>No Classrooms Enrolled Yet</h3>
+          <p style={{ color: "#94a3b8", lineHeight: "1.6", marginBottom: "24px" }}>
+            To view your Scaled CIE Progress, Topic Mastery, Module Heatmaps, and Explainable AI risk
+            analysis, please join a classroom using the join code provided by your faculty.
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            style={{
+              padding: "10px 20px",
+              background: "linear-gradient(135deg, #0284c7, #0369a1)",
+              border: "none",
+              borderRadius: "8px",
+              color: "#ffffff",
+              fontWeight: "600",
+              cursor: "pointer",
+            }}
+            onClick={() => navigate("/student/dashboard")}
+          >
+            ← Go to Dashboard &amp; Enter Join Code
+          </button>
+        </div>
       ) : (
-        <div className="performance-content">
-          {/* Overall Performance Card */}
-          <div className="performance-card">
-            <h2>Overall Academic Performance</h2>
-
-            <div className="summary-item">
-              <span>Student USN</span>
-              <strong>{analytics?.usn || localStorage.getItem("usn")}</strong>
-            </div>
-
-            <div className="summary-item">
-              <span>Overall Aggregate Score</span>
-              <strong className="score-highlight">{allApplicable.length > 0 ? `${overallAvg}%` : "N/A"}</strong>
-            </div>
-
-            <div className="summary-item">
-              <span>Performance Trend</span>
-              <strong className={`direction-tag ${analytics?.direction?.toLowerCase()}`}>
-                {analytics?.direction || "STABLE"}
-              </strong>
-            </div>
-
-            <div className="summary-item">
-              <span>Total Evaluations</span>
-              <strong>{allApplicable.length} Tests ({onlineTheoryResults.length} Theory · {onlineMcqResults.length} MCQ · {offlineResults.length} Offline)</strong>
-            </div>
-          </div>
-
-          {/* Assessment Mode Breakdown Card */}
-          <div className="performance-card">
-            <h2>Assessment Breakdown</h2>
-
-            <div className="mode-breakdown-row">
-              <div className="mode-stat-box online-box">
-                <span className="mode-title">📑 Theory Exams</span>
-                <span className="mode-avg">{onlineTheoryResults.length > 0 ? `${theoryAvg}%` : "No submissions"}</span>
-                <small className="mode-count">{onlineTheoryResults.length} Written Tests</small>
-              </div>
-
-              <div className="mode-stat-box mcq-box">
-                <span className="mode-title">🎯 MCQ Quizzes</span>
-                <span className="mode-avg">{onlineMcqResults.length > 0 ? `${mcqAvg}%` : "No submissions"}</span>
-                <small className="mode-count">{onlineMcqResults.length} Objective Quizzes</small>
-              </div>
-
-              <div className="mode-stat-box offline-box">
-                <span className="mode-title">📝 Offline Written</span>
-                <span className="mode-avg">{offlineResults.length > 0 ? `${offlineAvg}%` : "No records"}</span>
-                <small className="mode-count">{offlineResults.length} Classroom Tests</small>
-              </div>
-            </div>
-          </div>
-
-          <div className="performance-card">
-            <h2>Exam History</h2>
-
-            <div className="history-list">
-
-              {analytics.trend?.map(
-                (exam, index) => (
-
-                  <div
-                    className="history-item"
-                    key={index}
-                  >
-
-                    <div>
-
-                      <span>
-                        {
-                          exam.paperId
-                        }
-                      </span>
-
-                      <small>
-                        {
-                          exam.submittedAt
-                        }
-                      </small>
-
-                    </div>
-
-                    <strong>
-
-                      {
-                        exam.percentage
-                      }
-                      %
-
-                    </strong>
-
-                  </div>
-                )
-              )}
-
-            </div>
-
-          </div>
-
-          <div className="performance-card">
-
-            <h2>
-              Prediction Insights
-            </h2>
-
-            <div className="history-list">
-
-              {analytics.trend?.map(
-                (exam, index) => (
-
-                  <div
-                    className="history-item"
-                    key={index}
-                  >
-
-                    <div>
-
-                      <span>
-                        {
-                          exam.paperId
-                        }
-                      </span>
-
-                      <small>
-                        {
-                          exam.riskLevel
-                        }
-                      </small>
-
-                    </div>
-
-                    <strong>
-                      {exam.predictedScore != null ? `${exam.predictedScore}%` : "N/A"}
-                    </strong>
-
-                  </div>
-                )
-              )}
-
-            </div>
-
-          </div>
-
+        <div className="performance-view-wrapper" style={{ marginTop: "16px" }}>
+          {selectedClassroomId && (
+            <StudentPerformanceView
+              key={selectedClassroomId}
+              classroomId={selectedClassroomId}
+            />
+          )}
         </div>
       )}
-
     </div>
   );
 }

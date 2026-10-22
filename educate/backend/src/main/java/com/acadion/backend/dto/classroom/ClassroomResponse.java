@@ -41,6 +41,11 @@ public class ClassroomResponse {
     // Student specific context if requested by a student
     private String studentMembershipStatus;
 
+    // Syllabus coverage progress for classroom
+    private Double coveragePercentage;
+    private Integer completedTopics;
+    private Integer totalTopics;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

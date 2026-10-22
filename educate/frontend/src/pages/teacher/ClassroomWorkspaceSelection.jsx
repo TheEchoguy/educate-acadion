@@ -226,6 +226,31 @@ export default function ClassroomWorkspaceSelection() {
                   </button>
                 </div>
               </div>
+
+              {/* CARD F: CLASSROOM NOTICEBOARD & RESOURCE BROADCAST */}
+              <div className="workspace-entry-card" id="card-classroom-announcements">
+                <div className="workspace-entry-icon" style={{ background: "rgba(59, 130, 246, 0.12)" }}>
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                  </svg>
+                </div>
+                <div className="workspace-entry-badge" style={{ color: "#38BDF8", borderColor: "rgba(56, 189, 248, 0.3)" }}>Broadcast & Sharing</div>
+                <h3 className="workspace-entry-title">Noticeboard &amp; Resource Broadcast</h3>
+                <p className="workspace-entry-desc">
+                  Publish pinned course notices, exam alerts, and 1-click downloadable slide decks, notes, or assignment guidelines.
+                </p>
+                <div className="workspace-entry-footer">
+                  <button
+                    type="button"
+                    className="workspace-entry-btn"
+                    id="btn-open-workspace-announcements"
+                    onClick={() => navigate(`/teacher/classrooms/${id}/management?subtab=announcements`)}
+                  >
+                    Broadcast Notice →
+                  </button>
+                </div>
+              </div>
             </div>
           </>
         )}

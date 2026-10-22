@@ -22,6 +22,7 @@ import IaMarksUploadSection from "../../components/classroom/IaMarksUploadSectio
 import ClassroomHeader from "../../components/classroom/ClassroomHeader";
 import AiContentStudioSection from "../../components/classroom/AiContentStudioSection";
 import RagStudyTutorSection from "../../components/classroom/RagStudyTutorSection";
+import ClassroomAnnouncementsSection from "../../components/classroom/ClassroomAnnouncementsSection";
 
 function ClassroomWorkspace() {
   const { id } = useParams();
@@ -72,6 +73,8 @@ function ClassroomWorkspace() {
     activeSection = "studio";
   } else if (sParam === "tutor" || sParam === "rag" || tParam === "tutor") {
     activeSection = "tutor";
+  } else if (sParam === "announcements" || sParam === "noticeboard" || tParam === "announcements") {
+    activeSection = "announcements";
   } else if (sParam === "iamarks" || sParam === "intelligence" || tParam === "iamarks") {
     activeSection = "management";
   } else if (sParam === "syllabus" || tParam === "syllabus") {
@@ -508,6 +511,15 @@ function ClassroomWorkspace() {
                 <span className="section-label">AI Study Tutor</span>
                 <span className="section-stage-badge" style={{ background: "rgba(6, 182, 212, 0.2)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.4)" }}>RAG Agent</span>
               </button>
+
+              <button
+                type="button"
+                className={`top-section-btn ${activeSection === "announcements" ? "active" : ""}`}
+                onClick={() => handleSectionChange("announcements")}
+              >
+                <span className="section-icon">📢</span>
+                <span className="section-label">Noticeboard &amp; Broadcast</span>
+              </button>
             </div>
 
             {/* SECTION 1: CLASSROOM MANAGEMENT */}
@@ -792,7 +804,7 @@ function ClassroomWorkspace() {
                             <tbody>
                               {parsedRoster.students.map((s, idx) => (
                                 <tr key={s.usn || s.email || idx}>
-                                  <td className="sl-no-cell">{s.rowNumber || idx + 1}</td>
+                                  <td className="sl-no-cell"># {s.rowNumber || idx + 1}</td>
                                   <td>
                                     <span className="usn-badge">{s.usn || "N/A"}</span>
                                   </td>
@@ -883,6 +895,13 @@ function ClassroomWorkspace() {
             {activeSection === "tutor" && (
               <div className="tab-panel-container" style={{ padding: "20px" }}>
                 <RagStudyTutorSection classroomId={id} classroomName={classroom?.name} isTeacher={true} />
+              </div>
+            )}
+
+            {/* SECTION 7: NOTICEBOARD & RESOURCE BROADCAST */}
+            {activeSection === "announcements" && (
+              <div className="tab-panel-container" style={{ padding: "20px" }}>
+                <ClassroomAnnouncementsSection classroomId={id} isTeacher={true} />
               </div>
             )}
           </>

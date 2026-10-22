@@ -1,19 +1,35 @@
 import { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { jwtDecode } from "jwt-decode";
 import { getStudentResults } from "../../services/responseService";
 import { getAllPapers } from "../../services/paperService";
+import { getStudentClassrooms, getMyPerformance } from "../../services/classroomService";
 import { exportEvaluatedSubmissionPdf } from "../../utils/pdfGenerator";
 import "./MyResults.css";
 
 function MyResults() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+
+  // Unified Hub Tab: AVAILABLE_EXAMS | PRACTICE_PAPERS | EVALUATED_RESULTS
+  const initialHubTab = searchParams.get("tab") ||
+    (location.pathname.includes("exams") ? "AVAILABLE_EXAMS" :
+     location.pathname.includes("practice") ? "PRACTICE_PAPERS" : "EVALUATED_RESULTS");
+  const [hubTab, setHubTab] = useState(initialHubTab);
+
+  // Section in Evaluated Results: ONLINE_TESTS (Section A) | IA_MARKSHEETS (Section B)
+  const [resultsSection, setResultsSection] = useState("ONLINE_TESTS");
+
   const [results, setResults] = useState([]);
   const [papers, setPapers] = useState([]);
+  const [classrooms, setClassrooms] = useState([]);
+  const [iaPerformanceMap, setIaPerformanceMap] = useState({});
   const [selectedResult, setSelectedResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("ALL"); // ALL, THEORY, MCQ, OFFLINE
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchResults = async () => {
     try {
@@ -35,9 +51,10 @@ function MyResults() {
         return;
       }
 
-      const [resData, paperData] = await Promise.allSettled([
+      const [resData, paperData, clsData] = await Promise.allSettled([
         getStudentResults(usn),
-        getAllPapers(),
+        getAllPapers({ role: "STUDENT" }),
+        getStudentClassrooms(),
       ]);
 
       if (resData.status === "fulfilled") {
@@ -45,6 +62,22 @@ function MyResults() {
       }
       if (paperData.status === "fulfilled") {
         setPapers(paperData.value || []);
+      }
+      if (clsData.status === "fulfilled" && clsData.value) {
+        const clsList = clsData.value || [];
+        setClassrooms(clsList);
+
+        // Fetch student IA performance records for each enrolled classroom
+        const pMap = {};
+        await Promise.allSettled(
+          clsList.map(async (cls) => {
+            try {
+              const perf = await getMyPerformance(cls.id);
+              if (perf) pMap[cls.id] = perf;
+            } catch (err) {}
+          })
+        );
+        setIaPerformanceMap(pMap);
       }
     } catch (error) {
       console.error(error);
@@ -306,60 +339,386 @@ function MyResults() {
       {/* Top Header */}
       <div className="results-header">
         <div>
-          <h2>My Exam Results & Evaluations</h2>
+          <h2>📝 Examinations &amp; Marksheets Hub</h2>
           <p>
-            View all your online theory exam submissions, objective MCQ quizzes, classroom written test
-            evaluations, faculty feedback, and AI performance predictions.
+            Attend scheduled classroom assessments, take unlimited practice papers, and inspect evaluated results.
           </p>
         </div>
       </div>
 
       {!selectedResult && (
-        <>
-          {/* Filter Categories Bar */}
-          <div className="filter-tabs-row">
-            <div className="tabs-left">
-              <button
-                className={`category-tab-btn ${activeTab === "ALL" ? "active" : ""}`}
-                onClick={() => setActiveTab("ALL")}
-              >
-                📁 All Evaluations <span className="tab-count">{results.length}</span>
-              </button>
-              <button
-                className={`category-tab-btn ${activeTab === "THEORY" ? "active" : ""}`}
-                onClick={() => setActiveTab("THEORY")}
-              >
-                📄 Theory Exams <span className="tab-count">{onlineTheoryResults.length}</span>
-              </button>
-              <button
-                className={`category-tab-btn ${activeTab === "MCQ" ? "active" : ""}`}
-                onClick={() => setActiveTab("MCQ")}
-              >
-                🎯 Objective MCQ Quizzes <span className="tab-count">{onlineMcqResults.length}</span>
-              </button>
-              <button
-                className={`category-tab-btn ${activeTab === "OFFLINE" ? "active" : ""}`}
-                onClick={() => setActiveTab("OFFLINE")}
-              >
-                📝 Offline Written Tests <span className="tab-count">{offlineResults.length}</span>
-              </button>
-            </div>
+        <div className="hub-main-tabs-nav">
+          <button
+            type="button"
+            className={`hub-tab-btn ${hubTab === "AVAILABLE_EXAMS" ? "active" : ""}`}
+            onClick={() => setHubTab("AVAILABLE_EXAMS")}
+          >
+            <span>📝 Available Classroom Exams</span>
+            <span className="tab-count" style={{ background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", padding: "2px 8px", borderRadius: "10px", fontSize: "0.78rem" }}>
+              {papers.length}
+            </span>
+          </button>
 
-            <div className="export-dropdown-wrapper">
-              <button
-                className="export-csv-btn"
-                onClick={() => exportCategoryCsv(activeTab)}
-                title="Download CSV table of filtered results"
-              >
-                📊 Export {activeTab === "ALL" ? "All" : activeTab} Results (CSV)
-              </button>
-            </div>
+          <button
+            type="button"
+            className={`hub-tab-btn ${hubTab === "PRACTICE_PAPERS" ? "active" : ""}`}
+            onClick={() => setHubTab("PRACTICE_PAPERS")}
+          >
+            <span>🎯 Practice Papers &amp; Self-Testing</span>
+          </button>
+
+          <button
+            type="button"
+            className={`hub-tab-btn ${hubTab === "EVALUATED_RESULTS" ? "active" : ""}`}
+            onClick={() => setHubTab("EVALUATED_RESULTS")}
+          >
+            <span>📊 Evaluated Results &amp; Marksheets</span>
+            <span className="tab-count" style={{ background: "rgba(16, 185, 129, 0.2)", color: "#34d399", padding: "2px 8px", borderRadius: "10px", fontSize: "0.78rem" }}>
+              {results.length + classrooms.length}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* TAB 1: AVAILABLE CLASSROOM EXAMS */}
+      {!selectedResult && hubTab === "AVAILABLE_EXAMS" && (
+        <div className="hub-available-exams-panel">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
+            <h3 style={{ margin: 0, color: "#f8fafc", fontSize: "1.2rem" }}>Scheduled Classroom Exams ({papers.length})</h3>
+            <input
+              type="text"
+              placeholder="Search paper by subject or code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                background: "#1e293b",
+                border: "1px solid rgba(255, 255, 255, 0.15)",
+                color: "#f8fafc",
+                padding: "8px 14px",
+                borderRadius: "8px",
+                fontSize: "0.86rem",
+                width: "280px",
+              }}
+            />
           </div>
+
+          {loading ? (
+            <div className="loading-state-card"><div className="spinner" /><p>Loading classroom exams...</p></div>
+          ) : papers.length === 0 ? (
+            <div className="empty-results-card">
+              <span className="empty-icon">📝</span>
+              <h3>No Classroom Examinations Available</h3>
+              <p>Your faculty has not scheduled any examinations for your batch yet.</p>
+            </div>
+          ) : (
+            <div className="results-rows-container">
+              {papers
+                .filter((p) => {
+                  if (!searchQuery.trim()) return true;
+                  const q = searchQuery.toLowerCase();
+                  return (p.subject || "").toLowerCase().includes(q) || (p.subjectCode || "").toLowerCase().includes(q) || (p.paperId || "").toLowerCase().includes(q);
+                })
+                .map((paper) => {
+                  const isMcq = isMcqResult(paper);
+                  const paperMaxMarks = getPaperMaxMarks(paper);
+                  const attendedSubmission = results.find(
+                    (r) => (r.paperId || "").toLowerCase() === (paper.paperId || paper.id || "").toLowerCase()
+                  );
+                  const isAttended = Boolean(attendedSubmission);
+
+                  return (
+                    <div className={`result-row-card ${isMcq ? "mcq-row" : "theory-row"}`} key={paper.id || paper.paperId}>
+                      <div className="row-left-cell">
+                        <div className="row-badge-cluster">
+                          <span className="exam-code-pill">{paper.subjectCode || paper.paperId}</span>
+                          <span className={`exam-mode-badge ${isMcq ? "mcq-mode" : "online-mode"}`}>
+                            {isMcq ? "🎯 Objective MCQ Quiz" : "🌐 Timed Theory Exam"}
+                          </span>
+                          {isAttended ? (
+                            <span className="eval-status-pill done">✓ Attended ({attendedSubmission.totalMarks}/{attendedSubmission.maxMarks || paperMaxMarks} M)</span>
+                          ) : (
+                            <span className="eval-status-pill pending">⚡ Ready to Attend</span>
+                          )}
+                        </div>
+                        <h3 className="paper-code-title">{paper.subject}</h3>
+                        <div className="evaluator-subtext">
+                          <span>Semester: {paper.semester || "All"}</span>
+                          <span> • Total Questions: {paper.questions?.length || 0}</span>
+                          <span> • Max Marks: {paperMaxMarks} M</span>
+                        </div>
+                      </div>
+
+                      <div className="row-right-actions">
+                        {isAttended ? (
+                          <button
+                            type="button"
+                            className="view-scorecard-btn"
+                            onClick={() => {
+                              setSelectedResult(attendedSubmission);
+                              setHubTab("EVALUATED_RESULTS");
+                              setResultsSection("ONLINE_TESTS");
+                            }}
+                          >
+                            👁 View Evaluated Scorecard
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="view-scorecard-btn"
+                            style={{ background: "linear-gradient(135deg, #0284c7, #0369a1)", borderColor: "#38bdf8" }}
+                            onClick={() => navigate(`/student/attend/${paper.id || paper.paperId}`)}
+                          >
+                            📝 Attend Classroom Exam →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: PRACTICE PAPERS & SELF-TESTING */}
+      {!selectedResult && hubTab === "PRACTICE_PAPERS" && (
+        <div className="hub-practice-panel">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
+            <div>
+              <h3 style={{ margin: "0 0 4px 0", color: "#f8fafc", fontSize: "1.2rem" }}>🎯 Practice Papers &amp; Self-Testing</h3>
+              <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.88rem" }}>
+                Take unlimited practice retakes with instant automated AI scoring and solution keys.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-primary"
+              style={{
+                padding: "8px 16px",
+                background: "linear-gradient(135deg, #9333ea, #7e22ce)",
+                border: "none",
+                borderRadius: "8px",
+                color: "#ffffff",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                cursor: "pointer",
+              }}
+              onClick={() => navigate("/student/practice")}
+            >
+              Open Full Practice Arena →
+            </button>
+          </div>
+
+          <div className="results-rows-container">
+            {papers.map((paper) => {
+              const paperMaxMarks = getPaperMaxMarks(paper);
+              const isMcq = isMcqResult(paper);
+
+              return (
+                <div className="result-row-card theory-row" key={`practice-${paper.id || paper.paperId}`}>
+                  <div className="row-left-cell">
+                    <div className="row-badge-cluster">
+                      <span className="exam-code-pill">{paper.subjectCode || paper.paperId}</span>
+                      <span className="exam-mode-badge online-mode">UNLIMITED RETAKES</span>
+                      <span className="eval-status-pill done">🎯 Practice Set</span>
+                    </div>
+                    <h3 className="paper-code-title">{paper.subject}</h3>
+                    <div className="evaluator-subtext">
+                      <span>Format: {isMcq ? "Objective MCQ" : "Theory Descriptive"}</span>
+                      <span> • Max Marks: {paperMaxMarks} M</span>
+                      <span> • Instant AI Evaluation Supported</span>
+                    </div>
+                  </div>
+
+                  <div className="row-right-actions">
+                    <button
+                      type="button"
+                      className="view-scorecard-btn"
+                      style={{ background: "rgba(147, 51, 234, 0.2)", borderColor: "rgba(147, 51, 234, 0.5)", color: "#c084fc" }}
+                      onClick={() => navigate(`/student/attend/${paper.id || paper.paperId}?mode=practice`)}
+                    >
+                      🎯 Start Practice Retake →
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: EVALUATED RESULTS & MARKSHEETS */}
+      {!selectedResult && hubTab === "EVALUATED_RESULTS" && (
+        <>
+          {/* SECTION A vs SECTION B SUB-NAV */}
+          <div className="hub-sub-sections-bar">
+            <button
+              type="button"
+              className={`hub-sub-btn ${resultsSection === "ONLINE_TESTS" ? "active" : ""}`}
+              onClick={() => setResultsSection("ONLINE_TESTS")}
+            >
+              Section A: 🌐 Online Attended Tests ({results.length})
+            </button>
+            <button
+              type="button"
+              className={`hub-sub-btn ${resultsSection === "IA_MARKSHEETS" ? "active" : ""}`}
+              onClick={() => setResultsSection("IA_MARKSHEETS")}
+            >
+              Section B: 📝 Internal Assessment (IA) Split-Up Marksheets ({classrooms.length})
+            </button>
+          </div>
+
+          {/* SECTION B: INTERNAL ASSESSMENT (IA) SPLIT-UP MARKSHEETS */}
+          {resultsSection === "IA_MARKSHEETS" && (
+            <div className="ia-marksheets-hub-wrapper">
+              {classrooms.length === 0 ? (
+                <div className="empty-results-card">
+                  <span className="empty-icon">🏫</span>
+                  <h3>No Classrooms Enrolled</h3>
+                  <p>Join a classroom to view your question-by-question IA offline split-up marks.</p>
+                </div>
+              ) : (
+                classrooms.map((cls) => {
+                  const rawName = (cls.name || cls.subjectName || "").toLowerCase();
+                  const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
+                  const displayCode = cls.courseCode || cls.subjectCode || inferredCode;
+                  const perf = iaPerformanceMap[cls.id];
+                  const hasPublishedTests = perf && perf.iaTests && perf.iaTests.length > 0;
+
+                  return (
+                    <div className="ia-marksheet-card" key={cls.id}>
+                      <div className="ia-marksheet-header">
+                        <div className="ia-card-title-group">
+                          <h3>{displayCode}: {cls.name || cls.subjectName}</h3>
+                          <span className="ia-card-meta">
+                            Faculty: <strong>{cls.teacherName || "Faculty"}</strong> • Sem {cls.semester}-{cls.section} • {cls.academicBatch || "Batch"}
+                          </span>
+                        </div>
+                        {hasPublishedTests ? (
+                          <div className="ia-scaled-pill">
+                            Scaled CIE Marks: <strong>{perf.scaledCieEarned?.toFixed(1) || 0} / {perf.scaledCieMax || 15.0} M</strong>
+                          </div>
+                        ) : (
+                          <div className="ia-pending-badge">
+                            ⏳ Pending faculty publication
+                          </div>
+                        )}
+                      </div>
+
+                      {hasPublishedTests ? (
+                        perf.iaTests.map((test) => (
+                          <div key={test.iaNumber} style={{ marginBottom: "22px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                              <strong style={{ color: "#38bdf8", fontSize: "0.95rem" }}>
+                                📑 Internal Assessment {test.iaNumber} (IA-{test.iaNumber})
+                              </strong>
+                              <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
+                                Total Scored: <strong style={{ color: "#f8fafc" }}>{test.totalMarks} / {test.maxMarks} M</strong> ({test.percentage}%)
+                              </span>
+                            </div>
+                            <div className="ia-table-wrapper">
+                              <table className="ia-split-table">
+                                <thead>
+                                  <tr>
+                                    <th>Question</th>
+                                    <th>Topic Name</th>
+                                    <th>Module / CO</th>
+                                    <th>Status</th>
+                                    <th>Scored Marks</th>
+                                    <th>Max Marks</th>
+                                    <th>Mastery %</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {test.questions?.map((q, qidx) => (
+                                    <tr key={qidx}>
+                                      <td><span className="ia-qcode-badge">{q.code || `Q${q.questionNumber}`}</span></td>
+                                      <td>{q.topicName || "Syllabus Question"}</td>
+                                      <td>{q.moduleNumber ? `Module ${q.moduleNumber}` : "General"} {q.co ? `• ${q.co}` : ""}</td>
+                                      <td>
+                                        <span className={`ia-status-tag ${q.status === "ATTEMPTED" ? "attempted" : "skipped"}`}>
+                                          {q.status === "ATTEMPTED" ? "✓ Attempted" : "Skipped via Choice"}
+                                        </span>
+                                      </td>
+                                      <td><strong>{q.marksScored?.toFixed(1) || 0}</strong></td>
+                                      <td>{q.maxMarks || 0}</td>
+                                      <td>{q.percentage?.toFixed(0) || 0}%</td>
+                                    </tr>
+                                  ))}
+                                  <tr className="ia-total-row">
+                                    <td colSpan="4">Total Aggregate (IA-{test.iaNumber})</td>
+                                    <td>{test.totalMarks?.toFixed(1) || 0}</td>
+                                    <td>{test.maxMarks}</td>
+                                    <td>{test.percentage?.toFixed(1) || 0}%</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p style={{ color: "#94a3b8", fontSize: "0.88rem", margin: 0, padding: "8px 0" }}>
+                          Question-by-question offline IA marks have not yet been published by your course instructor.
+                          Once verified and published, your full question split-up marks and scaled CIE marks will appear here.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* SECTION A: ONLINE ATTENDED TESTS */}
+          {resultsSection === "ONLINE_TESTS" && (
+            <>
+              {/* Filter Categories Bar */}
+              <div className="filter-tabs-row">
+                <div className="tabs-left">
+                  <button
+                    className={`category-tab-btn ${activeTab === "ALL" ? "active" : ""}`}
+                    onClick={() => setActiveTab("ALL")}
+                  >
+                    📁 All Evaluations <span className="tab-count">{results.length}</span>
+                  </button>
+                  <button
+                    className={`category-tab-btn ${activeTab === "THEORY" ? "active" : ""}`}
+                    onClick={() => setActiveTab("THEORY")}
+                  >
+                    📄 Theory Exams <span className="tab-count">{onlineTheoryResults.length}</span>
+                  </button>
+                  <button
+                    className={`category-tab-btn ${activeTab === "MCQ" ? "active" : ""}`}
+                    onClick={() => setActiveTab("MCQ")}
+                  >
+                    🎯 Objective MCQ Quizzes <span className="tab-count">{onlineMcqResults.length}</span>
+                  </button>
+                  <button
+                    className={`category-tab-btn ${activeTab === "OFFLINE" ? "active" : ""}`}
+                    onClick={() => setActiveTab("OFFLINE")}
+                  >
+                    📝 Offline Written Tests <span className="tab-count">{offlineResults.length}</span>
+                  </button>
+                </div>
+
+                <div className="export-dropdown-wrapper">
+                  <button
+                    className="export-csv-btn"
+                    onClick={() => exportCategoryCsv(activeTab)}
+                    title="Download CSV table of filtered results"
+                  >
+                    📊 Export {activeTab === "ALL" ? "All" : activeTab} Results (CSV)
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
 
-      {/* Main Content Area */}
-      {loading ? (
+      {/* Main Content Area for Section A Online Results */}
+      {resultsSection === "ONLINE_TESTS" && hubTab === "EVALUATED_RESULTS" && (
+        loading ? (
         <div className="loading-state-card">
           <div className="spinner"></div>
           <p>Fetching evaluation records and scorecards...</p>
@@ -702,7 +1061,8 @@ function MyResults() {
             )}
           </div>
         </div>
-      )}
+      )
+    )}
     </div>
   );
 }

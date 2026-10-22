@@ -983,9 +983,14 @@
   box-shadow: 0 6px 22px rgba(124, 58, 237, 0.55);
 }
 
-.btn-download-master:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.btn-download-master:disabled,
+.btn-action-download-excel:disabled,
+.btn-export-report:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  pointer-events: auto !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 .btn-export-report {
@@ -1011,9 +1016,26 @@
   transform: translateY(-2px);
 }
 
-.btn-export-report:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.btn-action-download-excel {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-action-download-excel:hover:not(:disabled) {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #7dd3fc;
 }
 
 /* Upload Mode Toggle */

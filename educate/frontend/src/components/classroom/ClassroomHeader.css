@@ -374,3 +374,138 @@
     justify-content: center;
   }
 }
+
+/* ==========================================================================
+   SLEEK STICKY COMPACT 40PX NAVIGATION BAR FOR INNER WORKSPACE PAGES
+   ========================================================================== */
+.compact-classroom-nav-bar {
+  position: sticky;
+  top: 12px;
+  z-index: 50;
+  min-height: 42px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  border-radius: 12px;
+  padding: 6px 18px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.compact-nav-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.88rem;
+  color: #94a3b8;
+}
+
+.compact-back-btn {
+  background: transparent;
+  color: #38bdf8;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.compact-back-btn:hover {
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+  text-decoration: underline;
+}
+
+.compact-nav-slash {
+  color: #475569;
+  font-weight: 600;
+}
+
+.compact-course-title {
+  color: #f8fafc;
+  font-size: 0.9rem;
+}
+
+.compact-code-highlight {
+  color: #c084fc;
+  font-weight: 700;
+}
+
+.compact-sem-sec {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.compact-nav-bullet {
+  color: #475569;
+  font-size: 0.8rem;
+}
+
+.compact-workspace-title {
+  color: #38bdf8;
+  font-weight: 600;
+  font-size: 0.84rem;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.compact-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.compact-join-code-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
+.compact-code-label {
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.compact-code-val {
+  color: #a855f7;
+  font-family: monospace;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-size: 0.88rem;
+}
+
+.compact-copy-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.74rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.compact-copy-btn:hover {
+  background: rgba(168, 85, 247, 0.25);
+  border-color: rgba(168, 85, 247, 0.5);
+}

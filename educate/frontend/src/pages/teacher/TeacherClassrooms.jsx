@@ -41,15 +41,15 @@ function TeacherClassrooms() {
   const teacherDept = sessionStorage.getItem("department") || localStorage.getItem("department") || "Computer Science & Engineering";
 
   const [formData, setFormData] = useState({
-    name: "Internet of Things",
-    courseCode: "BCS701",
-    subjectName: "Internet of Things",
-    subjectCode: "BCS701",
+    name: "",
+    courseCode: "",
+    subjectName: "",
+    subjectCode: "",
     department: teacherDept,
     semester: 7,
     section: "A",
-    academicBatch: "2021-2025",
-    academicYear: "2024-2025",
+    academicBatch: "2022-2026",
+    academicYear: "2025-2026",
   });
 
   useEffect(() => {
@@ -103,9 +103,9 @@ function TeacherClassrooms() {
       setShowCreateModal(false);
       setFormData({
         name: "",
-        courseCode: "BCS701",
+        courseCode: "",
         subjectName: "",
-        subjectCode: "BCS701",
+        subjectCode: "",
         department: teacherDept,
         semester: 7,
         section: "A",
@@ -124,11 +124,14 @@ function TeacherClassrooms() {
   const handleEditOpen = (cls, e) => {
     e.stopPropagation();
     setEditClassroom(cls);
+    const rawName = (cls.name || cls.subjectName || "").toLowerCase();
+    const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "");
+    const code = cls.courseCode || cls.subjectCode || inferredCode;
     setEditFormData({
       name: cls.name || "",
-      courseCode: cls.courseCode || cls.subjectCode || "BCS701",
+      courseCode: code,
       subjectName: cls.subjectName || cls.name || "",
-      subjectCode: cls.subjectCode || cls.courseCode || "BCS701",
+      subjectCode: code,
       department: cls.department || teacherDept,
       semester: cls.semester || 7,
       section: cls.section || "A",

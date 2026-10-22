@@ -135,17 +135,44 @@ function StudentClassrooms() {
               </div>
             ) : (
               <div className="classrooms-grid">
-                {enrolledClassrooms.map((cls) => (
-                  <div key={cls.id} className="student-class-card active-card">
-                    <div className="class-card-top">
-                      <span className="subject-pill">{cls.courseCode || cls.subjectCode || "BCS701"}</span>
-                      <span className="enrolled-badge">✓ ENROLLED</span>
-                    </div>
+                {enrolledClassrooms.map((cls) => {
+                  const rawName = (cls.name || cls.subjectName || "").toLowerCase();
+                  const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
+                  const displayCode = cls.courseCode || cls.subjectCode || inferredCode;
+                  const totalTopics = cls.totalTopics || 0;
+                  const completedTopics = cls.completedTopics || 0;
+                  const coveragePct = cls.coveragePercentage != null ? cls.coveragePercentage : (totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 1000) / 10 : 0);
 
-                    <h3 className="card-class-name">{cls.name}</h3>
-                    <p className="card-subject-name">{cls.subjectName}</p>
+                  return (
+                    <div key={cls.id} className="student-class-card active-card">
+                      <div className="class-card-top">
+                        <span className="subject-pill">{displayCode}</span>
+                        <span className="enrolled-badge">✓ ENROLLED</span>
+                      </div>
 
-                    <div className="card-meta-list">
+                      <h3 className="card-class-name">{cls.name}</h3>
+                      <p className="card-subject-name">{cls.subjectName}</p>
+
+                      {/* VISUAL SYLLABUS TEACHING COVERAGE PROGRESS BAR */}
+                      <div className="card-syllabus-coverage" style={{ margin: "14px 0 10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", color: "#94a3b8", marginBottom: "5px" }}>
+                          <span style={{ fontWeight: 600, color: "#38bdf8" }}>Teaching Coverage: {coveragePct}%</span>
+                          <span>{completedTopics}/{totalTopics} Topics Completed</span>
+                        </div>
+                        <div style={{ width: "100%", height: "6px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "4px", overflow: "hidden" }}>
+                          <div
+                            style={{
+                              width: `${Math.min(100, Math.max(0, coveragePct))}%`,
+                              height: "100%",
+                              background: "linear-gradient(90deg, #0284c7, #38bdf8)",
+                              borderRadius: "4px",
+                              transition: "width 0.4s ease",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="card-meta-list">
                       <div className="meta-line">
                         <span>Faculty:</span>
                         <strong>{cls.teacherName || "Faculty"}</strong>
@@ -181,11 +208,12 @@ function StudentClassrooms() {
                         }}
                         onClick={() => navigate(`/student/classrooms/${cls.id}`)}
                       >
-                        📖 View Syllabus & Revision
+                        📢 Open Noticeboard &amp; Classroom →
                       </button>
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
             )}
 

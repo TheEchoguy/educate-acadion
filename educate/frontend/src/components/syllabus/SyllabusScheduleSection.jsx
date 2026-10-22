@@ -466,7 +466,7 @@ export default function SyllabusScheduleSection({
                           }}
                         >
                           {sess.subtopicSource === "AI_GENERATED"
-                            ? "✨ AI Focus"
+                            ? "🎯 AI Focus"
                             : sess.subtopicSource === "TEACHER_EDITED"
                             ? "✏️ Teacher Focus"
                             : "💡 Suggested Focus"}

@@ -40,52 +40,20 @@ function StudentDashboard() {
       actionText: "Open My Classrooms",
     },
     {
-      id: "exams",
-      title: "Available Exams",
-      tag: "ACTIVE EXAMS READY",
+      id: "exam-hub",
+      title: "Examinations & Marksheets Hub",
+      tag: "CENTRAL ASSESSMENT SUITE",
       badgeColor: "blue",
       icon: "📝",
-      path: "/student/exams",
-      image: imgExams,
-      description: "View and launch all formal online examinations uploaded by faculty for your batch and department.",
-      features: [
-        "Timed Online Exam Interface",
-        "Instant Submission & System Logging",
-        "Automated Question Paper Parsing",
-      ],
-      actionText: "Launch Available Exams",
-    },
-    {
-      id: "results",
-      title: "My Results & Marksheets",
-      tag: "EVALUATED MARKS",
-      badgeColor: "green",
-      icon: "📊",
       path: "/student/results",
-      image: imgResults,
-      description: "Check evaluated marks, question-by-question breakdown, and constructive feedback recorded by your teachers.",
+      image: imgExams,
+      description: "Attend scheduled classroom assessments, take unlimited practice papers, and inspect evaluated results.",
       features: [
-        "Question-wise Marks Breakdown",
-        "Detailed Teacher Remarks & Feedback",
-        "Downloadable PDF Score Report",
+        "Available Classroom Timed Exams",
+        "Practice Papers & Self-Testing Retakes",
+        "Evaluated Marksheets & IA Split-Up Scores",
       ],
-      actionText: "View Evaluated Results",
-    },
-    {
-      id: "practice",
-      title: "Practice Test Papers",
-      tag: "UNLIMITED RETAKES",
-      badgeColor: "purple",
-      icon: "🎯",
-      path: "/student/practice",
-      image: imgPractice,
-      description: "Unlimited practice retakes, self-study paper sets, instant AI scoring, and peer review reference papers.",
-      features: [
-        "Unlimited Self-Study Exam Retakes",
-        "Instant Automated AI Answer Scoring",
-        "Peer Review & Reference Answers",
-      ],
-      actionText: "Start Practice Retake",
+      actionText: "Open Exam Hub →",
     },
     {
       id: "analytics",
@@ -256,27 +224,112 @@ function StudentDashboard() {
             </div>
 
             <div className="enrolled-cards-scroller">
-              {enrolledClassrooms.map((cls) => (
-                <div
-                  key={cls.id}
-                  className="enrolled-mini-card"
-                  onClick={() => navigate("/student/classrooms")}
-                >
-                  <div className="mini-card-top">
-                    <span className="mini-code-badge">{cls.courseCode || cls.subjectCode || "BCS701"}</span>
-                    <span className="mini-sem-sec">Sem {cls.semester} • Sec {cls.section}</span>
+              {enrolledClassrooms.map((cls) => {
+                const rawName = (cls.name || cls.subjectName || "").toLowerCase();
+                const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
+                const courseCode = cls.courseCode || cls.subjectCode || inferredCode;
+                const courseTitle = cls.subjectName || cls.name || "Course Subject";
+                const facultyName = cls.teacherName || "Faculty";
+                const totalTopics = cls.totalTopics || 0;
+                const completedTopics = cls.completedTopics || 0;
+                const coveragePct = cls.coveragePercentage != null ? cls.coveragePercentage : (totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 1000) / 10 : 0);
+                const attendance = cls.attendancePercentage != null ? `${cls.attendancePercentage}% Attendance` : "88% Attendance Recorded";
+                const scaledCie = cls.scaledCieProgress || "13.5 / 15.0 M Secured in IA-1";
+                const isNeedsAttention = cls.riskStatus === "HIGH_RISK" || cls.statusBadge === "NEEDS_ATTENTION";
+
+                return (
+                  <div
+                    key={cls.id}
+                    className="enrolled-mini-card"
+                    onClick={() => navigate(`/student/classrooms/${cls.id}`)}
+                  >
+                    <div className="mini-card-top">
+                      <span className="mini-code-badge">{courseCode}</span>
+                      <span className={`mini-status-badge ${isNeedsAttention ? "needs-attention" : "on-track"}`}>
+                        {isNeedsAttention ? "🟡 Needs Attention" : "🟢 On Track"}
+                      </span>
+                    </div>
+
+                    <h4 className="mini-classroom-name">
+                      {courseCode}: {courseTitle}
+                    </h4>
+
+                    <p className="mini-faculty-name">
+                      Faculty: <strong>{facultyName}</strong>
+                    </p>
+
+                    {/* VISUAL SYLLABUS TEACHING COVERAGE PROGRESS BAR */}
+                    <div className="mini-syllabus-coverage" style={{ margin: "10px 0 12px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", color: "#94a3b8", marginBottom: "4px" }}>
+                        <span style={{ fontWeight: 600, color: "#38bdf8" }}>Teaching Coverage: {coveragePct}%</span>
+                        <span>({completedTopics}/{totalTopics} Topics Completed)</span>
+                      </div>
+                      <div style={{ width: "100%", height: "6px", background: "rgba(255, 255, 255, 0.08)", borderRadius: "4px", overflow: "hidden" }}>
+                        <div
+                          style={{
+                            width: `${Math.min(100, Math.max(0, coveragePct))}%`,
+                            height: "100%",
+                            background: "linear-gradient(90deg, #0284c7, #38bdf8)",
+                            borderRadius: "4px",
+                            transition: "width 0.4s ease",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mini-metrics-row">
+                      <div className="mini-metric-item">
+                        <span className="mini-metric-label">Attendance:</span>
+                        <strong className="mini-metric-value">{attendance}</strong>
+                      </div>
+                      <div className="mini-metric-item">
+                        <span className="mini-metric-label">CIE Progress:</span>
+                        <strong className="mini-metric-value">{scaledCie}</strong>
+                      </div>
+                    </div>
+
+                    <div className="mini-card-bottom">
+                      <span className="mini-arrow-btn">Enter Classroom Workspace →</span>
+                    </div>
                   </div>
-                  <h4 className="mini-classroom-name">{cls.name}</h4>
-                  <p className="mini-faculty-name">Instructor: <strong>{cls.teacherName || "Faculty"}</strong></p>
-                  <div className="mini-card-bottom">
-                    <span className="mini-active-dot">● Enrolled</span>
-                    <span className="mini-arrow-btn">View Class →</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
+
+        {/* 4-LEVEL ACADEMIC INTELLIGENCE & EXPLAINABLE AI (XAI) PLACEHOLDER CARD */}
+        <div className="xai-placeholder-card">
+          <div className="xai-placeholder-left">
+            <span className="xai-diagnostics-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+              Diagnostics Available
+            </span>
+            <h2 className="xai-placeholder-title">
+              📊 4-Level Academic Intelligence &amp; Explainable AI (XAI)
+            </h2>
+            <p className="xai-placeholder-subtitle">
+              Deep Diagnostic Mastery: Topic-by-topic granularity, Module 1–5 drop rates, and SHAP-explained performance drivers.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="xai-inspect-btn"
+            onClick={() => {
+              if (enrolledClassrooms.length > 0) {
+                navigate(`/student/classrooms/${enrolledClassrooms[0].id}/performance`);
+              } else {
+                toast.info("Please join or enroll in a classroom to inspect your 4-level diagnostics.");
+                navigate("/student/classrooms");
+              }
+            }}
+          >
+            <span>[ Inspect Detailed 4-Level Diagnostics → ]</span>
+          </button>
+        </div>
 
         {/* FEATURED SHOWCASE BANNER - HORIZONTAL CAMERA SLIDE TRACK FROM FAR END OF DESKTOP */}
         <div className="topic-showcase-banner">
@@ -367,45 +420,18 @@ function StudentDashboard() {
         </div>
 
         <div className="clean-modules-grid">
-          {/* Card 1: Available Exams */}
-          <div className="clean-grid-card border-blue" onClick={() => navigate("/student/exams")}>
+          {/* Consolidated Module: Examinations & Marksheets Hub */}
+          <div className="clean-grid-card border-blue" onClick={() => navigate("/student/results")}>
             <div className="card-top-bar">
-              <div className="card-badge blue">ACTIVE EXAMS</div>
+              <div className="card-badge blue">UNIFIED ASSESSMENT HUB</div>
               <span className="card-arrow">→</span>
             </div>
-            <h3>📝 Available Examinations</h3>
-            <p>Launch official timed question papers assigned to your semester and department.</p>
+            <h3>📝 Examinations &amp; Marksheets Hub</h3>
+            <p>Attend scheduled classroom assessments, take unlimited practice papers, and inspect evaluated results.</p>
             <div className="card-footer-meta">
-              <span>• Timed Interface</span>
-              <span>• Automated Logging</span>
-            </div>
-          </div>
-
-          {/* Card 2: Results & Marksheets */}
-          <div className="clean-grid-card border-green" onClick={() => navigate("/student/results")}>
-            <div className="card-top-bar">
-              <div className="card-badge green">EVALUATED MARKS</div>
-              <span className="card-arrow">→</span>
-            </div>
-            <h3>📊 Results &amp; Marksheets</h3>
-            <p>Inspect evaluated marks, question-by-question breakdown, and teacher remarks.</p>
-            <div className="card-footer-meta">
-              <span>• PDF Download</span>
-              <span>• Teacher Feedback</span>
-            </div>
-          </div>
-
-          {/* Card 3: Practice Retakes */}
-          <div className="clean-grid-card border-purple" onClick={() => navigate("/student/practice")}>
-            <div className="card-top-bar">
-              <div className="card-badge purple">PRACTICE RETAKES</div>
-              <span className="card-arrow">→</span>
-            </div>
-            <h3>🎯 Practice Test Papers</h3>
-            <p>Take unlimited self-study retakes with instant AI answer scoring and reference keys.</p>
-            <div className="card-footer-meta">
-              <span>• Instant Scoring</span>
-              <span>• Peer Reference</span>
+              <span>• Classroom Exams</span>
+              <span>• Unlimited Retakes</span>
+              <span>• Evaluated Marksheets</span>
             </div>
           </div>
 

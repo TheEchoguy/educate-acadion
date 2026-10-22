@@ -80,22 +80,25 @@ export default function IaMarksWorkspacePage() {
             <button
               type="button"
               className="btn-primary"
-              onClick={() => navigate("/teacher/classrooms")}
+              onClick={() => navigate(`/teacher/classrooms/${id}`)}
             >
-              Return to Classrooms
+              Return to Workspace
             </button>
           </div>
         ) : (
           <>
-            {/* SHARED RESPONSIVE CLASSROOM HEADER */}
+            {/* COMPACT STICKY CLASSROOM HEADER */}
             <ClassroomHeader
               classroom={classroom}
-              backLabel="← Back to Workspace Selection"
-              onBack={() => navigate(`/teacher/classrooms/${id}/workspaces`)}
+              backLabel="← Back to Workspace"
+              onBack={() => navigate(`/teacher/classrooms/${id}`)}
+              secondaryBackLabel="Classrooms"
+              onSecondaryBack={() => navigate("/teacher/classrooms")}
               workspaceTitle="IA Split-Up Marks Ingestion"
               onRegenerateCode={handleRegenerate}
               regenerating={regenerating}
               showJoinCode={true}
+              compact={true}
             />
 
             <div className="tab-panel-container" style={{ padding: "28px" }}>

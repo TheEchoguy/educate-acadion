@@ -117,7 +117,7 @@ const TeacherNotesManager = ({ classroomId }) => {
 
         <div className="tnm-hero-badge">
           <span>{totalIndexed} / 5 Modules Indexed</span>
-          {totalIndexed === 5 && <span>✨ Full Coverage</span>}
+          {totalIndexed === 5 && <span>✓ Full Coverage</span>}
         </div>
       </div>
 

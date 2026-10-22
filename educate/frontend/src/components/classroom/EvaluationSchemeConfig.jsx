@@ -10,8 +10,8 @@ export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }
   const [activePreset, setActivePreset] = useState("VTU_IPCC");
 
   const [formData, setFormData] = useState({
-    courseCode: "BCS701",
-    courseName: "Internet of Things",
+    courseCode: "",
+    courseName: "",
     semester: 7,
     isLabIntegrated: true,
     iaCount: 3,
@@ -41,8 +41,8 @@ export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }
         if (!active) return;
         setScheme(data);
         setFormData({
-          courseCode: data.courseCode || "BCS701",
-          courseName: data.courseName || "Internet of Things",
+          courseCode: data.courseCode || "",
+          courseName: data.courseName || "",
           semester: data.semester || 7,
           isLabIntegrated: data.labIntegrated ?? data.isLabIntegrated ?? true,
           iaCount: data.iaCount || 3,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import toast from "react-hot-toast";
 import { getClassroomDetails } from "../../services/classroomService";
@@ -7,18 +7,38 @@ import StudentSyllabusView from "../../components/syllabus/student/StudentSyllab
 import EvaluationSchemeConfig from "../../components/classroom/EvaluationSchemeConfig";
 import StudentPerformanceView from "./StudentPerformanceView";
 import RagStudyTutorSection from "../../components/classroom/RagStudyTutorSection";
+import ClassroomAnnouncementsSection from "../../components/classroom/ClassroomAnnouncementsSection";
 import "./StudentClassrooms.css";
 
-function StudentClassroomWorkspace() {
+function StudentClassroomWorkspace({ defaultTab = null }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
   const [classroom, setClassroom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const initialTab = searchParams.get("tab") || "syllabus";
-  const [activeTab, setActiveTab] = useState(initialTab === "tutor" || initialTab === "rag" ? "tutor" : initialTab);
+
+  // Determine initial tab based on path, prop, or search query
+  const getInitialTab = () => {
+    if (defaultTab) return defaultTab;
+    if (location.pathname.endsWith("/performance")) return "performance";
+    const qTab = searchParams.get("tab");
+    if (qTab === "tutor" || qTab === "rag") return "tutor";
+    if (qTab === "performance") return "performance";
+    if (qTab === "scheme") return "scheme";
+    if (qTab === "announcements" || qTab === "noticeboard") return "announcements";
+    return "announcements"; // Default to noticeboard & announcements feed or syllabus
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab);
+
+  useEffect(() => {
+    if (location.pathname.endsWith("/performance")) {
+      setActiveTab("performance");
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     let active = true;
@@ -46,7 +66,7 @@ function StudentClassroomWorkspace() {
   }, [id]);
 
   return (
-    <div className="student-classrooms-page">
+    <div className="student-classrooms-page" style={{ background: "#0B0F19", minHeight: "100vh" }}>
       <Navbar />
 
       <div className="student-classrooms-container">
@@ -55,10 +75,15 @@ function StudentClassroomWorkspace() {
           type="button"
           className="ssm-subtab-btn"
           style={{
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
+            background: "#111827",
+            border: "1px solid #1F2937",
             marginBottom: 20,
-            color: "#94a3b8",
+            color: "#9CA3AF",
+            borderRadius: 8,
+            padding: "8px 16px",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            cursor: "pointer",
           }}
           onClick={() => navigate("/student/classrooms")}
         >
@@ -68,138 +93,192 @@ function StudentClassroomWorkspace() {
         {loading ? (
           <div className="loading-container">
             <div className="spinner"></div>
-            <p>Loading course workspace...</p>
+            <p style={{ color: "#9CA3AF" }}>Loading course workspace...</p>
           </div>
         ) : error || !classroom ? (
-          <div className="empty-state-card">
-            <h3>Classroom Not Found</h3>
-            <p>{error || "We could not find the requested classroom. You might not be enrolled yet."}</p>
+          <div
+            className="empty-state-card"
+            style={{
+              background: "#111827",
+              border: "1px solid #1F2937",
+              borderRadius: 12,
+              padding: "40px 24px",
+              textAlign: "center",
+            }}
+          >
+            <h3 style={{ color: "#F9FAFB", margin: "0 0 8px 0" }}>Classroom Not Found</h3>
+            <p style={{ color: "#9CA3AF", margin: "0 0 20px 0" }}>
+              {error || "We could not find the requested classroom. You might not be enrolled yet."}
+            </p>
             <button className="btn-join-first" onClick={() => navigate("/student/classrooms")}>
               Back to Enrolled Classrooms
             </button>
           </div>
         ) : (
           <>
-            {/* HERO CARD */}
+            {/* HERO CARD - Clean Midnight Slate Design */}
             <div
               style={{
-                background: "rgba(26, 32, 58, 0.75)",
-                backdropFilter: "blur(12px)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                borderRadius: 20,
-                padding: "28px 32px",
-                marginBottom: 28,
+                background: "#111827",
+                border: "1px solid #1F2937",
+                borderRadius: 14,
+                padding: "24px 28px",
+                marginBottom: 24,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 flexWrap: "wrap",
-                gap: 20,
-                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.35)",
+                gap: 18,
               }}
             >
               <div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-                  <span className="subject-pill">{classroom.subjectCode}</span>
+                  <span className="subject-pill">{classroom.courseCode || classroom.subjectCode}</span>
                   <span
                     style={{
-                      background: "rgba(255, 255, 255, 0.06)",
-                      color: "#cbd5e1",
+                      background: "#1F2937",
+                      color: "#9CA3AF",
                       fontSize: "0.78rem",
+                      fontWeight: 600,
                       padding: "3px 10px",
                       borderRadius: 6,
+                      border: "1px solid #374151",
                     }}
                   >
                     Sem {classroom.semester} • Sec {classroom.section}
                   </span>
                   <span
                     style={{
-                      background: "rgba(255, 255, 255, 0.06)",
-                      color: "#cbd5e1",
+                      background: "#1F2937",
+                      color: "#9CA3AF",
                       fontSize: "0.78rem",
+                      fontWeight: 600,
                       padding: "3px 10px",
                       borderRadius: 6,
+                      border: "1px solid #374151",
                     }}
                   >
                     {classroom.department}
                   </span>
-                  <span className="enrolled-badge">✓ ENROLLED</span>
+                  <span
+                    style={{
+                      background: "rgba(16, 185, 129, 0.12)",
+                      color: "#10B981",
+                      border: "1px solid rgba(16, 185, 129, 0.3)",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      padding: "3px 9px",
+                      borderRadius: 6,
+                    }}
+                  >
+                    ✓ ENROLLED
+                  </span>
                 </div>
 
-                <h1 style={{ fontSize: "1.85rem", fontWeight: 800, margin: "0 0 4px 0", color: "#ffffff" }}>
+                <h1 style={{ fontSize: "1.75rem", fontWeight: 800, margin: "0 0 6px 0", color: "#F9FAFB" }}>
                   {classroom.name}
                 </h1>
-                <p style={{ margin: 0, color: "#94a3b8", fontSize: "0.95rem" }}>
-                  {classroom.subjectName} • Academic Year {classroom.academicYear} • Faculty: {classroom.teacherName || "Instructor"}
+                <p style={{ margin: 0, color: "#9CA3AF", fontSize: "0.92rem" }}>
+                  {classroom.subjectName} • Academic Year {classroom.academicYear} • Faculty: {classroom.teacherName || "Course Instructor"}
                 </p>
               </div>
             </div>
 
             {/* TABS ROW */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+            <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className={`ssm-subtab-btn ${activeTab === "announcements" ? "active" : ""}`}
+                onClick={() => setActiveTab("announcements")}
+                style={{
+                  background: activeTab === "announcements" ? "#2563EB" : "#111827",
+                  color: activeTab === "announcements" ? "#FFFFFF" : "#9CA3AF",
+                  padding: "9px 18px",
+                  borderRadius: 8,
+                  border: activeTab === "announcements" ? "1px solid #3B82F6" : "1px solid #1F2937",
+                  fontWeight: 600,
+                  fontSize: "0.88rem",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                📢 Noticeboard &amp; Resources
+              </button>
+
               <button
                 type="button"
                 className={`ssm-subtab-btn ${activeTab === "syllabus" ? "active" : ""}`}
                 onClick={() => setActiveTab("syllabus")}
                 style={{
-                  background: activeTab === "syllabus" ? "#9333ea" : "rgba(255, 255, 255, 0.05)",
-                  color: "#ffffff",
-                  padding: "10px 20px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: activeTab === "syllabus" ? "#2563EB" : "#111827",
+                  color: activeTab === "syllabus" ? "#FFFFFF" : "#9CA3AF",
+                  padding: "9px 18px",
+                  borderRadius: 8,
+                  border: activeTab === "syllabus" ? "1px solid #3B82F6" : "1px solid #1F2937",
                   fontWeight: 600,
+                  fontSize: "0.88rem",
                   cursor: "pointer",
+                  transition: "all 0.15s ease",
                 }}
               >
-                📖 Syllabus & Revision
+                📖 Syllabus &amp; Revision
               </button>
+
               <button
                 type="button"
                 className={`ssm-subtab-btn ${activeTab === "scheme" ? "active" : ""}`}
                 onClick={() => setActiveTab("scheme")}
                 style={{
-                  background: activeTab === "scheme" ? "#9333ea" : "rgba(255, 255, 255, 0.05)",
-                  color: "#ffffff",
-                  padding: "10px 20px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: activeTab === "scheme" ? "#2563EB" : "#111827",
+                  color: activeTab === "scheme" ? "#FFFFFF" : "#9CA3AF",
+                  padding: "9px 18px",
+                  borderRadius: 8,
+                  border: activeTab === "scheme" ? "1px solid #3B82F6" : "1px solid #1F2937",
                   fontWeight: 600,
+                  fontSize: "0.88rem",
                   cursor: "pointer",
+                  transition: "all 0.15s ease",
                 }}
               >
                 ⚖️ Evaluation Scheme
               </button>
+
               <button
                 type="button"
                 className={`ssm-subtab-btn ${activeTab === "performance" ? "active" : ""}`}
                 onClick={() => setActiveTab("performance")}
                 style={{
-                  background: activeTab === "performance" ? "#9333ea" : "rgba(255, 255, 255, 0.05)",
-                  color: "#ffffff",
-                  padding: "10px 20px",
-                  borderRadius: 10,
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: activeTab === "performance" ? "#2563EB" : "#111827",
+                  color: activeTab === "performance" ? "#FFFFFF" : "#9CA3AF",
+                  padding: "9px 18px",
+                  borderRadius: 8,
+                  border: activeTab === "performance" ? "1px solid #3B82F6" : "1px solid #1F2937",
                   fontWeight: 600,
+                  fontSize: "0.88rem",
                   cursor: "pointer",
+                  transition: "all 0.15s ease",
                 }}
               >
-                📊 My Performance & Analytics
+                📊 My Performance &amp; Analytics
               </button>
+
               <button
                 type="button"
                 className={`ssm-subtab-btn ${activeTab === "tutor" ? "active" : ""}`}
                 onClick={() => setActiveTab("tutor")}
                 style={{
-                  background: activeTab === "tutor" ? "linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)" : "rgba(255, 255, 255, 0.05)",
-                  color: "#ffffff",
-                  padding: "10px 20px",
-                  borderRadius: 10,
-                  border: activeTab === "tutor" ? "1px solid rgba(56, 189, 248, 0.6)" : "1px solid rgba(255, 255, 255, 0.1)",
-                  fontWeight: 700,
+                  background: activeTab === "tutor" ? "#0284C7" : "#111827",
+                  color: activeTab === "tutor" ? "#FFFFFF" : "#9CA3AF",
+                  padding: "9px 18px",
+                  borderRadius: 8,
+                  border: activeTab === "tutor" ? "1px solid #0EA5E9" : "1px solid #1F2937",
+                  fontWeight: 600,
+                  fontSize: "0.88rem",
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 8,
-                  boxShadow: activeTab === "tutor" ? "0 4px 16px rgba(6, 182, 212, 0.35)" : "none",
+                  transition: "all 0.15s ease",
                 }}
               >
                 🤖 AI Study Tutor (RAG)
@@ -207,6 +286,9 @@ function StudentClassroomWorkspace() {
             </div>
 
             {/* TAB CONTENTS */}
+            {activeTab === "announcements" && (
+              <ClassroomAnnouncementsSection classroomId={id} isTeacher={false} />
+            )}
             {activeTab === "syllabus" && <StudentSyllabusView classroomId={id} />}
             {activeTab === "scheme" && <EvaluationSchemeConfig classroomId={id} isTeacher={false} />}
             {activeTab === "performance" && <StudentPerformanceView classroomId={id} />}

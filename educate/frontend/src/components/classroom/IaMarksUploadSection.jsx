@@ -707,6 +707,13 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
     publishStatus?.[`ia${selectedIa}Published`] ??
     (iaRecords.length > 0 && iaRecords.every((r) => r.published));
 
+  const hasManualMarks = Object.values(manualMarks).some((studentMarks) =>
+    Object.values(studentMarks || {}).some(
+      (val) => val !== "" && val !== undefined && val !== null && !isNaN(parseFloat(val))
+    )
+  );
+  const hasMarks = (iaRecords && iaRecords.length > 0) || hasManualMarks;
+
   return (
     <div className="ia-marks-section">
       {/* Top Banner / Actions Card */}
@@ -721,14 +728,18 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
           </p>
         </div>
 
-        {/* Action Buttons: Master Template & Marks Report */}
+        {/* Action Buttons: Master Template */}
         <div className="ia-header-actions">
           <button
             type="button"
             className="btn-download-master"
             onClick={handleDownloadMasterTemplate}
-            disabled={isDownloading}
-            title="Download complete Master Workbook containing IA-1, IA-2, IA-3, and Assignments pre-populated with enrolled students"
+            disabled={isDownloading || !hasMarks}
+            title={
+              !hasMarks
+                ? "Please upload or enter student marks first before exporting."
+                : "Download complete Master Workbook containing IA-1, IA-2, IA-3, and Assignments pre-populated with enrolled students"
+            }
           >
             {isDownloading ? (
               <>
@@ -737,16 +748,6 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
             ) : (
               <>📥 Download Master Unified Split-Up Sheet</>
             )}
-          </button>
-
-          <button
-            type="button"
-            className="btn-export-report"
-            onClick={handleExportMasterReport}
-            disabled={isDownloading}
-            title="Export all current students with their latest entered marks, module mastery percentages, and class averages"
-          >
-            📊 Download Current Class Marks Report (.xlsx)
           </button>
         </div>
       </div>
@@ -1485,8 +1486,12 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
                   type="button"
                   className="btn-action-download-excel"
                   onClick={() => handleDownloadSingleIaTemplate(selectedIa)}
-                  disabled={isDownloading}
-                  title={`Download Excel sheet of IA-${selectedIa} with all current student marks and formulas pre-populated`}
+                  disabled={isDownloading || !hasMarks}
+                  title={
+                    !hasMarks
+                      ? "Please upload or enter student marks first before exporting."
+                      : `Download Excel sheet of IA-${selectedIa} with all current student marks and formulas pre-populated`
+                  }
                 >
                   {isDownloading ? (
                     <>
@@ -1501,9 +1506,13 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
                   type="button"
                   className="btn-export-report"
                   onClick={handleExportMasterReport}
-                  disabled={isDownloading}
+                  disabled={isDownloading || !hasMarks}
                   style={{ padding: "8px 14px", fontSize: "0.82rem" }}
-                  title="Export full master workbook covering all 3 IAs and Assignments"
+                  title={
+                    !hasMarks
+                      ? "Please upload or enter student marks first before exporting."
+                      : "Export full master workbook covering all 3 IAs and Assignments"
+                  }
                 >
                   📊 Export Master Sheet (All IAs)
                 </button>

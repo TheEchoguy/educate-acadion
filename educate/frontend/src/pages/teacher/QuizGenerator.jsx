@@ -424,7 +424,7 @@ function QuizGenerator() {
 
         {/* Hero Banner */}
         <div className="quiz-hero-banner">
-          <span className="quiz-badge">✨ AI Assessment Studio</span>
+          <span className="quiz-badge">🎯 AI Assessment Studio</span>
           <h1>MCQ Quiz Generator</h1>
           <p>
             Generate curriculum-grounded multiple-choice quizzes from any subject topic or lecture notes.
@@ -671,7 +671,7 @@ function QuizGenerator() {
                   </>
                 ) : (
                   <>
-                    <span>✨ Generate Quiz with AI</span>
+                    <span>⚡ Generate Quiz with AI</span>
                     <span style={{ fontSize: "1.1rem" }}>→</span>
                   </>
                 )}

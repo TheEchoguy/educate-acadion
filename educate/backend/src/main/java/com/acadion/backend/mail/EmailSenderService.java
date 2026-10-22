@@ -18,6 +18,10 @@ public class EmailSenderService {
     }
 
     public void sendOtpEmail(String to, String otp) {
+        System.out.println("==================================================");
+        System.out.println(">>> OTP GENERATED FOR: " + to);
+        System.out.println(">>> OTP CODE: " + otp);
+        System.out.println("==================================================");
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(from);
@@ -29,11 +33,10 @@ public class EmailSenderService {
                             + "\n\nThis OTP is valid for 10 minutes."
             );
             mailSender.send(message);
+            System.out.println(">>> [EMAIL SERVICE] OTP successfully delivered to: " + to);
         } catch (Exception e) {
-            System.err.println("[EmailSenderService] Failed to send OTP email to " + to + ": " + e.getMessage());
-            System.out.println("==================================================");
-            System.out.println("ACADION OTP FOR " + to + " : " + otp);
-            System.out.println("==================================================");
+            System.err.println(">>> [EMAIL SERVICE ERROR] Failed to send email via SMTP: " + e.getMessage());
+            System.out.println(">>> [DEV FALLBACK] Use the console OTP above to complete verification.");
         }
     }
 

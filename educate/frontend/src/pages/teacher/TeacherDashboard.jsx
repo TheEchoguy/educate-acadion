@@ -14,9 +14,13 @@ import FloatingChatbotWidget from "../../components/classroom/FloatingChatbotWid
 import "./TeacherDashboard.css";
 
 import imgPapers from "@media/images/topics/teacher_papers.jpg";
+import imgEvaluate from "@media/images/topics/teacher_evaluate.jpg";
+import imgAnalytics from "@media/images/topics/teacher_analytics.jpg";
+import imgManual from "@media/images/topics/teacher_manual.jpg";
 
 function TeacherDashboard() {
   const navigate = useNavigate();
+  const [activeModuleSlide, setActiveModuleSlide] = useState(0);
   const [syllabusOverview, setSyllabusOverview] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
 
@@ -30,9 +34,9 @@ function TeacherDashboard() {
   const [creatingClassroom, setCreatingClassroom] = useState(false);
   const [createFormData, setCreateFormData] = useState({
     name: "",
-    courseCode: "BCS701",
+    courseCode: "",
     subjectName: "",
-    subjectCode: "BCS701",
+    subjectCode: "",
     department: "",
     semester: 7,
     section: "A",
@@ -99,9 +103,9 @@ function TeacherDashboard() {
       setShowCreateModal(false);
       setCreateFormData({
         name: "",
-        courseCode: "BCS701",
+        courseCode: "",
         subjectName: "",
-        subjectCode: "BCS701",
+        subjectCode: "",
         department: teacherDept,
         semester: 7,
         section: "A",
@@ -120,12 +124,14 @@ function TeacherDashboard() {
   const handleOpenEdit = (cls, e) => {
     e.stopPropagation();
     setOpenSettingsId(null);
-    setEditClassroom(cls);
+    const rawName = (cls.name || cls.subjectName || "").toLowerCase();
+    const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "");
+    const code = cls.courseCode || cls.subjectCode || inferredCode;
     setEditFormData({
       name: cls.name || "",
-      courseCode: cls.courseCode || cls.subjectCode || "BCS701",
+      courseCode: code,
       subjectName: cls.subjectName || cls.name || "",
-      subjectCode: cls.subjectCode || cls.courseCode || "BCS701",
+      subjectCode: code,
       semester: cls.semester || 7,
       section: cls.section || "A",
     });
@@ -226,6 +232,98 @@ function TeacherDashboard() {
     };
   }, []);
 
+  // Showcase modules for visual hero banner
+  const teacherModules = [
+    {
+      id: "papers_studio",
+      title: "Question Papers & Evaluation Studio",
+      tag: "QUESTION PAPERS & EVALUATION STUDIO",
+      badgeColor: "purple",
+      icon: "📝",
+      path: "/teacher/papers",
+      image: imgPapers,
+      description: "Upload and extract question papers, configure IA blueprints, evaluate student answer submissions, and manage practice permissions.",
+      features: [
+        "AI Question Extraction & Blueprint Config",
+        "Practice Permissions & Self-Testing",
+        "Direct Answer Evaluation Studio",
+      ],
+      actionText: "Open Papers & Studio",
+    },
+    {
+      id: "classrooms_hub",
+      title: "Classroom Hub & IA Ingestion",
+      tag: "DYNAMIC INGESTION & SUB-MARKS",
+      badgeColor: "green",
+      icon: "🏫",
+      path: "/teacher/classrooms",
+      image: imgManual,
+      description: "Manage course sections, roster import, download dynamic IA templates, and ingest question-wise sub-marks.",
+      features: [
+        "Multi-Classroom Isolated Workspaces",
+        "Unified Master Split-Up Sheet Ingestion",
+        "Excel Roster Import with Strict USN Validation",
+      ],
+      actionText: "Open Classroom Hub",
+    },
+    {
+      id: "class_performance",
+      title: "Class Performance & AI Risk Watchlist",
+      tag: "ML RISK CLASSIFIER & SHAP INSIGHTS",
+      badgeColor: "amber",
+      icon: "🚨",
+      path: "/teacher/analytics",
+      image: imgAnalytics,
+      description: "Analyze whole-class topic mastery heatmaps, module 1–5 drop rates, and SHAP-explained student risk predictions.",
+      features: [
+        "4-Level Multi-Scale Mastery Heatmaps",
+        "ML Student Risk Classifier & Watchlist",
+        "SHAP Explainable AI Academic Diagnosis",
+      ],
+      actionText: "View Performance & Risk",
+    },
+    {
+      id: "ppt_generator",
+      title: "AI PPT Generator & Studio",
+      tag: "AI PRESENTATION STUDIO",
+      badgeColor: "purple",
+      icon: "🖥️",
+      path: "/teacher/ppt-generator",
+      image: imgPapers,
+      description: "Generate syllabus-aligned PowerPoint presentations and lecture decks from module notes.",
+      features: [
+        "Full Notes Upload & Topic Discovery",
+        "Multi-Part Widescreen Series Generation",
+        "Visual Slide Canvas Editor & PPTX Export",
+      ],
+      actionText: "Launch PPT Generator",
+    },
+    {
+      id: "quiz_generator",
+      title: "AI MCQ Quiz Generator",
+      tag: "AI QUESTION GENERATOR & PUBLISHER",
+      badgeColor: "purple",
+      icon: "🎯",
+      path: "/teacher/quiz-generator",
+      image: imgEvaluate,
+      description: "Generate academic MCQ quizzes from topics or lecture notes using OpenRouter AI, review & edit questions, and publish directly for student practice.",
+      features: [
+        "Topic & Document Notes Generation",
+        "Interactive Option & Key Editor",
+        "End-to-End Publishing & Student Scoring",
+      ],
+      actionText: "Launch Quiz Generator",
+    },
+  ];
+
+  // Automatic slow transition between modules every 6 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveModuleSlide((prev) => (prev + 1) % teacherModules.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [teacherModules.length]);
+
   return (
     <div className="teacher-dashboard-page">
       <Navbar />
@@ -244,6 +342,88 @@ function TeacherDashboard() {
           </div>
           <div className="user-chips-side">
             <span className="clean-meta-chip">Department: {teacherDept}</span>
+          </div>
+        </div>
+
+        {/* FEATURED SHOWCASE BANNER - HORIZONTAL CAMERA SLIDE TRACK */}
+        <div className="topic-showcase-banner">
+          <div
+            className="showcase-reel-track"
+            style={{
+              width: `${teacherModules.length * 100}%`,
+              transform: `translateX(-${(activeModuleSlide * 100) / teacherModules.length}%)`,
+            }}
+          >
+            {teacherModules.map((mod) => (
+              <div
+                key={mod.id}
+                className="showcase-reel-item"
+                style={{
+                  width: `${100 / teacherModules.length}%`,
+                  flex: `0 0 ${100 / teacherModules.length}%`,
+                }}
+              >
+                <div
+                  className="topic-photo-slide active-zoom"
+                  style={{ backgroundImage: `url(${mod.image})` }}
+                />
+                <div className="topic-photo-scrim" />
+
+                <div className="topic-showcase-inner">
+                  <div className="showcase-top-row">
+                    <div className="module-title-box">
+                      <span className={`status-badge-pill ${mod.badgeColor}`}>
+                        <span className="dot-indicator" />
+                        {mod.tag}
+                      </span>
+                      <h2>
+                        <span className="mod-emoji">{mod.icon}</span>
+                        {mod.title}
+                      </h2>
+                    </div>
+
+                    <button
+                      className={`launch-btn ${mod.badgeColor}`}
+                      onClick={() => navigate(mod.path)}
+                    >
+                      <span>{mod.actionText}</span>
+                      <span className="arrow">→</span>
+                    </button>
+                  </div>
+
+                  <p className="showcase-desc">{mod.description}</p>
+
+                  <div className="features-row">
+                    {mod.features.map((feat, fidx) => (
+                      <div key={fidx} className="feature-chip">
+                        <span className="check-mark-purple">✓</span>
+                        <span>{feat}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* INTERACTIVE MODULE TABS & AUTO-TIMER */}
+                  <div className="tabs-bar-row">
+                    <div className="tabs-group">
+                      {teacherModules.map((tmod, tidx) => (
+                        <button
+                          key={tmod.id}
+                          className={`tab-chip-btn ${activeModuleSlide === tidx ? "active" : ""}`}
+                          onClick={() => setActiveModuleSlide(tidx)}
+                        >
+                          <span className="tab-icon">{tmod.icon}</span>
+                          <span className="tab-title">{tmod.title}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="timer-track">
+                      <div className="timer-fill-fast-purple" key={activeModuleSlide} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -433,7 +613,7 @@ function TeacherDashboard() {
               <span className="tool-badge cyan">AI PPT STUDIO</span>
               <span className="tool-arrow">→</span>
             </div>
-            <h3>✨ AI PPT Generator &amp; Studio</h3>
+            <h3>🖥️ AI PPT Generator &amp; Studio</h3>
             <p>
               Generate structured, syllabus-grounded slide decks from course notes with interactive visual editing and PPTX export.
             </p>

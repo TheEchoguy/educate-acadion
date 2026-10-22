@@ -378,7 +378,7 @@ const StudentRagTutorModal = ({
               disabled={loading}
               onClick={() => handleSendMessage(p)}
             >
-              ✨ {p}
+              💡 {p}
             </button>
           ))}
         </div>

@@ -83,17 +83,20 @@ public class AuthService {
         // Save user
         userRepository.save(user);
 
-        // Send OTP Email
+        // Log and Send OTP Email
+        System.out.println("==================================================");
+        System.out.println(">>> OTP GENERATED FOR: " + request.getEmail());
+        System.out.println(">>> OTP CODE: " + otp);
+        System.out.println("==================================================");
+
         try {
             emailSenderService.sendOtpEmail(
                     request.getEmail(),
                     otp
             );
         } catch (Exception e) {
-            System.err.println("[EmailService Warning] Failed to send OTP email: " + e.getMessage());
-            System.out.println("==================================================");
-            System.out.println("ACADION REGISTRATION OTP FOR " + request.getEmail() + " : " + otp);
-            System.out.println("==================================================");
+            System.err.println(">>> [EMAIL SERVICE ERROR] Failed to send email via SMTP: " + e.getMessage());
+            System.out.println(">>> [DEV FALLBACK] Use the console OTP above to complete verification.");
         }
 
         return "Registration successful. OTP: " + otp;

@@ -4,14 +4,17 @@ import "./ClassroomHeader.css";
 
 export default function ClassroomHeader({
   classroom,
-  backLabel = "← Back to All Classrooms",
+  backLabel = "← Back to Classrooms",
   onBack,
+  secondaryBackLabel = null,
+  onSecondaryBack = null,
   workspaceTitle = null,
   onRegenerateCode = null,
   regenerating = false,
   showJoinCode = true,
   onEditClassroom = null,
   onDeleteClassroom = null,
+  compact = false,
 }) {
   if (!classroom) return null;
 
@@ -23,12 +26,90 @@ export default function ClassroomHeader({
   };
 
   const status = (classroom.status || "ACTIVE").toUpperCase();
+  const rawName = (classroom.name || classroom.subjectName || "").toLowerCase();
+  const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
+  const courseCode = classroom.courseCode || classroom.subjectCode || inferredCode;
+  const subjectName = classroom.subjectName || classroom.name || "Subject";
+  const semSec = `(Sem ${classroom.semester || "7"}-${classroom.section || "A"})`;
+
+  if (compact) {
+    return (
+      <div className="compact-classroom-nav-bar" id="compact-classroom-header">
+        <div className="compact-nav-left">
+          {onSecondaryBack && (
+            <>
+              <button
+                type="button"
+                className="compact-back-btn compact-secondary-crumb"
+                onClick={onSecondaryBack}
+                id="btn-compact-header-secondary-back"
+              >
+                {secondaryBackLabel || "Classrooms"}
+              </button>
+              <span className="compact-nav-slash">/</span>
+            </>
+          )}
+          {onBack && (
+            <button
+              type="button"
+              className="compact-back-btn"
+              onClick={onBack}
+              id="btn-compact-header-back"
+            >
+              {backLabel}
+            </button>
+          )}
+          <span className="compact-nav-slash">/</span>
+          <span className="compact-course-title">
+            <strong className="compact-code-highlight">{courseCode}: {subjectName}</strong>{" "}
+            <span className="compact-sem-sec">{semSec}</span>
+          </span>
+          {workspaceTitle && (
+            <>
+              <span className="compact-nav-bullet">•</span>
+              <span className="compact-workspace-title">{workspaceTitle}</span>
+            </>
+          )}
+        </div>
+
+        <div className="compact-nav-right">
+          {showJoinCode && classroom.joinCode && (
+            <div className="compact-join-code-pill">
+              <span className="compact-code-label">Join Code:</span>
+              <code className="compact-code-val">{classroom.joinCode}</code>
+              <button
+                type="button"
+                className="compact-copy-btn"
+                onClick={handleCopyCode}
+                title="Copy Join Code to clipboard"
+              >
+                📋 Copy
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="classroom-header-card classroom-identity-card" id="classroom-header">
       {/* TOP ROW: Back Navigation & Status Badge */}
       <div className="classroom-header-top-row">
         <div className="classroom-header-nav-group">
+          {onSecondaryBack && (
+            <>
+              <button
+                type="button"
+                className="classroom-header-back-btn btn-secondary-crumb"
+                onClick={onSecondaryBack}
+                id="btn-classroom-header-secondary-back"
+              >
+                {secondaryBackLabel || "Classrooms"}
+              </button>
+              <span className="classroom-header-separator">/</span>
+            </>
+          )}
           {onBack && (
             <button
               type="button"

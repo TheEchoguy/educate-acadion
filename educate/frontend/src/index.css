@@ -1,46 +1,47 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
 
 :root {
-  /* Core Colors */
+  /* Core Colors - Obsidian & Midnight Slate */
   --bg-primary: #0b0f19;
   --bg-secondary: #111827;
-  --bg-card: #1e293b;
-  --bg-card-hover: #273549;
-  --bg-input: #0f172a;
+  --bg-card: #111827;
+  --bg-card-hover: #1f2937;
+  --bg-input: #0b0f19;
   
   /* Brand Accents */
   --primary: #3b82f6;
   --primary-hover: #2563eb;
-  --primary-light: rgba(59, 130, 246, 0.15);
-  --primary-border: rgba(59, 130, 246, 0.35);
+  --primary-light: rgba(59, 130, 246, 0.12);
+  --primary-border: rgba(59, 130, 246, 0.3);
 
   --secondary: #6366f1;
   --secondary-hover: #4f46e5;
-  --accent: #06b6d4;
+  --accent: #38bdf8;
 
-  /* Status Colors */
+  /* Functional Status Colors */
   --success: #10b981;
-  --success-bg: rgba(16, 185, 129, 0.15);
-  --success-border: rgba(16, 185, 129, 0.35);
+  --success-bg: rgba(16, 185, 129, 0.12);
+  --success-border: rgba(16, 185, 129, 0.3);
   
   --warning: #f59e0b;
-  --warning-bg: rgba(245, 158, 11, 0.15);
-  --warning-border: rgba(245, 158, 11, 0.35);
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.3);
   
-  --danger: #ef4444;
-  --danger-hover: #dc2626;
-  --danger-bg: rgba(239, 68, 68, 0.15);
-  --danger-border: rgba(239, 68, 68, 0.35);
+  --danger: #f43f5e;
+  --danger-hover: #e11d48;
+  --danger-bg: rgba(244, 63, 94, 0.12);
+  --danger-border: rgba(244, 63, 94, 0.3);
 
   /* Text Colors */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-disabled: #475569;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --text-disabled: #4b5563;
 
   /* Borders & Dividers */
-  --border-color: #334155;
-  --border-subtle: #1e293b;
+  --border-color: #1f2937;
+  --border-hover: #374151;
+  --border-subtle: #1f2937;
   --border-focus: #3b82f6;
 
   /* Shadows */

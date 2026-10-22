@@ -368,30 +368,23 @@ public class SyllabusService {
         if (caller.getRole() == Role.STUDENT) {
             Optional<SyllabusVersion> latestVersionOpt = syllabusVersionRepository
                     .findTopByClassroomIdOrderByVersionNumberDesc(classroomId);
-            if (latestVersionOpt.isEmpty()) {
+            if (latestVersionOpt.isPresent()) {
+                List<SyllabusItemSnapshot> publishedTopics = latestVersionOpt.get().getTopics();
+                long total = publishedTopics.size();
+                long completed = publishedTopics.stream().filter(t -> t.getStatus() == SyllabusStatus.COMPLETED).count();
+                long inProgress = publishedTopics.stream().filter(t -> t.getStatus() == SyllabusStatus.IN_PROGRESS).count();
+                long notStarted = publishedTopics.stream().filter(t -> t.getStatus() == SyllabusStatus.NOT_STARTED).count();
+                double pct = total > 0 ? Math.round(((double) completed / total) * 10000.0) / 100.0 : 0.0;
                 return SyllabusProgressResponse.builder()
                         .classroomId(classroomId)
-                        .totalTopics(0)
-                        .completedTopics(0)
-                        .inProgressTopics(0)
-                        .notStartedTopics(0)
-                        .completionPercentage(0.0)
+                        .totalTopics(total)
+                        .completedTopics(completed)
+                        .inProgressTopics(inProgress)
+                        .notStartedTopics(notStarted)
+                        .completionPercentage(pct)
                         .build();
             }
-            List<SyllabusItemSnapshot> publishedTopics = latestVersionOpt.get().getTopics();
-            long total = publishedTopics.size();
-            long completed = publishedTopics.stream().filter(t -> t.getStatus() == SyllabusStatus.COMPLETED).count();
-            long inProgress = publishedTopics.stream().filter(t -> t.getStatus() == SyllabusStatus.IN_PROGRESS).count();
-            long notStarted = publishedTopics.stream().filter(t -> t.getStatus() == SyllabusStatus.NOT_STARTED).count();
-            double pct = total > 0 ? Math.round(((double) completed / total) * 10000.0) / 100.0 : 0.0;
-            return SyllabusProgressResponse.builder()
-                    .classroomId(classroomId)
-                    .totalTopics(total)
-                    .completedTopics(completed)
-                    .inProgressTopics(inProgress)
-                    .notStartedTopics(notStarted)
-                    .completionPercentage(pct)
-                    .build();
+            // If no published snapshot version yet, fall through to live classroom syllabus items
         }
 
         long totalTopics = syllabusItemRepository.countByClassroomId(classroomId);

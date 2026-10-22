@@ -89,22 +89,25 @@ export default function ClassPerformanceWorkspacePage() {
             <button
               type="button"
               className="btn-primary"
-              onClick={() => navigate("/teacher/classrooms")}
+              onClick={() => navigate(`/teacher/classrooms/${id}`)}
             >
-              Return to Classrooms
+              Return to Workspace
             </button>
           </div>
         ) : (
           <>
-            {/* SHARED RESPONSIVE CLASSROOM HEADER */}
+            {/* COMPACT STICKY CLASSROOM HEADER */}
             <ClassroomHeader
               classroom={classroom}
-              backLabel="← Back to Workspace Selection"
-              onBack={() => navigate(`/teacher/classrooms/${id}/workspaces`)}
+              backLabel="← Back to Workspace"
+              onBack={() => navigate(`/teacher/classrooms/${id}`)}
+              secondaryBackLabel="Classrooms"
+              onSecondaryBack={() => navigate("/teacher/classrooms")}
               workspaceTitle="Class Performance & AI Risk (XAI)"
               onRegenerateCode={handleRegenerate}
               regenerating={regenerating}
               showJoinCode={true}
+              compact={true}
             />
 
             {/* TAB SELECTOR: STEP 3 vs STEP 4 */}

@@ -314,4 +314,48 @@ export const getModuleNotesStatus = async (classroomId) => {
   return response.data;
 };
 
+// ============================================================================
+// CLASSROOM ANNOUNCEMENTS & RESOURCE BROADCAST
+// ============================================================================
+export const getClassroomAnnouncements = async (classroomId) => {
+  const response = await API.get(`/classrooms/${classroomId}/announcements`);
+  return response.data;
+};
+
+export const createClassroomAnnouncement = async (classroomId, formDataOrPayload) => {
+  const isFormData = formDataOrPayload instanceof FormData;
+  const config = isFormData
+    ? { headers: { "Content-Type": "multipart/form-data" } }
+    : {};
+  const response = await API.post(
+    `/classrooms/${classroomId}/announcements`,
+    formDataOrPayload,
+    config
+  );
+  return response.data;
+};
+
+export const deleteClassroomAnnouncement = async (classroomId, announcementId) => {
+  const response = await API.delete(
+    `/classrooms/${classroomId}/announcements/${announcementId}`
+  );
+  return response.data;
+};
+
+export const downloadAnnouncementAttachment = async (classroomId, announcementId, attachmentId, fileName) => {
+  const response = await API.get(
+    `/classrooms/${classroomId}/announcements/${announcementId}/attachments/${attachmentId}/download`,
+    { responseType: "blob" }
+  );
+  const blob = new Blob([response.data]);
+  const link = document.createElement("a");
+  link.href = window.URL.createObjectURL(blob);
+  link.download = fileName || "attachment";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(link.href);
+};
+
+
 
