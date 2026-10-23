@@ -1,6 +1,6 @@
-# ACADION — Asset Relocation Manifest
+# Acadion — Media & Institutional Asset Manifest
 
-This document tracks all image, video, and decorative binary assets moved out of the source-code tree into the centralized `media-assets/` directory to prepare a lightweight source-only repository for architectural and code review.
+This document tracks all video sequences, topic cards, and decorative binary assets cataloged in the `media-assets/` directory. All assets are mapped dynamically to the application frontend.
 
 ## Summary of Media Relocation
 - **Total Video Files Moved**: 12 files (~135.09 MB)
