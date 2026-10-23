@@ -35,9 +35,16 @@ public class CreateClassroomRequest {
     private String academicYear;
 
     public String getEffectiveCourseCode() {
-        if (courseCode != null && !courseCode.isBlank()) return courseCode.trim();
-        if (subjectCode != null && !subjectCode.isBlank()) return subjectCode.trim();
-        return "BCS701";
+        if (courseCode != null && !courseCode.isBlank()) return courseCode.trim().toUpperCase();
+        if (subjectCode != null && !subjectCode.isBlank()) return subjectCode.trim().toUpperCase();
+        String text = ((name != null ? name : "") + " " + (subjectName != null ? subjectName : "")).toLowerCase();
+        if (text.contains("energy") || text.contains("ec&a") || text.contains("audit")) {
+            return "BEE755B";
+        }
+        if (text.contains("internet") || text.contains("iot")) {
+            return "BCS701";
+        }
+        return "COURSE";
     }
 
     public String getEffectiveSubjectName() {

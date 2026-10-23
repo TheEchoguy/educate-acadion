@@ -89,7 +89,7 @@ export default function EvaluationSchemeWorkspacePage() {
             />
 
             <div className="tab-panel-container" style={{ padding: "28px" }}>
-              <EvaluationSchemeConfig classroomId={id} isTeacher={true} />
+              <EvaluationSchemeConfig classroomId={id} isTeacher={true} classroom={classroom} />
             </div>
           </>
         )}

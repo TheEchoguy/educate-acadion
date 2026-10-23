@@ -18,6 +18,10 @@ public class StudentPerformanceResponse {
     private String usn;
     private String studentEmail;
     
+    @Builder.Default
+    private boolean isPublished = true;
+    private String message;
+    
     // Scaled CIE Calculation
     private double scaledCieEarned;
     private double scaledCieMax;

@@ -399,7 +399,7 @@ def synthesize_topics_with_llm(questions: list) -> list:
 
 
 def infer_topic(text: str) -> str:
-    """
+    r"""
     Universal question topic synthesizer:
     Uses specified regex to strip leading instructional verbs:
     ^(What do you mean by|Briefly explain|Define the following terms|Explain the features of|Discuss how|Define|List the advantages|Enumerate the step-by-step approach|Write a note on|Explain the working of|Explain|Describe|Discuss|Compare|Draw and explain)\s+

@@ -179,8 +179,23 @@ export const getIaRecordsByNumber = async (classroomId, iaNumber) => {
 };
 
 export const publishIaMarks = async (classroomId, iaNumber = 0, publish = true) => {
-  const response = await API.post(
-    `/classrooms/${classroomId}/intelligence/publish-ia-marks?iaNumber=${iaNumber}&publish=${publish}`
+  const response = await API.put(
+    `/classrooms/${classroomId}/intelligence/marks/publish-all?iaNumber=${iaNumber}&status=${publish}`
+  );
+  return response.data;
+};
+
+export const publishAllIaMarks = async (classroomId, iaNumber = 0, status = true) => {
+  const response = await API.put(
+    `/classrooms/${classroomId}/intelligence/marks/publish-all?iaNumber=${iaNumber}&status=${status}`
+  );
+  return response.data;
+};
+
+export const publishStudentIaMarks = async (classroomId, usn, iaNumber = 1, isPublished = true) => {
+  const response = await API.put(
+    `/classrooms/${classroomId}/intelligence/marks/publish-student`,
+    { usn, iaNumber, isPublished }
   );
   return response.data;
 };
@@ -229,6 +244,16 @@ export const generateBlueprint = async (classroomId, iaNumber = 1, counts = {}) 
 // ============================================================================
 // ACADEMIC INTELLIGENCE - 4-LEVEL HIERARCHICAL PERFORMANCE ANALYTICS ENGINE
 // ============================================================================
+export const getAllCoursesPerformance = async () => {
+  const response = await API.get("/student/performance/all-courses");
+  return response.data;
+};
+
+export const getAllPublishedMarks = async () => {
+  const response = await API.get("/student/performance/all-published-marks");
+  return response.data;
+};
+
 export const getMyPerformance = async (classroomId) => {
   const response = await API.get(
     `/classrooms/${classroomId}/intelligence/my-performance`
@@ -356,6 +381,31 @@ export const downloadAnnouncementAttachment = async (classroomId, announcementId
   document.body.removeChild(link);
   window.URL.revokeObjectURL(link.href);
 };
+/**
+ * Resolves the accurate, official course / subject code for any classroom object,
+ * preventing cross-course code leakage (e.g. Energy Conservation inheriting BCS701).
+ */
+export const resolveCourseCode = (cls) => {
+  if (!cls) return "COURSE";
+  const rawName = `${cls.name || ""} ${cls.subjectName || ""} ${cls.courseName || ""}`.toLowerCase();
+  const existingCode = (cls.courseCode || cls.subjectCode || cls.code || "").trim();
 
+  // If the classroom name or subject clearly refers to Energy Conservation & Audit
+  if (rawName.includes("energy") || rawName.includes("ec&a") || rawName.includes("audit")) {
+    if (!existingCode || existingCode.toUpperCase() === "BCS701" || existingCode.toUpperCase() === "COURSE") {
+      return "BEE755B";
+    }
+    return existingCode;
+  }
 
+  // If the classroom name or subject clearly refers to Internet of Things
+  if (rawName.includes("internet") || rawName.includes("iot")) {
+    if (!existingCode || existingCode.toUpperCase() === "COURSE") {
+      return "BCS701";
+    }
+    return existingCode;
+  }
+
+  return existingCode || "COURSE";
+};
 

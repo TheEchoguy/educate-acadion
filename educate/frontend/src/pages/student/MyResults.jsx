@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 import { jwtDecode } from "jwt-decode";
 import { getStudentResults } from "../../services/responseService";
 import { getAllPapers } from "../../services/paperService";
-import { getStudentClassrooms, getMyPerformance } from "../../services/classroomService";
+import { getStudentClassrooms, getMyPerformance, resolveCourseCode } from "../../services/classroomService";
 import { exportEvaluatedSubmissionPdf } from "../../utils/pdfGenerator";
 import "./MyResults.css";
 
@@ -579,9 +579,7 @@ function MyResults() {
                 </div>
               ) : (
                 classrooms.map((cls) => {
-                  const rawName = (cls.name || cls.subjectName || "").toLowerCase();
-                  const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
-                  const displayCode = cls.courseCode || cls.subjectCode || inferredCode;
+                  const displayCode = resolveCourseCode(cls);
                   const perf = iaPerformanceMap[cls.id];
                   const hasPublishedTests = perf && perf.iaTests && perf.iaTests.length > 0;
 

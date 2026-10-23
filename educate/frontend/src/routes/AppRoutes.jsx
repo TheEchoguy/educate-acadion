@@ -22,6 +22,7 @@ import AvailableExams from "../pages/student/AvailableExams";
 import AttendExam from "../pages/student/AttendExam";
 import MyResults from "../pages/student/MyResults";
 import StudentPerformance from "../pages/student/StudentPerformance";
+import StudentSemesterDiagnosticsPage from "../pages/student/StudentSemesterDiagnosticsPage";
 import PracticePapers from "../pages/student/PracticePapers";
 import EditPaper from "../pages/teacher/EditPaper";
 import CreateQuestionPaper from "../pages/teacher/CreateQuestionPaper";
@@ -102,14 +103,36 @@ function AppRoutes() {
       <Route path="/student/classrooms" element={<StudentClassrooms />} />
       <Route path="/student/classrooms/:id" element={<StudentClassroomWorkspace />} />
       <Route path="/student/classrooms/:id/syllabus" element={<StudentClassroomWorkspace />} />
-      <Route path="/student/classrooms/:id/performance" element={<StudentClassroomWorkspace defaultTab="performance" />} />
+      <Route
+        path="/student/classrooms/:id/performance"
+        element={
+          <ErrorBoundary title="Student Performance Analytics" backLabel="← Back to Dashboard" backPath="/student/dashboard">
+            <StudentClassroomWorkspace defaultTab="performance" />
+          </ErrorBoundary>
+        }
+      />
       <Route path="/student/classrooms/:id/announcements" element={<StudentClassroomWorkspace defaultTab="announcements" />} />
       <Route path="/student/classrooms/:id/noticeboard" element={<StudentClassroomWorkspace defaultTab="announcements" />} />
       <Route path="/student/exams" element={<AvailableExams />} />
       <Route path="/student/attend/:id" element={<AttendExam />} />
       <Route path="/student/attend-exam/:id" element={<AttendExam />} />
       <Route path="/student/results" element={<MyResults />} />
-      <Route path="/student/performance" element={<StudentPerformance />} />
+      <Route
+        path="/student/performance"
+        element={
+          <ErrorBoundary title="Student Performance Analytics" backLabel="← Back to Dashboard" backPath="/student/dashboard">
+            <StudentSemesterDiagnosticsPage />
+          </ErrorBoundary>
+        }
+      />
+      <Route
+        path="/student/diagnostics/semester"
+        element={
+          <ErrorBoundary title="Student Performance Analytics" backLabel="← Back to Dashboard" backPath="/student/dashboard">
+            <StudentSemesterDiagnosticsPage />
+          </ErrorBoundary>
+        }
+      />
       <Route path="/student/practice" element={<PracticePapers />} />
       <Route
         path="/student/tutor"

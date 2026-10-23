@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import toast from "react-hot-toast";
-import { getStudentClassrooms, joinClassroom } from "../../services/classroomService";
+import { getStudentClassrooms, joinClassroom, resolveCourseCode } from "../../services/classroomService";
 import { getMyProfile } from "../../services/profileService";
 import FloatingChatbotWidget from "../../components/classroom/FloatingChatbotWidget";
 import "./StudentDashboard.css";
@@ -69,7 +69,7 @@ function StudentDashboard() {
         "Academic Risk Trajectory (Low/Medium/High)",
         "Pass/Fail Grade Predictions",
       ],
-      actionText: "Analyze Performance Trends",
+      actionText: "Inspect Detailed 4-Level Diagnostics",
     },
     {
       id: "tutor",
@@ -225,16 +225,12 @@ function StudentDashboard() {
 
             <div className="enrolled-cards-scroller">
               {enrolledClassrooms.map((cls) => {
-                const rawName = (cls.name || cls.subjectName || "").toLowerCase();
-                const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
-                const courseCode = cls.courseCode || cls.subjectCode || inferredCode;
+                const courseCode = resolveCourseCode(cls);
                 const courseTitle = cls.subjectName || cls.name || "Course Subject";
                 const facultyName = cls.teacherName || "Faculty";
                 const totalTopics = cls.totalTopics || 0;
                 const completedTopics = cls.completedTopics || 0;
                 const coveragePct = cls.coveragePercentage != null ? cls.coveragePercentage : (totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 1000) / 10 : 0);
-                const attendance = cls.attendancePercentage != null ? `${cls.attendancePercentage}% Attendance` : "88% Attendance Recorded";
-                const scaledCie = cls.scaledCieProgress || "13.5 / 15.0 M Secured in IA-1";
                 const isNeedsAttention = cls.riskStatus === "HIGH_RISK" || cls.statusBadge === "NEEDS_ATTENTION";
 
                 return (
@@ -251,7 +247,7 @@ function StudentDashboard() {
                     </div>
 
                     <h4 className="mini-classroom-name">
-                      {courseCode}: {courseTitle}
+                      {courseTitle}
                     </h4>
 
                     <p className="mini-faculty-name">
@@ -277,17 +273,6 @@ function StudentDashboard() {
                       </div>
                     </div>
 
-                    <div className="mini-metrics-row">
-                      <div className="mini-metric-item">
-                        <span className="mini-metric-label">Attendance:</span>
-                        <strong className="mini-metric-value">{attendance}</strong>
-                      </div>
-                      <div className="mini-metric-item">
-                        <span className="mini-metric-label">CIE Progress:</span>
-                        <strong className="mini-metric-value">{scaledCie}</strong>
-                      </div>
-                    </div>
-
                     <div className="mini-card-bottom">
                       <span className="mini-arrow-btn">Enter Classroom Workspace →</span>
                     </div>
@@ -298,7 +283,7 @@ function StudentDashboard() {
           </div>
         )}
 
-        {/* 4-LEVEL ACADEMIC INTELLIGENCE & EXPLAINABLE AI (XAI) PLACEHOLDER CARD */}
+        {/* 4-LEVEL ACADEMIC INTELLIGENCE & EXPLAINABLE AI (XAI) HIGHLIGHT CARD */}
         <div className="xai-placeholder-card">
           <div className="xai-placeholder-left">
             <span className="xai-diagnostics-badge">
@@ -311,24 +296,13 @@ function StudentDashboard() {
               📊 4-Level Academic Intelligence &amp; Explainable AI (XAI)
             </h2>
             <p className="xai-placeholder-subtitle">
-              Deep Diagnostic Mastery: Topic-by-topic granularity, Module 1–5 drop rates, and SHAP-explained performance drivers.
+              Topic-by-topic diagnostic mastery, Module 1–5 drop rates, and SHAP-explained performance drivers are accessible directly inside each enrolled course workspace.
             </p>
           </div>
 
-          <button
-            type="button"
-            className="xai-inspect-btn"
-            onClick={() => {
-              if (enrolledClassrooms.length > 0) {
-                navigate(`/student/classrooms/${enrolledClassrooms[0].id}/performance`);
-              } else {
-                toast.info("Please join or enroll in a classroom to inspect your 4-level diagnostics.");
-                navigate("/student/classrooms");
-              }
-            }}
-          >
-            <span>[ Inspect Detailed 4-Level Diagnostics → ]</span>
-          </button>
+          <div className="xai-embedded-badge">
+            <span>⚡ Embedded in Classrooms</span>
+          </div>
         </div>
 
         {/* FEATURED SHOWCASE BANNER - HORIZONTAL CAMERA SLIDE TRACK FROM FAR END OF DESKTOP */}
@@ -444,8 +418,7 @@ function StudentDashboard() {
             <h3>📈 Performance Analytics</h3>
             <p>Track academic performance trajectory, weak spots, and AI grade prediction metrics.</p>
             <div className="card-footer-meta">
-              <span>• Weak-Spot Detect</span>
-              <span>• Risk Prediction</span>
+              <span style={{ color: "#f59e0b", fontWeight: 600 }}>Inspect Detailed 4-Level Diagnostics →</span>
             </div>
           </div>
 

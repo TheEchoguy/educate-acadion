@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { getClassroomDetails } from "../../services/classroomService";
 import StudentSyllabusView from "../../components/syllabus/student/StudentSyllabusView";
 import EvaluationSchemeConfig from "../../components/classroom/EvaluationSchemeConfig";
+import ErrorBoundary from "../../components/common/ErrorBoundary";
 import StudentPerformanceView from "./StudentPerformanceView";
 import RagStudyTutorSection from "../../components/classroom/RagStudyTutorSection";
 import ClassroomAnnouncementsSection from "../../components/classroom/ClassroomAnnouncementsSection";
@@ -290,8 +291,16 @@ function StudentClassroomWorkspace({ defaultTab = null }) {
               <ClassroomAnnouncementsSection classroomId={id} isTeacher={false} />
             )}
             {activeTab === "syllabus" && <StudentSyllabusView classroomId={id} />}
-            {activeTab === "scheme" && <EvaluationSchemeConfig classroomId={id} isTeacher={false} />}
-            {activeTab === "performance" && <StudentPerformanceView classroomId={id} />}
+            {activeTab === "scheme" && (
+              <ErrorBoundary title="Subject Evaluation Scheme" backLabel="← Back to Dashboard" backPath="/student/dashboard">
+                <EvaluationSchemeConfig classroomId={id} isTeacher={false} classroom={classroom} />
+              </ErrorBoundary>
+            )}
+            {activeTab === "performance" && (
+              <ErrorBoundary title="Student Performance Analytics" backLabel="← Back to Dashboard" backPath="/student/dashboard">
+                <StudentPerformanceView classroomId={id} />
+              </ErrorBoundary>
+            )}
             {activeTab === "tutor" && (
               <RagStudyTutorSection classroomId={id} classroomName={classroom?.name} isTeacher={false} />
             )}

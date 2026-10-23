@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import toast from "react-hot-toast";
-import { getStudentClassrooms, joinClassroom } from "../../services/classroomService";
+import { getStudentClassrooms, joinClassroom, resolveCourseCode } from "../../services/classroomService";
 import "./StudentClassrooms.css";
 
 function StudentClassrooms() {
@@ -136,9 +136,7 @@ function StudentClassrooms() {
             ) : (
               <div className="classrooms-grid">
                 {enrolledClassrooms.map((cls) => {
-                  const rawName = (cls.name || cls.subjectName || "").toLowerCase();
-                  const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
-                  const displayCode = cls.courseCode || cls.subjectCode || inferredCode;
+                  const displayCode = resolveCourseCode(cls);
                   const totalTopics = cls.totalTopics || 0;
                   const completedTopics = cls.completedTopics || 0;
                   const coveragePct = cls.coveragePercentage != null ? cls.coveragePercentage : (totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 1000) / 10 : 0);

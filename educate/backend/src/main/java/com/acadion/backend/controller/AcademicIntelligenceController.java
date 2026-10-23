@@ -4,6 +4,7 @@ import com.acadion.backend.dto.intelligence.ClassroomAnalyticsSummaryDTO;
 import com.acadion.backend.dto.intelligence.ClassroomRiskWatchlistResponse;
 import com.acadion.backend.dto.intelligence.IaIngestionSummary;
 import com.acadion.backend.dto.intelligence.ManualMarksRecordRequest;
+import com.acadion.backend.dto.intelligence.PublishStudentMarksRequest;
 import com.acadion.backend.dto.intelligence.StudentFourLevelAnalyticsDTO;
 import com.acadion.backend.dto.intelligence.StudentIaBreakdownResponse;
 import com.acadion.backend.dto.intelligence.StudentPerformanceResponse;
@@ -205,6 +206,33 @@ public class AcademicIntelligenceController {
     /**
      * Teacher confirmation to publish or unpublish IA marks to students.
      */
+    @PutMapping("/marks/publish-all")
+    public ResponseEntity<Map<String, Object>> publishAllMarks(
+            @PathVariable("classroomId") String classroomId,
+            @RequestParam(value = "iaNumber", defaultValue = "0") int iaNumber,
+            @RequestParam(value = "status", defaultValue = "true") boolean status
+    ) {
+        Map<String, Object> result = iaMarksIngestionService.publishIaMarks(classroomId, iaNumber, status);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Publish or unpublish marks for an individual student.
+     */
+    @PutMapping("/marks/publish-student")
+    public ResponseEntity<Map<String, Object>> publishStudentMarks(
+            @PathVariable("classroomId") String classroomId,
+            @RequestBody PublishStudentMarksRequest request
+    ) {
+        Map<String, Object> result = iaMarksIngestionService.publishStudentMarks(
+                classroomId,
+                request.getUsn(),
+                request.getIaNumber(),
+                request.isPublished()
+        );
+        return ResponseEntity.ok(result);
+    }
+
     @PostMapping("/publish-ia-marks")
     public ResponseEntity<Map<String, Object>> publishIaMarks(
             @PathVariable("classroomId") String classroomId,
@@ -436,6 +464,21 @@ public class AcademicIntelligenceController {
     ) {
         ModuleNotesStatusResponse status = ragTutorService.getModuleNotesStatus(classroomId);
         return ResponseEntity.ok(status);
+    }
+
+    /**
+     * Semester-wide published marks across all enrolled courses for the authenticated student.
+     */
+    @GetMapping("/all-published-marks")
+    public ResponseEntity<com.acadion.backend.dto.intelligence.StudentPublishedMarksSemesterResponse> getAllPublishedMarks(
+            @AuthenticationPrincipal UserDetails userDetails,
+            Principal principal
+    ) {
+        String studentEmail = userDetails != null ? userDetails.getUsername() : (principal != null ? principal.getName() : null);
+        if (studentEmail == null || studentEmail.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User must be authenticated");
+        }
+        return ResponseEntity.ok(studentPerformanceService.getAllPublishedMarks(studentEmail));
     }
 }
 

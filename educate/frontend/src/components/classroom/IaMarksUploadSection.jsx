@@ -14,6 +14,8 @@ import {
   updateBlueprint,
   generateBlueprint,
   publishIaMarks,
+  publishAllIaMarks,
+  publishStudentIaMarks,
   getIaPublishStatus,
   resetIaMarks,
 } from "../../services/classroomService";
@@ -24,6 +26,8 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
   const [entryMode, setEntryMode] = useState("excel"); // 'excel' | 'manual'
   const [manualMarks, setManualMarks] = useState({}); // { [usn]: { [code]: value } }
   const [isSavingManual, setIsSavingManual] = useState(false);
+  const [editingStudents, setEditingStudents] = useState({}); // { [usn]: boolean }
+  const [inlineMarks, setInlineMarks] = useState({}); // { [usn]: { [code]: value } }
   const [selectedIa, setSelectedIa] = useState(1);
   const [uploadMode, setUploadMode] = useState("master"); // 'master' | 'single'
   const [selectedFile, setSelectedFile] = useState(null);
@@ -483,6 +487,143 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
     } finally {
       setIsLoadingRecords(false);
     }
+  };
+
+  const handleToggleStudentPublish = async (usn, currentStatus) => {
+    const nextStatus = !currentStatus;
+    try {
+      await publishStudentIaMarks(classroomId, usn, selectedIa, nextStatus);
+      setIaRecords((prev) =>
+        prev.map((r) => {
+          if (r.usn && r.usn.toUpperCase() === usn.toUpperCase()) {
+            return { ...r, published: nextStatus, isPublished: nextStatus };
+          }
+          return r;
+        })
+      );
+      await loadPublishStatus();
+    } catch (err) {
+      console.error("Failed to toggle student publish:", err);
+      alert(err.response?.data?.message || "Failed to update publication status.");
+    }
+  };
+
+  const handleInlineMarkChange = (usn, code, val) => {
+    const u = usn.toUpperCase();
+    setInlineMarks((prev) => ({
+      ...prev,
+      [u]: {
+        ...(prev[u] || {}),
+        [code]: val,
+      },
+    }));
+  };
+
+  const handleSaveInlineStudentMarks = async (student, shouldPublish = false) => {
+    const u = student.usn.toUpperCase();
+    const stMarks = inlineMarks[u] || manualMarks[u] || student.questionMarks || {};
+    const cleanMap = {};
+    activeQuestions.forEach((q) => {
+      const v = stMarks[q.code] ?? stMarks[q.code.toLowerCase()] ?? stMarks[q.code.toUpperCase()];
+      cleanMap[q.code] = v === "" || v === undefined || v === null ? 0.0 : parseFloat(v) || 0.0;
+    });
+
+    const payload = [
+      {
+        usn: u,
+        studentName: student.studentName || student.name || "Student",
+        questionMarks: cleanMap,
+      },
+    ];
+
+    try {
+      await saveManualMarks(classroomId, selectedIa, payload);
+      if (shouldPublish) {
+        await publishStudentIaMarks(classroomId, u, selectedIa, true);
+      }
+      setEditingStudents((prev) => ({ ...prev, [u]: false }));
+      await loadIaRecords(selectedIa);
+      await loadPublishStatus();
+    } catch (err) {
+      console.error("Save inline marks error:", err);
+      alert(err.response?.data?.message || "Failed to save marks.");
+    }
+  };
+
+  const existingUsnSet = new Set(iaRecords.map((r) => (r.usn || "").trim().toUpperCase()));
+  const missingEnrolled = (enrolledStudents || []).filter(
+    (st) => st.usn && !existingUsnSet.has(st.usn.trim().toUpperCase())
+  );
+
+  const handleAddEnrolledStudent = async (student) => {
+    const u = student.usn.toUpperCase();
+    const cleanMap = {};
+    activeQuestions.forEach((q) => {
+      cleanMap[q.code] = 0.0;
+    });
+    try {
+      await saveManualMarks(classroomId, selectedIa, [
+        {
+          usn: u,
+          studentName: student.name || "Student",
+          questionMarks: cleanMap,
+        },
+      ]);
+      await loadIaRecords(selectedIa);
+      setEditingStudents((prev) => ({ ...prev, [u]: true }));
+      setInlineMarks((prev) => ({ ...prev, [u]: cleanMap }));
+    } catch (err) {
+      console.error("Failed to add student:", err);
+      alert(err.response?.data?.message || "Failed to add student to marks sheet.");
+    }
+  };
+
+  const handleAddAllMissingStudents = async () => {
+    if (missingEnrolled.length === 0) return;
+    const payload = missingEnrolled.map((st) => {
+      const cleanMap = {};
+      activeQuestions.forEach((q) => {
+        cleanMap[q.code] = 0.0;
+      });
+      return {
+        usn: st.usn.toUpperCase(),
+        studentName: st.name || "Student",
+        questionMarks: cleanMap,
+      };
+    });
+    try {
+      await saveManualMarks(classroomId, selectedIa, payload);
+      await loadIaRecords(selectedIa);
+      await loadPublishStatus();
+    } catch (err) {
+      console.error("Failed to add missing students:", err);
+      alert(err.response?.data?.message || "Failed to add students.");
+    }
+  };
+
+  const getStudentLiveTotal = (usn, currentMarks) => {
+    const marks = inlineMarks[usn] || currentMarks || {};
+    const m1a = parseFloat(marks["1a"]) || 0;
+    const m1b = parseFloat(marks["1b"]) || 0;
+    const m1c = parseFloat(marks["1c"]) || 0;
+    const m2a = parseFloat(marks["2a"]) || 0;
+    const m2b = parseFloat(marks["2b"]) || 0;
+    const m2c = parseFloat(marks["2c"]) || 0;
+    const q1 = m1a + m1b + m1c;
+    const q2 = m2a + m2b + m2c;
+    const partA = Math.max(q1, q2);
+
+    const m3a = parseFloat(marks["3a"]) || 0;
+    const m3b = parseFloat(marks["3b"]) || 0;
+    const m3c = parseFloat(marks["3c"]) || 0;
+    const m4a = parseFloat(marks["4a"]) || 0;
+    const m4b = parseFloat(marks["4b"]) || 0;
+    const m4c = parseFloat(marks["4c"]) || 0;
+    const q3 = m3a + m3b + m3c;
+    const q4 = m4a + m4b + m4c;
+    const partB = Math.max(q3, q4);
+
+    return parseFloat((partA + partB).toFixed(1));
   };
 
   // 1. Download Master Unified Template
@@ -1587,39 +1728,38 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
               </div>
 
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                {isCurrentIaPublished ? (
-                  <button
-                    type="button"
-                    className="btn-preset"
-                    onClick={() => handlePublishIaMarks(selectedIa, false)}
-                    disabled={isPublishing}
-                    style={{ color: "#f87171", borderColor: "rgba(248, 113, 113, 0.3)" }}
-                  >
-                    {isPublishing ? "Updating..." : "🔒 Unpublish IA-" + selectedIa + " (Revert to Draft)"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn-confirm-lock"
-                    onClick={() => handlePublishIaMarks(selectedIa, true)}
-                    disabled={isPublishing || filteredRecords.length === 0}
-                    style={{
-                      background: "linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)",
-                      borderColor: "#60a5fa",
-                      padding: "8px 18px",
-                      fontSize: "0.88rem",
-                    }}
-                    title="Confirm and publish these marks so students can view them on their dashboard"
-                  >
-                    {isPublishing ? (
-                      <>
-                        <span className="ia-spinner" /> Publishing...
-                      </>
-                    ) : (
-                      <>📢 Publish IA-{selectedIa} Marks to Students</>
-                    )}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="btn-confirm-lock"
+                  onClick={() => handlePublishIaMarks(selectedIa, true)}
+                  disabled={isPublishing || filteredRecords.length === 0}
+                  style={{
+                    background: "linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)",
+                    borderColor: "#60a5fa",
+                    padding: "8px 18px",
+                    fontSize: "0.88rem",
+                  }}
+                  title="Confirm and publish these marks so students can view them on their dashboard"
+                >
+                  {isPublishing ? (
+                    <>
+                      <span className="ia-spinner" /> Updating...
+                    </>
+                  ) : (
+                    <>📢 Publish All Students</>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-preset"
+                  onClick={() => handlePublishIaMarks(selectedIa, false)}
+                  disabled={isPublishing || filteredRecords.length === 0}
+                  style={{ color: "#f87171", borderColor: "rgba(248, 113, 113, 0.3)" }}
+                  title="Revert all students to draft so marks are hidden from student dashboards"
+                >
+                  🔒 Unpublish All (Revert to Draft)
+                </button>
 
                 <button
                   type="button"
@@ -1632,6 +1772,38 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
                 </button>
               </div>
             </div>
+
+        {missingEnrolled.length > 0 && (
+          <div
+            style={{
+              padding: "10px 16px",
+              margin: "10px 0",
+              background: "rgba(59, 130, 246, 0.1)",
+              border: "1px solid rgba(59, 130, 246, 0.3)",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.85rem", color: "#93c5fd" }}>
+              <span>ℹ️</span>
+              <span>
+                Found <strong>{missingEnrolled.length}</strong> enrolled student{missingEnrolled.length > 1 ? "s" : ""} without IA-{selectedIa} marks sheet entries.
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn-confirm-lock"
+              style={{ padding: "6px 14px", fontSize: "0.82rem" }}
+              onClick={handleAddAllMissingStudents}
+            >
+              + Add All to Sheet
+            </button>
+          </div>
+        )}
 
         {isLoadingRecords ? (
           <div className="ia-empty-state">
@@ -1667,14 +1839,42 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
               <tbody>
                 {filteredRecords.map((r, idx) => {
                   const q = r.questionMarks || {};
+                  const isEditing = Boolean(editingStudents[r.usn]);
+                  const isPub = Boolean(r.published || r.isPublished);
+
                   return (
-                    <tr key={r.id || r.usn}>
+                    <tr key={r.id || r.usn} style={{ background: isEditing ? "rgba(37, 99, 235, 0.08)" : undefined }}>
                       <td className="cell-muted">{idx + 1}</td>
                       <td>
                         <strong className="usn-tag">{r.usn}</strong>
                       </td>
                       <td className="name-cell">{r.studentName}</td>
                       {activeQuestions.map((qItem) => {
+                        if (isEditing) {
+                          const currentVal = inlineMarks[r.usn]?.[qItem.code] ?? (q[qItem.code] ?? "");
+                          return (
+                            <td key={qItem.code} className="mark-cell" style={{ padding: "4px" }}>
+                              <input
+                                type="number"
+                                min="0"
+                                max={qItem.maxMarks || 10}
+                                step="0.5"
+                                value={currentVal}
+                                onChange={(e) => handleInlineMarkChange(r.usn, qItem.code, e.target.value)}
+                                style={{
+                                  width: "48px",
+                                  background: "#090d16",
+                                  color: "#f8fafc",
+                                  border: "1px solid #3b82f6",
+                                  borderRadius: "4px",
+                                  textAlign: "center",
+                                  padding: "3px 2px",
+                                  fontSize: "0.82rem",
+                                }}
+                              />
+                            </td>
+                          );
+                        }
                         const m = getQuestionMark(q, qItem.code);
                         return (
                           <td key={qItem.code} className="mark-cell">
@@ -1683,8 +1883,8 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
                         );
                       })}
                       <td>
-                        <span className="badge-total-marks">
-                          {r.totalMarks !== undefined ? r.totalMarks.toFixed(1) : "0.0"}
+                        <span className="badge-total-marks" style={{ color: isEditing ? "#38bdf8" : undefined }}>
+                          {isEditing ? getStudentLiveTotal(r.usn, q) : (r.totalMarks !== undefined ? r.totalMarks.toFixed(1) : "0.0")}
                         </span>
                       </td>
                       <td>
@@ -1706,25 +1906,121 @@ const IaMarksUploadSection = ({ classroomId, classroomName, enrolledStudents = [
                         </div>
                       </td>
                       <td>
-                        {r.published ? (
-                          <span style={{ color: "#34d399", fontWeight: 700, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-                            ● Published
+                        {isPub ? (
+                          <span
+                            className="bp-status-badge locked"
+                            style={{ padding: "3px 8px", fontSize: "0.76rem", whiteSpace: "nowrap" }}
+                          >
+                            Published
                           </span>
                         ) : (
-                          <span style={{ color: "#facc15", fontWeight: 700, fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-                            ● Draft
+                          <span
+                            className="bp-status-badge default"
+                            style={{
+                              background: "rgba(234, 179, 8, 0.15)",
+                              color: "#facc15",
+                              borderColor: "rgba(234, 179, 8, 0.3)",
+                              padding: "3px 8px",
+                              fontSize: "0.76rem",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Draft
                           </span>
                         )}
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn-inspect-student"
-                          onClick={() => handleInspectStudent(r.usn)}
-                          title="View weak topics and full multi-IA history"
-                        >
-                          🔍 Breakdown
-                        </button>
+                        {isEditing ? (
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                            <button
+                              type="button"
+                              className="btn-confirm-lock"
+                              style={{ padding: "4px 8px", fontSize: "0.76rem", whiteSpace: "nowrap" }}
+                              onClick={() => handleSaveInlineStudentMarks(r, true)}
+                              title="Save entered marks and immediately publish to student"
+                            >
+                              💾 Save &amp; Publish
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-preset"
+                              style={{ padding: "4px 8px", fontSize: "0.76rem", whiteSpace: "nowrap" }}
+                              onClick={() => handleSaveInlineStudentMarks(r, false)}
+                              title="Save entered marks as draft"
+                            >
+                              Save Draft
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-action-reset-subtle"
+                              style={{ padding: "4px 6px", fontSize: "0.76rem" }}
+                              onClick={() => setEditingStudents((prev) => ({ ...prev, [r.usn]: false }))}
+                              title="Cancel editing"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                            {isPub ? (
+                              <button
+                                type="button"
+                                className="btn-preset"
+                                style={{
+                                  padding: "3px 7px",
+                                  fontSize: "0.76rem",
+                                  color: "#f87171",
+                                  borderColor: "rgba(248, 113, 113, 0.3)",
+                                  whiteSpace: "nowrap",
+                                }}
+                                onClick={() => handleToggleStudentPublish(r.usn, true)}
+                                title="Unpublish marks for this student"
+                              >
+                                [ Unpublish ]
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn-preset"
+                                style={{
+                                  padding: "3px 7px",
+                                  fontSize: "0.76rem",
+                                  color: "#34d399",
+                                  borderColor: "rgba(52, 211, 153, 0.3)",
+                                  whiteSpace: "nowrap",
+                                }}
+                                onClick={() => handleToggleStudentPublish(r.usn, false)}
+                                title="Publish marks to this student"
+                              >
+                                [ Publish ]
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              className="btn-preset"
+                              style={{ padding: "3px 7px", fontSize: "0.76rem", whiteSpace: "nowrap" }}
+                              onClick={() => {
+                                const currentMarks = r.questionMarks || {};
+                                setInlineMarks((prev) => ({ ...prev, [r.usn]: { ...currentMarks } }));
+                                setEditingStudents((prev) => ({ ...prev, [r.usn]: true }));
+                              }}
+                              title="Inline edit sub-question marks"
+                            >
+                              ✏️ Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              className="btn-inspect-student"
+                              style={{ padding: "3px 7px", fontSize: "0.76rem", whiteSpace: "nowrap" }}
+                              onClick={() => handleInspectStudent(r.usn)}
+                              title="View weak topics and full multi-IA history"
+                            >
+                              🔍 Breakdown
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

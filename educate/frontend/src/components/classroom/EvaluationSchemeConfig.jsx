@@ -3,8 +3,9 @@ import toast from "react-hot-toast";
 import { getEvaluationScheme, updateEvaluationScheme } from "../../services/classroomService";
 import "./EvaluationSchemeConfig.css";
 
-export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }) {
+export default function EvaluationSchemeConfig({ classroomId, isTeacher = true, classroom = null }) {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [scheme, setScheme] = useState(null);
   const [activePreset, setActivePreset] = useState("VTU_IPCC");
@@ -31,54 +32,57 @@ export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }
     totalPassMinMarks: 40.0,
   });
 
-  useEffect(() => {
-    let active = true;
+  const fetchScheme = async (showToast = false) => {
     if (!classroomId) return;
-
-    setLoading(true);
-    getEvaluationScheme(classroomId)
-      .then((data) => {
-        if (!active) return;
-        setScheme(data);
-        setFormData({
-          courseCode: data.courseCode || "",
-          courseName: data.courseName || "",
-          semester: data.semester || 7,
-          isLabIntegrated: data.labIntegrated ?? data.isLabIntegrated ?? true,
-          iaCount: data.iaCount || 3,
-          iaRawMaxMarks: data.iaRawMaxMarks ?? 40.0,
-          iaScaledMaxMarks: data.iaScaledMaxMarks ?? 15.0,
-          iaCalculationRule: data.iaCalculationRule || "AVERAGE_ALL",
-          assignmentRawMaxMarks: data.assignmentRawMaxMarks ?? 25.0,
-          assignmentScaledMaxMarks: data.assignmentScaledMaxMarks ?? 10.0,
-          labRecordScaledMarks: data.labRecordScaledMarks ?? 15.0,
-          labTestRawMarks: data.labTestRawMarks ?? 50.0,
-          labTestScaledMarks: data.labTestScaledMarks ?? 10.0,
-          cieTotalMaxMarks: data.cieTotalMaxMarks ?? 50.0,
-          cieMinPassingMarks: data.cieMinPassingMarks ?? 20.0,
-          seeRawMaxMarks: data.seeRawMaxMarks ?? 100.0,
-          seeScaledMaxMarks: data.seeScaledMaxMarks ?? 50.0,
-          seeMinPassingMarks: data.seeMinPassingMarks ?? 18.0,
-          totalPassMinMarks: data.totalPassMinMarks ?? 40.0,
-        });
-
-        if (data.labIntegrated ?? data.isLabIntegrated) {
-          setActivePreset("VTU_IPCC");
-        } else {
-          setActivePreset("PURE_THEORY");
-        }
-      })
-      .catch((err) => {
-        console.error(err);
-        toast.error("Failed to load evaluation scheme");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+    try {
+      if (showToast) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      const data = await getEvaluationScheme(classroomId);
+      setScheme(data);
+      setFormData({
+        courseCode: data.courseCode || classroom?.subjectCode || classroom?.courseCode || "",
+        courseName: data.courseName || classroom?.subjectName || classroom?.name || "",
+        semester: data.semester || classroom?.semester || 7,
+        isLabIntegrated: data.labIntegrated ?? data.isLabIntegrated ?? true,
+        iaCount: data.iaCount || 3,
+        iaRawMaxMarks: data.iaRawMaxMarks ?? 40.0,
+        iaScaledMaxMarks: data.iaScaledMaxMarks ?? 15.0,
+        iaCalculationRule: data.iaCalculationRule || "AVERAGE_ALL",
+        assignmentRawMaxMarks: data.assignmentRawMaxMarks ?? 25.0,
+        assignmentScaledMaxMarks: data.assignmentScaledMaxMarks ?? 10.0,
+        labRecordScaledMarks: data.labRecordScaledMarks ?? 15.0,
+        labTestRawMarks: data.labTestRawMarks ?? 50.0,
+        labTestScaledMarks: data.labTestScaledMarks ?? 10.0,
+        cieTotalMaxMarks: data.cieTotalMaxMarks ?? 50.0,
+        cieMinPassingMarks: data.cieMinPassingMarks ?? 20.0,
+        seeRawMaxMarks: data.seeRawMaxMarks ?? 100.0,
+        seeScaledMaxMarks: data.seeScaledMaxMarks ?? 50.0,
+        seeMinPassingMarks: data.seeMinPassingMarks ?? 18.0,
+        totalPassMinMarks: data.totalPassMinMarks ?? 40.0,
       });
 
-    return () => {
-      active = false;
-    };
+      if (data.labIntegrated ?? data.isLabIntegrated) {
+        setActivePreset("VTU_IPCC");
+      } else {
+        setActivePreset("PURE_THEORY");
+      }
+      if (showToast) {
+        toast.success("Evaluation scheme synced with latest faculty version");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load evaluation scheme");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchScheme(false);
   }, [classroomId]);
 
   // Apply Presets
@@ -159,7 +163,7 @@ export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }
       setSaving(true);
       const updated = await updateEvaluationScheme(classroomId, formData);
       setScheme(updated);
-      toast.success("Evaluation scheme updated successfully!");
+      toast.success("Evaluation scheme published to students successfully!");
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to update evaluation scheme");
@@ -180,35 +184,73 @@ export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }
 
   if (loading) {
     return (
-      <div className="eval-scheme-container" style={{ padding: 40, textAlign: "center" }}>
+      <div className="eval-scheme-container" style={{ padding: 48, textAlign: "center" }}>
         <div className="spinner" style={{ margin: "0 auto 16px" }}></div>
-        <p style={{ color: "#94a3b8" }}>Loading Subject Evaluation Scheme...</p>
+        <p style={{ color: "#94a3b8", fontSize: "0.95rem" }}>Loading Subject Evaluation Scheme...</p>
       </div>
     );
   }
 
   // STUDENT VIEW (READ-ONLY)
   if (!isTeacher) {
+    const displayCourseCode = formData.courseCode || classroom?.subjectCode || classroom?.courseCode || "VTU IPCC";
+    const displayCourseName = formData.courseName || classroom?.subjectName || classroom?.name || "Subject Evaluation Scheme";
+    const displaySemester = formData.semester || classroom?.semester || 7;
+
     return (
       <div className="eval-scheme-container">
+        {/* LIVE FACULTY SYNC BANNER */}
+        <div className="student-eval-sync-banner">
+          <div className="sync-banner-left">
+            <span className="live-status-dot" />
+            <div>
+              <span className="live-status-title">Faculty Evaluation Scheme • Published &amp; Active</span>
+              <p className="live-status-meta">
+                {scheme?.updatedAt
+                  ? `Last synchronized with faculty updates: ${new Date(scheme.updatedAt).toLocaleString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true
+                    })}`
+                  : "Calibrated to institutional syllabus standards"}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn-student-refresh"
+            onClick={() => fetchScheme(true)}
+            disabled={refreshing}
+          >
+            {refreshing ? "🔄 Syncing..." : "🔄 Refresh Scheme"}
+          </button>
+        </div>
+
         <div className="student-eval-summary-card">
           <div className="student-eval-top">
             <div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                <span className="eval-card-badge badge-cie">{formData.courseCode}</span>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+                <span className="eval-card-badge badge-cie">{displayCourseCode}</span>
                 <span className="eval-card-badge badge-pass">
                   {formData.isLabIntegrated ? "🔬 Integrated (Theory + Lab)" : "📖 Pure Theory"}
                 </span>
-                <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Semester {formData.semester}</span>
+                <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>Semester {displaySemester}</span>
               </div>
-              <h3>{formData.courseName}</h3>
-              <p>Official syllabus marks distribution and minimum passing threshold standards.</p>
+              <h3 style={{ fontSize: "1.45rem", margin: "0 0 6px 0", color: "#F8FAFC" }}>{displayCourseName}</h3>
+              <p style={{ color: "#94A3B8", margin: 0, fontSize: "0.9rem" }}>
+                Official syllabus marks distribution, internal evaluation weightages, and minimum passing threshold standards.
+              </p>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: "1.8rem", fontWeight: 800, color: "#a855f7" }}>
+            <div className="student-eval-total-box">
+              <div style={{ fontSize: "2rem", fontWeight: 800, color: "#38BDF8" }}>
                 {formData.cieTotalMaxMarks + formData.seeScaledMaxMarks} Marks
               </div>
-              <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>Course Total (CIE 50 + SEE 50)</span>
+              <span style={{ fontSize: "0.82rem", color: "#94a3b8" }}>
+                Course Total (CIE {formData.cieTotalMaxMarks} + SEE {formData.seeScaledMaxMarks})
+              </span>
             </div>
           </div>
 
@@ -218,26 +260,45 @@ export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }
               <h4>
                 <span>📝</span> Continuous Internal Evaluation (CIE)
                 <span className="eval-card-badge badge-cie" style={{ marginLeft: "auto" }}>
-                  {formData.cieTotalMaxMarks} Marks
+                  {formData.cieTotalMaxMarks} Marks Max
                 </span>
               </h4>
               <div className="student-component-list">
                 <div className="student-component-item">
-                  <span>Internal Assessments ({formData.iaCount} Tests raw /{formData.iaRawMaxMarks})</span>
+                  <div>
+                    <span style={{ display: "block", fontWeight: 600, color: "#E2E8F0" }}>Internal Assessments (IA)</span>
+                    <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>
+                      {formData.iaCount} Tests raw /{formData.iaRawMaxMarks}m ({formData.iaCalculationRule === "BEST_2" ? "Best 2 Average" : "Average of All"})
+                    </span>
+                  </div>
                   <strong>{formData.iaScaledMaxMarks} Marks</strong>
                 </div>
+
                 <div className="student-component-item">
-                  <span>Assignments & Quizzes</span>
+                  <div>
+                    <span style={{ display: "block", fontWeight: 600, color: "#E2E8F0" }}>Continuous Assignments &amp; Quizzes</span>
+                    <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>
+                      Submissions raw /{formData.assignmentRawMaxMarks}m scaled
+                    </span>
+                  </div>
                   <strong>{formData.assignmentScaledMaxMarks} Marks</strong>
                 </div>
+
                 {formData.isLabIntegrated && (
                   <>
                     <div className="student-component-item">
-                      <span>Lab Record & Conduction</span>
+                      <div>
+                        <span style={{ display: "block", fontWeight: 600, color: "#E2E8F0" }}>Lab Record &amp; Practical Conduction</span>
+                        <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>Continuous laboratory work</span>
+                      </div>
                       <strong>{formData.labRecordScaledMarks} Marks</strong>
                     </div>
+
                     <div className="student-component-item">
-                      <span>Lab Internal Test (scaled from {formData.labTestRawMarks})</span>
+                      <div>
+                        <span style={{ display: "block", fontWeight: 600, color: "#E2E8F0" }}>Lab Internal Test</span>
+                        <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>Scaled from {formData.labTestRawMarks}m raw</span>
+                      </div>
                       <strong>{formData.labTestScaledMarks} Marks</strong>
                     </div>
                   </>
@@ -250,21 +311,34 @@ export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }
               <h4>
                 <span>🎓</span> Semester End Exam (SEE)
                 <span className="eval-card-badge badge-see" style={{ marginLeft: "auto" }}>
-                  {formData.seeScaledMaxMarks} Marks
+                  {formData.seeScaledMaxMarks} Marks Scaled
                 </span>
               </h4>
               <div className="student-component-list">
                 <div className="student-component-item">
-                  <span>Theory Written Exam Raw Max</span>
+                  <div>
+                    <span style={{ display: "block", fontWeight: 600, color: "#E2E8F0" }}>University Written Exam Raw</span>
+                    <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>Maximum written question paper marks</span>
+                  </div>
                   <strong>{formData.seeRawMaxMarks} Marks</strong>
                 </div>
+
                 <div className="student-component-item">
-                  <span>Scaled Weightage in Final Grade</span>
+                  <div>
+                    <span style={{ display: "block", fontWeight: 600, color: "#E2E8F0" }}>Weightage in Final Grade</span>
+                    <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>Scaled from {formData.seeRawMaxMarks}m to 50m</span>
+                  </div>
                   <strong>{formData.seeScaledMaxMarks} Marks</strong>
                 </div>
+
                 <div className="student-component-item">
-                  <span>Minimum Qualifying SEE Marks</span>
-                  <strong>{formData.seeMinPassingMarks} / {formData.seeScaledMaxMarks} ({Math.round((formData.seeMinPassingMarks / formData.seeScaledMaxMarks) * 100)}%)</strong>
+                  <div>
+                    <span style={{ display: "block", fontWeight: 600, color: "#E2E8F0" }}>Minimum Qualifying SEE Standard</span>
+                    <span style={{ fontSize: "0.78rem", color: "#94A3B8" }}>Required to pass SEE paper (35%)</span>
+                  </div>
+                  <strong style={{ color: "#FDE047" }}>
+                    {formData.seeMinPassingMarks} / {formData.seeScaledMaxMarks} Marks
+                  </strong>
                 </div>
               </div>
             </div>
@@ -272,20 +346,24 @@ export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }
 
           {/* PASSING CRITERIA CHECKLIST */}
           <div className="student-passing-checklist">
-            <h4 style={{ margin: "0 0 4px 0", color: "#4ade80", fontSize: "0.95rem" }}>
-              ✓ Mandatory Passing Criteria (University & Institutional Norms)
+            <h4 style={{ margin: "0 0 6px 0", color: "#34D399", fontSize: "0.98rem", display: "flex", alignItems: "center", gap: 8 }}>
+              <span>✓</span> Mandatory Passing Thresholds &amp; University Norms
             </h4>
             <div className="passing-check-row">
               <span className="check-icon">✓</span>
-              <span><strong>CIE Minimum:</strong> Must score at least <strong>{formData.cieMinPassingMarks} out of {formData.cieTotalMaxMarks} (40%)</strong> to qualify for SEE eligibility.</span>
+              <span><strong>CIE Eligibility Threshold:</strong> Must score at least <strong>{formData.cieMinPassingMarks} out of {formData.cieTotalMaxMarks} (40%)</strong> in Continuous Internal Evaluation to qualify for SEE appearance.</span>
             </div>
             <div className="passing-check-row">
               <span className="check-icon">✓</span>
-              <span><strong>SEE Minimum:</strong> Must score at least <strong>{formData.seeMinPassingMarks} out of {formData.seeScaledMaxMarks} (35% scaled)</strong> in the semester end exam.</span>
+              <span><strong>SEE Examination Standard:</strong> Must score at least <strong>{formData.seeMinPassingMarks} out of {formData.seeScaledMaxMarks} (35% scaled)</strong> in the Semester End Exam.</span>
             </div>
             <div className="passing-check-row">
               <span className="check-icon">✓</span>
-              <span><strong>Aggregate Minimum:</strong> Total combined (CIE + SEE) must be at least <strong>{formData.totalPassMinMarks} out of {formData.cieTotalMaxMarks + formData.seeScaledMaxMarks} (40%)</strong> to pass the course.</span>
+              <span><strong>Course Aggregate Standard:</strong> Total combined (CIE + SEE) must be at least <strong>{formData.totalPassMinMarks} out of {formData.cieTotalMaxMarks + formData.seeScaledMaxMarks} (40%)</strong> to pass and earn subject credits.</span>
+            </div>
+            <div className="passing-check-row">
+              <span className="check-icon">✓</span>
+              <span><strong>Attendance Requirement:</strong> Minimum <strong>75% classroom &amp; lab attendance</strong> is mandatory to maintain exam eligibility.</span>
             </div>
           </div>
         </div>
@@ -622,13 +700,28 @@ export default function EvaluationSchemeConfig({ classroomId, isTeacher = true }
 
       {/* SAVE BUTTON BAR */}
       <div className="eval-actions-bar">
+        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: "0.85rem", color: "#94A3B8" }}>
+          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} />
+          <span>
+            {scheme?.updatedAt
+              ? `Last published to students: ${new Date(scheme.updatedAt).toLocaleString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                })}`
+              : "Ready to publish to all enrolled students"}
+          </span>
+        </div>
         <button
           type="button"
           className="btn-save-scheme"
           onClick={handleSave}
           disabled={saving}
         >
-          {saving ? "Saving Scheme..." : "💾 Save Evaluation Scheme"}
+          {saving ? "Publishing to Students..." : "🚀 Save & Publish Scheme to Students"}
         </button>
       </div>
     </div>

@@ -16,3 +16,4 @@ pytesseract
 pillow
 httpx
 python-multipart
+openpyxl

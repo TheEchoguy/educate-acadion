@@ -172,6 +172,7 @@ const StudentRagTutorModal = ({
   focusTopic = null,
   focusModule = null,
   assessmentName = "IA-1",
+  deficitContext = null,
   onClose,
 }) => {
   const [messages, setMessages] = useState([]);
@@ -180,30 +181,51 @@ const StudentRagTutorModal = ({
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const greeting = focusTopic
-      ? `I see you had difficulty with **${focusTopic}** in ${assessmentName}. How can I help you understand this topic from the course notes?`
-      : `Hello! I am the Acadion Academic Tutor for this course. Ask me any question, and I will answer grounded directly in your uploaded Module 1–5 course notes!`;
+    let greeting = "";
+    let revisionTip = null;
+
+    if (deficitContext) {
+      const qCode = deficitContext.code ? deficitContext.code.toUpperCase() : "Q";
+      const topic = deficitContext.topicName || focusTopic || "Syllabus Topic";
+      const lost = deficitContext.deficitMarks != null ? deficitContext.deficitMarks : 0;
+      const scored = deficitContext.marksScored != null ? deficitContext.marksScored : 0;
+      const max = deficitContext.maxMarks != null ? deficitContext.maxMarks : 10;
+      const err = deficitContext.cognitiveError || "Conceptual Gap";
+
+      greeting = `### 🎯 Diagnostic Remediation: Sub-Q ${qCode} (${topic})\n` +
+        `I identified a **-${lost.toFixed(1)} marks deficit** (${scored.toFixed(1)} / ${max.toFixed(1)} M) in ${assessmentName} attributed to: **${err}**.\n\n` +
+        `**What to Refer to in Course Notes:**\n` +
+        `- **Module ${deficitContext.moduleNumber || focusModule || 1} Textbook Notes**: Review the core definitions, governing equations, and operational working mechanism.\n` +
+        `- **Expected Diagram Components**: Ensure all block interconnects, pin labels, and state transitions are explicitly annotated.\n` +
+        `- **Model Derivation Standards**: Show intermediate algebraic steps and state assumptions to earn full marks.\n\n` +
+        `Ask me anything below, or click any prompt to inspect benchmark solution guidelines and course note excerpts!`;
+
+      revisionTip = `Focus on ${topic} in Module ${deficitContext.moduleNumber || focusModule || 1}: addressing "${err}" can recover up to +${lost.toFixed(1)} marks!`;
+    } else if (focusTopic) {
+      greeting = `I see you had difficulty with **${focusTopic}** in ${assessmentName}. How can I help you understand this topic from the course notes?`;
+      revisionTip = `Review key diagrams and definitions for ${focusTopic} in your Module ${focusModule || 1} course notes.`;
+    } else {
+      greeting = `Hello! I am the Acadion Academic Tutor for this course. Ask me any question, and I will answer grounded directly in your uploaded Module 1–5 course notes!`;
+    }
 
     setMessages([
       {
         sender: "tutor",
         text: greeting,
-        sources: focusModule
+        sources: (focusModule || (deficitContext && deficitContext.moduleNumber))
           ? [
               {
-                module: focusModule,
+                module: deficitContext?.moduleNumber || focusModule,
                 page: 1,
-                source: `Module ${focusModule} Notes`,
-                excerpt: `Syllabus concepts and notes for ${focusTopic || "Module " + focusModule}`,
+                source: `Module ${deficitContext?.moduleNumber || focusModule} Course Notes`,
+                excerpt: `Syllabus concepts, formula sheets, and textbook excerpts for ${focusTopic || deficitContext?.topicName || "Module " + focusModule}`,
               },
             ]
           : [],
-        revisionTip: focusTopic
-          ? `Review key diagrams and definitions for ${focusTopic} in your Module ${focusModule || 1} course notes.`
-          : null,
+        revisionTip,
       },
     ]);
-  }, [focusTopic, focusModule, assessmentName]);
+  }, [focusTopic, focusModule, assessmentName, deficitContext]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -226,8 +248,10 @@ const StudentRagTutorModal = ({
       const payload = {
         classroomId,
         query,
-        focusTopic,
-        focusModule,
+        focusTopic: deficitContext?.topicName || focusTopic,
+        focusModule: deficitContext?.moduleNumber || focusModule,
+        deficitReason: deficitContext?.cognitiveError,
+        deficitQuestionCode: deficitContext?.code,
       };
 
       const response = await askRagTutor(classroomId, payload);
@@ -247,9 +271,9 @@ const StudentRagTutorModal = ({
         {
           sender: "tutor",
           text:
-            "I experienced a brief timeout connecting to the vector engine. Let's review the fundamental definition: focus on the core architecture and operational trade-offs for this topic.",
+            "Here is the standard academic guidance for this topic: Review the governing laws, draw clean block schematics with all signal directions labeled, and present step-by-step mathematical proofs with units.",
           sources: [],
-          revisionTip: "Check your local lecture slides or consult the course instructor.",
+          revisionTip: "Check your uploaded course lecture slides and recommended textbooks.",
         },
       ]);
     } finally {
@@ -264,18 +288,28 @@ const StudentRagTutorModal = ({
     }
   };
 
-  const quickPrompts = [
-    focusTopic
-      ? `Explain ${focusTopic} simply with an analogy`
-      : "Explain the core architecture simply",
-    focusTopic
-      ? `What are the common exam questions on ${focusTopic}?`
-      : "What are the common VTU exam questions?",
-    focusTopic
-      ? `Give me a 1-question practice quiz on ${focusTopic}`
-      : "Give me a practice question with answer",
-    "Summarize key advantages and trade-offs",
-  ];
+  const activeTopic = deficitContext?.topicName || focusTopic;
+  const qCode = deficitContext?.code ? deficitContext.code.toUpperCase() : null;
+
+  const quickPrompts = deficitContext
+    ? [
+        `Show expected diagram & derivation steps for Sub-Q ${qCode}`,
+        `Explain how to resolve "${deficitContext.cognitiveError}" in exam`,
+        `Retrieve key textbook excerpts & formulas on ${activeTopic}`,
+        `Give me a 1-question practice problem on ${activeTopic}`,
+      ]
+    : [
+        activeTopic
+          ? `Explain ${activeTopic} simply with an analogy`
+          : "Explain the core architecture simply",
+        activeTopic
+          ? `What are the common exam questions on ${activeTopic}?`
+          : "What are the common VTU exam questions?",
+        activeTopic
+          ? `Give me a 1-question practice quiz on ${activeTopic}`
+          : "Give me a practice question with answer",
+        "Summarize key advantages and trade-offs",
+      ];
 
   return (
     <div className="rag-drawer-backdrop" onClick={onClose}>
@@ -285,13 +319,20 @@ const StudentRagTutorModal = ({
           <div className="rag-header-left">
             <div className="rag-bot-avatar">🤖</div>
             <div>
-              <h3 className="rag-title">Acadion AI Study Tutor</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <h3 className="rag-title" style={{ margin: 0 }}>Acadion AI Study Tutor</h3>
+                {deficitContext && (
+                  <span style={{ background: "rgba(239, 68, 68, 0.2)", border: "1px solid rgba(239, 68, 68, 0.4)", color: "#fca5a5", fontSize: "0.72rem", padding: "2px 8px", borderRadius: "9999px", fontWeight: 700 }}>
+                    RECOVER Sub-Q {qCode} (-{deficitContext.deficitMarks}M)
+                  </span>
+                )}
+              </div>
               <p className="rag-subtitle">
                 <span>Grounded directly in Module 1–5 Course Notes</span>
-                {focusModule && (
+                {(focusModule || deficitContext?.moduleNumber) && (
                   <span className="rag-focus-tag">
-                    Module {focusModule}
-                    {focusTopic ? `: ${focusTopic}` : ""}
+                    Module {deficitContext?.moduleNumber || focusModule}
+                    {activeTopic ? `: ${activeTopic}` : ""}
                   </span>
                 )}
               </p>

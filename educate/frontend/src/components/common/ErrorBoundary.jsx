@@ -20,6 +20,10 @@ class ErrorBoundary extends React.Component {
   };
 
   handleGoHome = () => {
+    if (this.props.backPath) {
+      window.location.href = this.props.backPath;
+      return;
+    }
     const role = (sessionStorage.getItem("role") || localStorage.getItem("role") || "").toUpperCase();
     if (role.includes("TEACHER")) {
       window.location.href = "/teacher/dashboard";
@@ -75,11 +79,11 @@ class ErrorBoundary extends React.Component {
             </div>
 
             <h2 style={{ fontSize: "1.35rem", fontWeight: 800, margin: "0 0 10px 0", color: "#ffffff" }}>
-              AI Study Tutor Encountered an Error
+              {this.props.title || "Something Went Wrong"}
             </h2>
 
             <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: 1.5, margin: "0 0 20px 0" }}>
-              A client-side runtime exception occurred while rendering this view. Your session and data are secure.
+              {this.props.message || "A client-side runtime exception occurred while rendering this view. Your session and data are secure."}
             </p>
 
             {this.state.error && (
@@ -118,7 +122,7 @@ class ErrorBoundary extends React.Component {
                   cursor: "pointer",
                 }}
               >
-                ↻ Reload Tutor
+                {this.props.reloadLabel || "↻ Reload Page"}
               </button>
               <button
                 type="button"
@@ -134,7 +138,7 @@ class ErrorBoundary extends React.Component {
                   cursor: "pointer",
                 }}
               >
-                Return to Dashboard
+                {this.props.backLabel || "← Back to Dashboard"}
               </button>
             </div>
           </div>

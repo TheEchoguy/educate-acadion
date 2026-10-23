@@ -559,7 +559,7 @@ export default function ClassroomManagementWorkspacePage() {
               {/* SUBTAB 3: EVALUATION SCHEME CONFIGURATION */}
               {managementTab === "scheme" && (
                 <div style={{ padding: "8px 0" }}>
-                  <EvaluationSchemeConfig classroomId={id} isTeacher={true} />
+                  <EvaluationSchemeConfig classroomId={id} isTeacher={true} classroom={classroom} />
                 </div>
               )}
 

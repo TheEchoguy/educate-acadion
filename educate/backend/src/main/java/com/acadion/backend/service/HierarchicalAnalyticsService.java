@@ -62,6 +62,40 @@ public class HierarchicalAnalyticsService {
             }
         }
 
+        boolean hasAnyPublished = records.stream().anyMatch(StudentIaMarksRecord::isPublished);
+        if (!hasAnyPublished) {
+            log.info("Student {} has no published marks records in classroom {} for 4-level analytics", cleanUsn, classroomId);
+            return StudentFourLevelAnalyticsDTO.builder()
+                    .studentUsn(cleanUsn)
+                    .studentName(studentName)
+                    .classroomId(classroomId)
+                    .isPublished(false)
+                    .message("Draft mode: your subject faculty has recorded your marks in draft mode. Detailed question breakdown and performance analytics will unlock once published by faculty.")
+                    .level1Topics(Collections.emptyList())
+                    .level2Modules(Collections.emptyMap())
+                    .level3Subject(SubjectAnalytics.builder()
+                            .subjectCode(classroom.getSubjectCode() != null ? classroom.getSubjectCode() : "COURSE")
+                            .subjectName(classroom.getSubjectName() != null ? classroom.getSubjectName() : classroom.getName())
+                            .rawIaAverage(0.0)
+                            .scaledIaScore(0.0)
+                            .assignmentScore(5.0)
+                            .labScore(0.0)
+                            .totalCieSecured(5.0)
+                            .cieMaxMarks(50.0)
+                            .passingThreshold(20.0)
+                            .cieStatus("AT_RISK")
+                            .seeProjectedTarget("Pending published IA marks.")
+                            .calculationRule(scheme.getIaCalculationRule())
+                            .build())
+                    .level4Semester(SemesterAnalytics.builder()
+                            .semester(classroom.getSemester() > 0 ? classroom.getSemester() : 7)
+                            .gpaTrajectory("ON_TRACK_FIRST_CLASS")
+                            .overallRiskCategory("MEDIUM")
+                            .academicAdvice("Your IA marks are currently pending publication by your faculty.")
+                            .build())
+                    .build();
+        }
+
         // =========================================================================
         // LEVEL 1: TOPIC-LEVEL ATOMIC BREAKDOWN
         // =========================================================================
@@ -77,6 +111,9 @@ public class HierarchicalAnalyticsService {
         List<Double> allIaScores = new ArrayList<>();
 
         for (StudentIaMarksRecord rec : records) {
+            if (!rec.isPublished()) {
+                continue;
+            }
             int iaNo = rec.getIaNumber();
             IaQuestionBlueprint blueprint = paperParserService.getOrCreateDefaultBlueprint(classroomId, iaNo);
             Map<String, Double> marksMap = rec.getQuestionMarks() != null ? rec.getQuestionMarks() : Collections.emptyMap();
@@ -235,9 +272,17 @@ public class HierarchicalAnalyticsService {
         String seeTargetMsg = String.format("Need ≥ %.1f marks in SEE (out of 50) to pass course; ≥ %.1f for Distinction.",
                 Math.min(50.0, minSeeForPass), Math.min(50.0, minSeeForDistinction));
 
+        String rawCode = classroom.getCourseCode() != null && !classroom.getCourseCode().isBlank() ? classroom.getCourseCode().trim() : (classroom.getSubjectCode() != null ? classroom.getSubjectCode().trim() : null);
+        String sText = ((classroom.getName() != null ? classroom.getName() : "") + " " + (classroom.getSubjectName() != null ? classroom.getSubjectName() : "")).toLowerCase();
+        if (sText.contains("energy") || sText.contains("ec&a") || sText.contains("audit")) {
+            rawCode = "BEE755B";
+        } else if (rawCode == null || rawCode.isBlank()) {
+            rawCode = (sText.contains("internet") || sText.contains("iot")) ? "BCS701" : "COURSE";
+        }
+
         SubjectAnalytics level3Subject = SubjectAnalytics.builder()
-                .subjectCode(classroom.getSubjectCode() != null ? classroom.getSubjectCode() : "BCS701")
-                .subjectName(classroom.getSubjectName() != null ? classroom.getSubjectName() : "Internet of Things")
+                .subjectCode(rawCode)
+                .subjectName(classroom.getSubjectName() != null ? classroom.getSubjectName() : (classroom.getName() != null ? classroom.getName() : "Subject"))
                 .rawIaAverage(Math.round(rawIaAvg * 10.0) / 10.0)
                 .scaledIaScore(scaledIa)
                 .assignmentScore(assignmentScore)
@@ -287,6 +332,8 @@ public class HierarchicalAnalyticsService {
                 .studentUsn(cleanUsn)
                 .studentName(studentName)
                 .classroomId(classroomId)
+                .isPublished(true)
+                .message("Published")
                 .level1Topics(level1Topics)
                 .level2Modules(level2Modules)
                 .level3Subject(level3Subject)
@@ -635,10 +682,18 @@ public class HierarchicalAnalyticsService {
             questionAnalyticsList.add(qa);
         }
 
+        String summaryCode = classroom.getCourseCode() != null && !classroom.getCourseCode().isBlank() ? classroom.getCourseCode().trim() : (classroom.getSubjectCode() != null ? classroom.getSubjectCode().trim() : null);
+        String sSummText = ((classroom.getName() != null ? classroom.getName() : "") + " " + (classroom.getSubjectName() != null ? classroom.getSubjectName() : "")).toLowerCase();
+        if (sSummText.contains("energy") || sSummText.contains("ec&a") || sSummText.contains("audit")) {
+            summaryCode = "BEE755B";
+        } else if (summaryCode == null || summaryCode.isBlank()) {
+            summaryCode = (sSummText.contains("internet") || sSummText.contains("iot")) ? "BCS701" : "COURSE";
+        }
+
         return ClassroomAnalyticsSummaryDTO.builder()
                 .classroomId(classroomId)
-                .subjectCode(classroom.getSubjectCode() != null ? classroom.getSubjectCode() : "BCS701")
-                .subjectName(classroom.getSubjectName() != null ? classroom.getSubjectName() : "Internet of Things")
+                .subjectCode(summaryCode)
+                .subjectName(classroom.getSubjectName() != null ? classroom.getSubjectName() : (classroom.getName() != null ? classroom.getName() : "Subject"))
                 .enrolledStudentsCount(enrolledCount)
                 .evaluatedStudentsCount(studentEvaluatedCount)
                 .topicHeatmap(heatmap)

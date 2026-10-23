@@ -8,7 +8,9 @@ import {
   updateClassroom,
   deleteClassroom,
   regenerateJoinCode,
+  resolveCourseCode,
 } from "../../services/classroomService";
+import { getTeacherProfile } from "../../services/adminService";
 import toast from "react-hot-toast";
 import FloatingChatbotWidget from "../../components/classroom/FloatingChatbotWidget";
 import "./TeacherDashboard.css";
@@ -59,13 +61,24 @@ function TeacherDashboard() {
   // Delete Classroom Modal
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deletingClassroom, setDeletingClassroom] = useState(false);
+  const [teacherAssignedSubjects, setTeacherAssignedSubjects] = useState([]);
 
   const teacherName = sessionStorage.getItem("name") || localStorage.getItem("name") || "Faculty";
+  const teacherEmail = sessionStorage.getItem("email") || localStorage.getItem("email") || "";
   const teacherDept = sessionStorage.getItem("department") || localStorage.getItem("department") || "Academic Department";
 
   useEffect(() => {
     loadClassrooms();
-  }, []);
+    if (teacherEmail) {
+      getTeacherProfile(teacherEmail)
+        .then((profile) => {
+          if (profile && Array.isArray(profile.assignedSubjects)) {
+            setTeacherAssignedSubjects(profile.assignedSubjects);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [teacherEmail]);
 
   const loadClassrooms = async () => {
     try {
@@ -124,9 +137,8 @@ function TeacherDashboard() {
   const handleOpenEdit = (cls, e) => {
     e.stopPropagation();
     setOpenSettingsId(null);
-    const rawName = (cls.name || cls.subjectName || "").toLowerCase();
-    const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "");
-    const code = cls.courseCode || cls.subjectCode || inferredCode;
+    setEditClassroom(cls);
+    const code = resolveCourseCode(cls);
     setEditFormData({
       name: cls.name || "",
       courseCode: code,
@@ -470,7 +482,7 @@ function TeacherDashboard() {
           <div className="classrooms-cards-grid">
             {classrooms.map((cls) => {
               const enrolledCount = cls.activeMemberCount || (cls.enrolledStudents ? cls.enrolledStudents.length : 0);
-              const courseCode = cls.courseCode || cls.subjectCode || "COURSE";
+              const courseCode = resolveCourseCode(cls);
               const semSec = `Sem ${cls.semester || "—"} - Sec ${cls.section || "A"}`;
 
               return (
@@ -660,19 +672,72 @@ function TeacherDashboard() {
               </div>
 
               <form onSubmit={handleCreateSubmit} className="dashboard-form">
+                {teacherAssignedSubjects && teacherAssignedSubjects.length > 0 && (
+                  <div className="form-group" style={{ marginBottom: 12 }}>
+                    <label style={{ color: "#38bdf8", fontSize: "0.82rem", fontWeight: 600 }}>
+                      📋 Quick Select from Your Assigned Profile Subjects
+                    </label>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+                      {teacherAssignedSubjects.map((sub, idx) => {
+                        const subStr = typeof sub === "string" ? sub : sub.name || "";
+                        const matchCode = subStr.match(/\(([^)]+)\)/);
+                        const extractedCode = matchCode ? matchCode[1] : (subStr.toLowerCase().includes("energy") ? "BEE755B" : (subStr.toLowerCase().includes("iot") || subStr.toLowerCase().includes("internet") ? "BCS701" : ""));
+                        const cleanName = subStr.replace(/\s*\([^)]*\)/, "").trim();
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            className="meta-pill-dark"
+                            style={{
+                              cursor: "pointer",
+                              background: "rgba(56, 189, 248, 0.12)",
+                              border: "1px solid rgba(56, 189, 248, 0.3)",
+                              color: "#38bdf8",
+                              padding: "4px 10px",
+                              borderRadius: 6,
+                              fontSize: "0.78rem",
+                            }}
+                            onClick={() => {
+                              setCreateFormData((prev) => ({
+                                ...prev,
+                                subjectName: cleanName,
+                                subjectCode: extractedCode || prev.subjectCode,
+                                courseCode: extractedCode || prev.courseCode,
+                                name: prev.name || cleanName,
+                              }));
+                            }}
+                          >
+                            + {cleanName} {extractedCode ? `(${extractedCode})` : ""}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="form-group">
                   <label>Course / Classroom Name *</label>
                   <input
                     type="text"
-                    placeholder="e.g. Internet of Things"
+                    placeholder="e.g. Internet of Things, 7th A (EC&A)"
                     value={createFormData.name}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const valLower = val.toLowerCase();
+                      let autoCode = createFormData.subjectCode;
+                      if (!autoCode || autoCode === "BCS701" || autoCode === "BEE755B") {
+                        if (valLower.includes("energy") || valLower.includes("ec&a")) autoCode = "BEE755B";
+                        else if (valLower.includes("internet") || valLower.includes("iot")) autoCode = "BCS701";
+                      }
                       setCreateFormData({
                         ...createFormData,
-                        name: e.target.value,
-                        subjectName: createFormData.subjectName || e.target.value,
-                      })
-                    }
+                        name: val,
+                        subjectName: createFormData.subjectName || val,
+                        subjectCode: autoCode,
+                        courseCode: autoCode,
+                      });
+                    }}
                     required
                   />
                 </div>
@@ -682,13 +747,13 @@ function TeacherDashboard() {
                     <label>Course / Subject Code *</label>
                     <input
                       type="text"
-                      placeholder="e.g. BCS701"
+                      placeholder="e.g. BEE755B, BCS701"
                       value={createFormData.subjectCode}
                       onChange={(e) =>
                         setCreateFormData({
                           ...createFormData,
-                          subjectCode: e.target.value,
-                          courseCode: e.target.value,
+                          subjectCode: e.target.value.toUpperCase(),
+                          courseCode: e.target.value.toUpperCase(),
                         })
                       }
                       required
@@ -698,11 +763,23 @@ function TeacherDashboard() {
                     <label>Subject Full Name *</label>
                     <input
                       type="text"
-                      placeholder="e.g. Internet of Things"
+                      placeholder="e.g. Energy conservation and Audit, Internet of Things"
                       value={createFormData.subjectName}
-                      onChange={(e) =>
-                        setCreateFormData({ ...createFormData, subjectName: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const valLower = val.toLowerCase();
+                        let autoCode = createFormData.subjectCode;
+                        if (!autoCode || autoCode === "BCS701" || autoCode === "BEE755B") {
+                          if (valLower.includes("energy") || valLower.includes("ec&a")) autoCode = "BEE755B";
+                          else if (valLower.includes("internet") || valLower.includes("iot")) autoCode = "BCS701";
+                        }
+                        setCreateFormData({
+                          ...createFormData,
+                          subjectName: val,
+                          subjectCode: autoCode,
+                          courseCode: autoCode,
+                        });
+                      }}
                       required
                     />
                   </div>

@@ -7,7 +7,9 @@ import {
   createClassroom,
   updateClassroom,
   deleteClassroom,
+  resolveCourseCode,
 } from "../../services/classroomService";
+import { getTeacherProfile } from "../../services/adminService";
 import "./TeacherClassrooms.css";
 
 function TeacherClassrooms() {
@@ -37,7 +39,9 @@ function TeacherClassrooms() {
   // Delete modal states
   const [deleteModalClassroom, setDeleteModalClassroom] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [teacherAssignedSubjects, setTeacherAssignedSubjects] = useState([]);
 
+  const teacherEmail = sessionStorage.getItem("email") || localStorage.getItem("email") || "";
   const teacherDept = sessionStorage.getItem("department") || localStorage.getItem("department") || "Computer Science & Engineering";
 
   const [formData, setFormData] = useState({
@@ -54,7 +58,16 @@ function TeacherClassrooms() {
 
   useEffect(() => {
     loadClassrooms();
-  }, []);
+    if (teacherEmail) {
+      getTeacherProfile(teacherEmail)
+        .then((profile) => {
+          if (profile && Array.isArray(profile.assignedSubjects)) {
+            setTeacherAssignedSubjects(profile.assignedSubjects);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [teacherEmail]);
 
   const loadClassrooms = async () => {
     try {
@@ -94,7 +107,12 @@ function TeacherClassrooms() {
 
     try {
       setCreating(true);
-      const res = await createClassroom(formData);
+      const payload = {
+        ...formData,
+        courseCode: formData.courseCode || formData.subjectCode,
+        subjectCode: formData.subjectCode || formData.courseCode,
+      };
+      const res = await createClassroom(payload);
       toast.success(
         res.joinCode
           ? `Classroom '${res.name}' created! Join Code: ${res.joinCode}`
@@ -124,9 +142,7 @@ function TeacherClassrooms() {
   const handleEditOpen = (cls, e) => {
     e.stopPropagation();
     setEditClassroom(cls);
-    const rawName = (cls.name || cls.subjectName || "").toLowerCase();
-    const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "");
-    const code = cls.courseCode || cls.subjectCode || inferredCode;
+    const code = resolveCourseCode(cls);
     setEditFormData({
       name: cls.name || "",
       courseCode: code,
@@ -240,7 +256,7 @@ function TeacherClassrooms() {
                 onClick={() => navigate(`/teacher/classrooms/${cls.id}/workspaces`)}
               >
                 <div className="card-top-header">
-                  <span className="subject-code-pill">{cls.courseCode || cls.subjectCode}</span>
+                  <span className="subject-code-pill">{resolveCourseCode(cls)}</span>
                   <div className="card-top-right-group">
                     <span className={`status-badge status-${cls.status?.toLowerCase()}`}>
                       {cls.status}
@@ -324,14 +340,73 @@ function TeacherClassrooms() {
             </div>
 
             <form onSubmit={handleCreateSubmit} className="create-classroom-form">
+              {teacherAssignedSubjects && teacherAssignedSubjects.length > 0 && (
+                <div className="form-group" style={{ marginBottom: 14 }}>
+                  <label style={{ color: "#38bdf8", fontSize: "0.82rem", fontWeight: 600 }}>
+                    📋 Quick Select from Your Assigned Profile Subjects
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+                    {teacherAssignedSubjects.map((sub, idx) => {
+                      const subStr = typeof sub === "string" ? sub : sub.name || "";
+                      const matchCode = subStr.match(/\(([^)]+)\)/);
+                      const extractedCode = matchCode ? matchCode[1] : (subStr.toLowerCase().includes("energy") ? "BEE755B" : (subStr.toLowerCase().includes("iot") || subStr.toLowerCase().includes("internet") ? "BCS701" : ""));
+                      const cleanName = subStr.replace(/\s*\([^)]*\)/, "").trim();
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          className="meta-tag"
+                          style={{
+                            cursor: "pointer",
+                            background: "rgba(56, 189, 248, 0.12)",
+                            border: "1px solid rgba(56, 189, 248, 0.3)",
+                            color: "#38bdf8",
+                            padding: "4px 10px",
+                            borderRadius: 6,
+                            fontSize: "0.78rem",
+                          }}
+                          onClick={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              subjectName: cleanName,
+                              subjectCode: extractedCode || prev.subjectCode,
+                              courseCode: extractedCode || prev.courseCode,
+                              name: prev.name || cleanName,
+                            }));
+                          }}
+                        >
+                          + {cleanName} {extractedCode ? `(${extractedCode})` : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label>Classroom Name *</label>
                 <input
                   type="text"
                   name="name"
-                  placeholder="e.g. Internet of Things"
+                  placeholder="e.g. Internet of Things, 7th A (EC&A)"
                   value={formData.name}
-                  onChange={handleInputChange}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const valLower = val.toLowerCase();
+                    let autoCode = formData.subjectCode;
+                    if (!autoCode || autoCode === "BCS701" || autoCode === "BEE755B") {
+                      if (valLower.includes("energy") || valLower.includes("ec&a")) autoCode = "BEE755B";
+                      else if (valLower.includes("internet") || valLower.includes("iot")) autoCode = "BCS701";
+                    }
+                    setFormData((prev) => ({
+                      ...prev,
+                      name: val,
+                      subjectName: prev.subjectName || val,
+                      subjectCode: autoCode,
+                      courseCode: autoCode,
+                    }));
+                  }}
                   required
                 />
               </div>
@@ -342,9 +417,15 @@ function TeacherClassrooms() {
                   <input
                     type="text"
                     name="subjectCode"
-                    placeholder="e.g. BCS701"
+                    placeholder="e.g. BEE755B, BCS701"
                     value={formData.subjectCode}
-                    onChange={handleInputChange}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        subjectCode: e.target.value.toUpperCase(),
+                        courseCode: e.target.value.toUpperCase(),
+                      }))
+                    }
                     required
                   />
                 </div>
@@ -353,9 +434,23 @@ function TeacherClassrooms() {
                   <input
                     type="text"
                     name="subjectName"
-                    placeholder="e.g. Internet of Things"
+                    placeholder="e.g. Energy conservation and Audit, Internet of Things"
                     value={formData.subjectName}
-                    onChange={handleInputChange}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const valLower = val.toLowerCase();
+                      let autoCode = formData.subjectCode;
+                      if (!autoCode || autoCode === "BCS701" || autoCode === "BEE755B") {
+                        if (valLower.includes("energy") || valLower.includes("ec&a")) autoCode = "BEE755B";
+                        else if (valLower.includes("internet") || valLower.includes("iot")) autoCode = "BCS701";
+                      }
+                      setFormData((prev) => ({
+                        ...prev,
+                        subjectName: val,
+                        subjectCode: autoCode,
+                        courseCode: autoCode,
+                      }));
+                    }}
                     required
                   />
                 </div>

@@ -181,3 +181,690 @@
     font-size: 1.85rem;
   }
 }
+
+/* ==========================================================================
+   GLOBAL SEMESTER REPORT - MIDNIGHT SLATE & DEEP OBSIDIAN THEME
+   ========================================================================== */
+.global-semester-page {
+  background: #0B0F19;
+  min-height: 100vh;
+  padding: 0 0 60px 0;
+  color: #f8fafc;
+}
+
+.global-performance-container {
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 28px 24px;
+}
+
+.perf-top-navigation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.perf-top-navigation .back-btn {
+  background: #111827;
+  border: 1px solid #1F2937;
+  color: #94a3b8;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.perf-top-navigation .back-btn:hover {
+  background: #1F2937;
+  color: #ffffff;
+  border-color: #374151;
+}
+
+.student-header-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.student-header-meta .meta-tag {
+  background: #111827;
+  border: 1px solid #1F2937;
+  color: #94a3b8;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.student-header-meta .meta-tag strong {
+  color: #f1f5f9;
+}
+
+.global-report-header {
+  margin-bottom: 28px;
+}
+
+.global-report-header .intel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 9999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.global-report-header h1 {
+  font-size: 2.1rem;
+  font-weight: 800;
+  color: #f8fafc;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.5px;
+}
+
+.global-report-header p {
+  color: #94a3b8;
+  font-size: 0.94rem;
+  margin: 0;
+  max-width: 900px;
+  line-height: 1.6;
+}
+
+/* 1. TOP HERO BANNER */
+.global-hero-banner {
+  background: linear-gradient(135deg, #111827 0%, #0d1322 100%);
+  border: 1px solid #1F2937;
+  border-radius: 16px;
+  padding: 30px;
+  margin-bottom: 32px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  align-items: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.hero-status-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.trajectory-pill {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.badge-risk-low {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.badge-risk-med {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badge-risk-high {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.courses-count-pill {
+  background: #1F2937;
+  color: #cbd5e1;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid #374151;
+}
+
+.hero-student-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 16px 0;
+}
+
+.hero-guidance-callout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 10px;
+  padding: 12px 16px;
+  max-width: 720px;
+}
+
+.guidance-icon {
+  font-size: 1.2rem;
+  line-height: 1.4;
+}
+
+.guidance-text {
+  font-size: 0.88rem;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.guidance-text strong {
+  color: #38bdf8;
+}
+
+/* HERO METRICS CLUSTER */
+.hero-metrics-cluster {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hero-metric-tile {
+  background: #0B0F19;
+  border: 1px solid #1F2937;
+  border-radius: 12px;
+  padding: 18px 22px;
+  min-width: 175px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-tile-lbl {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-tile-val {
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.metric-tile-val small {
+  font-size: 0.88rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.metric-tile-sub {
+  font-size: 0.74rem;
+  color: #94a3b8;
+}
+
+.text-blue { color: #38bdf8; }
+.text-green { color: #34d399; }
+.text-amber { color: #fbbf24; }
+.text-red { color: #f87171; }
+
+/* 2. ENROLLED SUBJECTS GRID */
+.global-section {
+  margin-bottom: 36px;
+}
+
+.section-header-row {
+  margin-bottom: 18px;
+}
+
+.section-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0 0 4px 0;
+}
+
+.section-desc {
+  font-size: 0.86rem;
+  color: #94a3b8;
+}
+
+.courses-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+}
+
+.course-summary-card {
+  background: #111827;
+  border: 1px solid #1F2937;
+  border-radius: 14px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.course-summary-card:hover {
+  transform: translateY(-2px);
+  border-color: #374151;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.card-top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.course-code-badge {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 6px;
+}
+
+.risk-badge-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.risk-badge-tag.risk-low {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.risk-badge-tag.risk-med {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.risk-badge-tag.risk-high {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.course-name-heading {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.course-faculty-meta {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.course-faculty-meta strong {
+  color: #cbd5e1;
+}
+
+.sec-chip {
+  background: #1F2937;
+  color: #94a3b8;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.74rem;
+}
+
+/* CIE GAUGE BLOCK */
+.cie-score-block {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid #1F2937;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.cie-score-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.cie-label {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.cie-status-tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.cie-status-tag.status-pass {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.cie-status-tag.status-risk {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.cie-score-display-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.cie-main-score .val {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.cie-main-score .max {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-left: 4px;
+}
+
+.cie-scaled-ia-note {
+  font-size: 0.78rem;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.cie-progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cie-progress-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.cie-progress-bar.bar-green {
+  background: linear-gradient(90deg, #059669, #34d399);
+}
+
+.cie-progress-bar.bar-amber {
+  background: linear-gradient(90deg, #d97706, #fbbf24);
+}
+
+/* TEACHING COVERAGE */
+.course-coverage-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.coverage-meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.76rem;
+}
+
+.cov-label { color: #94a3b8; }
+.cov-pct { color: #38bdf8; font-weight: 600; }
+
+.cov-track {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cov-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0284c7, #38bdf8);
+  border-radius: 4px;
+}
+
+.topics-assessed-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.topic-flag {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.topic-flag.weak {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.topic-flag.clean {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.topic-flag.strong {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.btn-view-breakdown {
+  margin-top: 4px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: #38bdf8;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.btn-view-breakdown:hover {
+  background: rgba(56, 189, 248, 0.18);
+  color: #ffffff;
+  border-color: #38bdf8;
+}
+
+.btn-view-breakdown .arr {
+  transition: transform 0.2s ease;
+}
+
+.btn-view-breakdown:hover .arr {
+  transform: translateX(4px);
+}
+
+/* 3. CROSS-SUBJECT TOPIC MASTERY MATRIX TABLE */
+.matrix-table-card {
+  background: #111827;
+  border: 1px solid #1F2937;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.matrix-table-wrap {
+  overflow-x: auto;
+}
+
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.86rem;
+}
+
+.matrix-table th {
+  background: #0B0F19;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #1F2937;
+}
+
+.matrix-table td {
+  padding: 14px 18px;
+  border-bottom: 1px solid #1F2937;
+  color: #cbd5e1;
+}
+
+.matrix-table tr:last-child td {
+  border-bottom: none;
+}
+
+.matrix-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.col-subject-name strong {
+  color: #f8fafc;
+  font-size: 0.92rem;
+}
+
+.col-code-pill {
+  background: #1F2937;
+  color: #38bdf8;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.col-mastered-count {
+  color: #34d399;
+  font-weight: 600;
+}
+
+.col-weak-count {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.col-clean-count {
+  color: #94a3b8;
+}
+
+.matrix-pct-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 130px;
+}
+
+.matrix-bar-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.matrix-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.matrix-pct-num {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  min-width: 38px;
+}
+
+.matrix-status-pill {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.matrix-status-pill.status-clean {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.matrix-status-pill.status-sat {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.matrix-status-pill.status-warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.matrix-action-btn {
+  background: #1F2937;
+  color: #38bdf8;
+  border: 1px solid #374151;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.matrix-action-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+@media (max-width: 900px) {
+  .global-hero-banner {
+    grid-template-columns: 1fr;
+  }
+  .courses-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

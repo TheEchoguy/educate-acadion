@@ -1,12 +1,12 @@
 server.port=8080
 
-# MongoDB Atlas (REDACTED FOR REVIEW)
-spring.data.mongodb.uri=mongodb+srv://prashantkasar021_db_user:<PASSWORD>@cluster1.jtd3br1.mongodb.net/?appName=Cluster1
-spring.data.mongodb.database=educate
+# MongoDB Atlas Connection URI
+spring.data.mongodb.uri=mongodb+srv://<DB_USERNAME>:<DB_PASSWORD>@<CLUSTER_HOST>/?retryWrites=true&w=majority
+spring.data.mongodb.database=acadiondb
 jdk.tls.client.protocols=TLSv1.2
 
-# JWT Secret (REDACTED FOR REVIEW)
-app.jwt.secret=AcadionSecretKeyForJwtAuthenticationSuperSecureKey2026
+# JWT Secret (Base64 or 256-bit secret string)
+app.jwt.secret=<YOUR_SECURE_256BIT_JWT_SECRET_KEY>
 app.jwt.expiration=86400000
 
 # SMTP Brevo Relay (REDACTED FOR REVIEW)

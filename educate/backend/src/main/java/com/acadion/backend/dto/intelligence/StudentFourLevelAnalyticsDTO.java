@@ -17,6 +17,9 @@ public class StudentFourLevelAnalyticsDTO {
     private String studentUsn;
     private String studentName;
     private String classroomId;
+    @Builder.Default
+    private boolean isPublished = true;
+    private String message;
 
     // LEVEL 1: TOPIC-LEVEL ATOMIC BREAKDOWN
     private List<TopicAnalytics> level1Topics;

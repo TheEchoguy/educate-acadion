@@ -9,7 +9,7 @@ SPRING_DATA_MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net
 SPRING_DATA_MONGODB_DATABASE=acadiondb
 
 # JWT Secret Key (Required: Minimum 256-bit secure secret key)
-APP_JWT_SECRET=AcadionSecretKeyForJwtAuthenticationSuperSecureKey2026
+APP_JWT_SECRET=<YOUR_SECURE_256BIT_JWT_SECRET_KEY>
 APP_JWT_EXPIRATION=86400000
 
 # Brevo / SMTP Email Service Configuration (Optional)

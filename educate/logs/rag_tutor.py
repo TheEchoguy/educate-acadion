@@ -440,6 +440,23 @@ def decompose_query(query: str) -> List[str]:
     return unique_sub_queries
 
 
+SUBJECT_PRETRAINED_STORE_ID = "6ad5c9592ea967aa02bd2cc8"
+
+def resolve_effective_classroom_dir(classroom_id: str) -> str:
+    """
+    Returns the classroom store directory. If the requested classroom does not yet
+    have indexed module notes, automatically falls back to the subject-specific
+    pre-trained VTU IoT curriculum store (6ad5c9592ea967aa02bd2cc8).
+    """
+    target_dir = get_classroom_store_dir(classroom_id)
+    has_notes = any(os.path.exists(os.path.join(target_dir, f"mod_{m}.json")) for m in range(1, 6))
+    if not has_notes:
+        default_dir = os.path.join(VECTOR_STORE_DIR, SUBJECT_PRETRAINED_STORE_ID)
+        if os.path.exists(default_dir) and any(os.path.exists(os.path.join(default_dir, f"mod_{m}.json")) for m in range(1, 6)):
+            return default_dir
+    return target_dir
+
+
 def search_relevant_chunks(
     classroom_id: str,
     query: str,
@@ -448,90 +465,104 @@ def search_relevant_chunks(
 ) -> List[Dict[str, Any]]:
     """
     Hybrid Search + Query Decomposition + Reciprocal Rank Fusion + Neighbour Expansion:
-    1. Decomposes compound questions into sub-queries
-    2. Dense Cosine similarity + Sparse TF-IDF per sub-query, merged via RRF
-    3. Fetches top candidates, dedupes, expands neighbours for top 3 chunks
-    4. Evaluates relevance threshold to prevent hallucinations
+    1. Resolves effective store directory (falls back to subject-specific pre-indexed notes)
+    2. Decomposes compound questions into sub-queries
+    3. Dense Cosine similarity + Sparse TF-IDF per sub-query, merged via RRF
+    4. Evaluates focus_module, and automatically expands across modules if question is best answered in another module
+    5. Fetches top candidates, dedupes, expands neighbours for top 3 chunks
+    6. Evaluates relevance threshold to prevent hallucinations
     """
-    classroom_dir = get_classroom_store_dir(classroom_id)
-    target_modules = [focus_module] if focus_module else [1, 2, 3, 4, 5]
+    classroom_dir = resolve_effective_classroom_dir(classroom_id)
 
-    all_candidate_chunks: List[Dict[str, Any]] = []
-    all_candidate_embs: List[np.ndarray] = []
-    module_chunk_map: Dict[int, List[Dict[str, Any]]] = {}
+    def _execute_search(modules_to_search: List[int]):
+        candidate_chunks: List[Dict[str, Any]] = []
+        candidate_embs: List[np.ndarray] = []
+        mod_chunk_map: Dict[int, List[Dict[str, Any]]] = {}
 
-    for m in target_modules:
-        json_path = os.path.join(classroom_dir, f"mod_{m}.json")
-        if not os.path.exists(json_path):
-            continue
+        for m in modules_to_search:
+            json_path = os.path.join(classroom_dir, f"mod_{m}.json")
+            if not os.path.exists(json_path):
+                continue
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    chunks = json.load(f)
+                embs = _ensure_module_embeddings(classroom_dir, m)
+                if embs is not None and len(chunks) == len(embs):
+                    for idx, c in enumerate(chunks):
+                        c["_mod_idx"] = idx
+                    mod_chunk_map[m] = chunks
+                    candidate_chunks.extend(chunks)
+                    candidate_embs.append(embs)
+            except Exception as e:
+                print(f"[RAG Tutor Warning] Error reading module {m}: {e}")
+
+        if not candidate_chunks or not candidate_embs:
+            return [], 0.0, 0.0, candidate_chunks, mod_chunk_map, np.array([]), np.array([])
+
+        comb_embs = np.vstack(candidate_embs)
+        n_chunks = len(candidate_chunks)
+
+        chunk_corpus = [c.get("text") or c.get("body", "") for c in candidate_chunks]
         try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                chunks = json.load(f)
-            embs = _ensure_module_embeddings(classroom_dir, m)
-            if embs is not None and len(chunks) == len(embs):
-                # Annotate module internal index
-                for idx, c in enumerate(chunks):
-                    c["_mod_idx"] = idx
-                module_chunk_map[m] = chunks
-                all_candidate_chunks.extend(chunks)
-                all_candidate_embs.append(embs)
-        except Exception as e:
-            print(f"[RAG Tutor Warning] Error reading module {m}: {e}")
+            tfidf_vec = TfidfVectorizer(ngram_range=(1, 2), stop_words="english")
+            tfidf_matrix = tfidf_vec.fit_transform(chunk_corpus)
+        except Exception:
+            tfidf_vec = None
+            tfidf_matrix = None
 
-    if not all_candidate_chunks or not all_candidate_embs:
+        sub_queries = decompose_query(query)
+        rrf = np.zeros(n_chunks, dtype=np.float32)
+        dense_scores = np.zeros(n_chunks, dtype=np.float32)
+        tfidf_scores = np.zeros(n_chunks, dtype=np.float32)
+
+        for sq in sub_queries:
+            sq_emb = embedder.encode([sq], normalize_embeddings=True)[0]
+            d_sims = np.dot(comb_embs, sq_emb)
+            dense_scores = np.maximum(dense_scores, d_sims)
+            d_ranking = np.argsort(d_sims)[::-1]
+
+            if tfidf_vec is not None and tfidf_matrix is not None:
+                sq_tfidf = tfidf_vec.transform([sq])
+                t_sims = cosine_similarity(sq_tfidf, tfidf_matrix).flatten()
+                tfidf_scores = np.maximum(tfidf_scores, t_sims)
+                t_ranking = np.argsort(t_sims)[::-1]
+            else:
+                t_ranking = d_ranking
+
+            d_rank_map = {idx: rank for rank, idx in enumerate(d_ranking)}
+            t_rank_map = {idx: rank for rank, idx in enumerate(t_ranking)}
+
+            for i in range(n_chunks):
+                rrf[i] += (1.0 / (60.0 + d_rank_map[i])) + (1.0 / (60.0 + t_rank_map[i]))
+
+        best_dense = float(np.max(dense_scores)) if len(dense_scores) > 0 else 0.0
+        best_tfidf = float(np.max(tfidf_scores)) if len(tfidf_scores) > 0 else 0.0
+        return sub_queries, best_dense, best_tfidf, candidate_chunks, mod_chunk_map, rrf, dense_scores
+
+    # Run search with focus_module if provided
+    if focus_module:
+        sqs, b_dense, b_tfidf, cand_chunks, mod_map, rrf_arr, d_scores = _execute_search([focus_module])
+        # If the focused module has low confidence (<0.62) or zero chunks, check all modules
+        if b_dense < 0.62 or len(cand_chunks) == 0:
+            sqs_all, b_dense_all, b_tfidf_all, cand_all, mod_map_all, rrf_all, d_scores_all = _execute_search([1, 2, 3, 4, 5])
+            if b_dense_all > (b_dense + 0.10):
+                # Found significantly better grounding across curriculum!
+                cand_chunks, mod_map, rrf_arr, d_scores = cand_all, mod_map_all, rrf_all, d_scores_all
+                b_dense, b_tfidf = b_dense_all, b_tfidf_all
+    else:
+        sqs, b_dense, b_tfidf, cand_chunks, mod_map, rrf_arr, d_scores = _execute_search([1, 2, 3, 4, 5])
+
+    if not cand_chunks or len(d_scores) == 0:
         return []
 
-    combined_embs = np.vstack(all_candidate_embs)
-    num_chunks = len(all_candidate_chunks)
-
-    # Prepare TF-IDF vectorizer over candidate chunks
-    chunk_corpus = [c.get("text") or c.get("body", "") for c in all_candidate_chunks]
-    try:
-        tfidf_vec = TfidfVectorizer(ngram_range=(1, 2), stop_words="english")
-        tfidf_matrix = tfidf_vec.fit_transform(chunk_corpus)
-    except Exception as tfidf_err:
-        tfidf_vec = None
-        tfidf_matrix = None
-
-    sub_queries = decompose_query(query)
-    rrf_scores = np.zeros(num_chunks, dtype=np.float32)
-    max_dense_scores = np.zeros(num_chunks, dtype=np.float32)
-    max_tfidf_scores = np.zeros(num_chunks, dtype=np.float32)
-
-    for sq in sub_queries:
-        # 1. Dense Cosine
-        sq_emb = embedder.encode([sq], normalize_embeddings=True)[0]
-        dense_sims = np.dot(combined_embs, sq_emb)
-        max_dense_scores = np.maximum(max_dense_scores, dense_sims)
-        dense_ranking = np.argsort(dense_sims)[::-1]
-
-        # 2. Sparse TF-IDF
-        if tfidf_vec is not None and tfidf_matrix is not None:
-            sq_tfidf = tfidf_vec.transform([sq])
-            tfidf_sims = cosine_similarity(sq_tfidf, tfidf_matrix).flatten()
-            max_tfidf_scores = np.maximum(max_tfidf_scores, tfidf_sims)
-            tfidf_ranking = np.argsort(tfidf_sims)[::-1]
-        else:
-            tfidf_ranking = dense_ranking
-
-        # Rank maps (rank = 0 is best)
-        dense_rank_map = {idx: rank for rank, idx in enumerate(dense_ranking)}
-        tfidf_rank_map = {idx: rank for rank, idx in enumerate(tfidf_ranking)}
-
-        # 3. Reciprocal Rank Fusion
-        for i in range(num_chunks):
-            rrf_scores[i] += (1.0 / (60.0 + dense_rank_map[i])) + (1.0 / (60.0 + tfidf_rank_map[i]))
-
     # Relevance Threshold Check: if top similarity is extremely low, query has zero grounding
-    overall_best_dense = float(np.max(max_dense_scores))
-    overall_best_tfidf = float(np.max(max_tfidf_scores))
-    if overall_best_dense < 0.22 and overall_best_tfidf < 0.05:
-        print(f"[RAG Tutor] Query '{query}' rejected by relevance gate (best_dense={overall_best_dense:.3f}, best_tfidf={overall_best_tfidf:.3f})")
+    if b_dense < 0.22 and b_tfidf < 0.05:
+        print(f"[RAG Tutor] Query '{query}' rejected by relevance gate (best_dense={b_dense:.3f}, best_tfidf={b_tfidf:.3f})")
         return []
 
     # Select top candidate chunks by RRF score
-    top_candidate_indices = np.argsort(rrf_scores)[::-1][:12]
-    top_candidates = [all_candidate_chunks[idx] for idx in top_candidate_indices]
+    top_candidate_indices = np.argsort(rrf_arr)[::-1][:12]
+    top_candidates = [cand_chunks[idx] for idx in top_candidate_indices]
 
     # Deduplicate top 8 overall
     seen_ids = set()
@@ -549,8 +580,8 @@ def search_relevant_chunks(
     for c in initial_top[:3]:
         m = c.get("module")
         mod_idx = c.get("_mod_idx")
-        if m in module_chunk_map and mod_idx is not None:
-            m_list = module_chunk_map[m]
+        if m in mod_map and mod_idx is not None:
+            m_list = mod_map[m]
             if mod_idx > 0:
                 prev_c = m_list[mod_idx - 1]
                 if prev_c["chunk_id"] not in seen_ids:
@@ -566,9 +597,8 @@ def search_relevant_chunks(
     results = []
     for c in expanded_chunks:
         c_copy = dict(c)
-        # Find index in all_candidate_chunks
-        orig_idx = next((i for i, oc in enumerate(all_candidate_chunks) if oc["chunk_id"] == c["chunk_id"]), None)
-        sim = float(max_dense_scores[orig_idx]) if orig_idx is not None else 0.5
+        orig_idx = next((i for i, oc in enumerate(cand_chunks) if oc["chunk_id"] == c["chunk_id"]), None)
+        sim = float(d_scores[orig_idx]) if orig_idx is not None and orig_idx < len(d_scores) else 0.5
         c_copy["similarity"] = round(sim, 3)
         results.append(c_copy)
 
@@ -632,10 +662,11 @@ STUDENT QUESTION: {query}"""
         GEMINI_MODELS = [
             os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
             "gemini-3.8-flash",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash"
+            "gemini-3.5-flash",
+            "gemini-3.1-flash-lite",
+            "gemini-flash-latest",
         ]
-        candidate_models = list(dict.fromkeys(GEMINI_MODELS))
+        candidate_models = [m for m in dict.fromkeys(GEMINI_MODELS) if m]
 
         try:
             from google import genai
@@ -661,35 +692,40 @@ STUDENT QUESTION: {query}"""
     # 2. Try OpenRouter API
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
     if openrouter_key:
-        try:
-            openrouter_model = os.getenv("AI_OPENROUTER_MODEL", "google/gemini-3.8-flash")
-            resp = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {openrouter_key.strip()}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://acadion.edu",
-                    "X-Title": "Acadion RAG Study Tutor"
-                },
-                json={
-                    "model": openrouter_model,
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.2,
-                    "max_tokens": 2048
-                },
-                timeout=40
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                if content:
-                    return content.strip(), "LLM"
-            else:
-                print(f"[RAG Tutor OpenRouter Error {resp.status_code}]: {resp.text}")
-        except Exception as e:
-            print(f"[RAG Tutor OpenRouter Exception]: {e}")
+        openrouter_models = [
+            os.getenv("AI_OPENROUTER_MODEL", "minimax/minimax-m3.1-flash:free"),
+            "minimax/minimax-m3.1-flash:free",
+            "openrouter/free"
+        ]
+        for or_m in openrouter_models:
+            try:
+                resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {openrouter_key.strip()}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://acadion.edu",
+                        "X-Title": "Acadion RAG Study Tutor"
+                    },
+                    json={
+                        "model": or_m,
+                        "messages": [
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.2,
+                        "max_tokens": 1500
+                    },
+                    timeout=35
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    if content:
+                        return content.strip(), "LLM"
+                else:
+                    print(f"[RAG Tutor OpenRouter ({or_m}) Error {resp.status_code}]: {resp.text}")
+            except Exception as e:
+                print(f"[RAG Tutor OpenRouter ({or_m}) Exception]: {e}")
 
     # 3. Transparent Extractive Fallback (No hallucination, never pretend to be an LLM)
     fallback_text = synthesize_academic_fallback(query, retrieved_chunks)
@@ -807,8 +843,9 @@ def ask_study_tutor(
 def get_indexed_modules(classroom_id: str) -> Dict[str, Any]:
     """
     Returns the indexed module status for Modules 1 to 5.
+    Falls back to pre-indexed subject store if this classroom has not uploaded its own notes yet.
     """
-    classroom_dir = get_classroom_store_dir(classroom_id)
+    classroom_dir = resolve_effective_classroom_dir(classroom_id)
     manifest_path = os.path.join(classroom_dir, "manifest.json")
     manifest = {}
     if os.path.exists(manifest_path):

@@ -86,12 +86,13 @@ def rag_health():
             from google import genai
             from google.genai import types
             client = genai.Client(api_key=gemini_key.strip())
-            candidate_models = list(dict.fromkeys([
+            candidate_models = [m for m in dict.fromkeys([
                 os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
                 "gemini-3.8-flash",
-                "gemini-2.5-flash",
-                "gemini-2.0-flash"
-            ]))
+                "gemini-3.5-flash",
+                "gemini-3.1-flash-lite",
+                "gemini-flash-latest",
+            ]) if m]
             
             gemini_ok = False
             last_err = None
@@ -135,7 +136,7 @@ def rag_health():
         }
     else:
         try:
-            openrouter_model = os.getenv("AI_OPENROUTER_MODEL", "google/gemini-3.8-flash")
+            openrouter_model = os.getenv("AI_OPENROUTER_MODEL", "minimax/minimax-m3.1-flash:free")
             resp = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={

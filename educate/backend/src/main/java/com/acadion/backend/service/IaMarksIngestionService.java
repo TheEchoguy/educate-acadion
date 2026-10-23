@@ -1535,7 +1535,98 @@ public class IaMarksIngestionService {
     }
 
     public List<StudentIaMarksRecord> getIaRecordsByNumber(String classroomId, int iaNumber) {
-        return iaMarksRecordRepository.findByClassroomIdAndIaNumber(classroomId, iaNumber);
+        List<StudentIaMarksRecord> existing = iaMarksRecordRepository.findByClassroomIdAndIaNumber(classroomId, iaNumber);
+        Classroom classroom = classroomRepository.findById(classroomId).orElse(null);
+        if (classroom != null && classroom.getEnrolledStudents() != null && !classroom.getEnrolledStudents().isEmpty()) {
+            Set<String> existingUsns = new HashSet<>();
+            for (StudentIaMarksRecord r : existing) {
+                if (r.getUsn() != null) {
+                    existingUsns.add(r.getUsn().trim().toUpperCase());
+                }
+            }
+
+            boolean addedAny = false;
+            for (Classroom.EnrolledStudent es : classroom.getEnrolledStudents()) {
+                String cleanUsn = es.getUsn() != null ? es.getUsn().trim().toUpperCase() : null;
+                if (cleanUsn != null && !cleanUsn.isBlank() && !existingUsns.contains(cleanUsn)) {
+                    StudentIaMarksRecord newRec = StudentIaMarksRecord.builder()
+                            .classroomId(classroomId)
+                            .usn(cleanUsn)
+                            .studentName(es.getName() != null ? es.getName() : "Student")
+                            .iaNumber(iaNumber)
+                            .questionMarks(new HashMap<>())
+                            .totalMarks(0.0)
+                            .moduleMastery(new HashMap<>())
+                            .published(false)
+                            .updatedAt(Instant.now())
+                            .build();
+                    iaMarksRecordRepository.save(newRec);
+                    existing.add(newRec);
+                    existingUsns.add(cleanUsn);
+                    addedAny = true;
+                }
+            }
+            if (addedAny) {
+                log.info("Auto-initialized missing enrolled students in classroom {} for IA-{}", classroomId, iaNumber);
+            }
+        }
+        return existing;
+    }
+
+    public Map<String, Object> publishStudentMarks(String classroomId, String usn, int iaNumber, boolean isPublished) {
+        if (usn == null || usn.isBlank()) {
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("success", false);
+            resp.put("message", "USN cannot be empty");
+            return resp;
+        }
+        String cleanUsn = usn.trim().toUpperCase();
+        Optional<StudentIaMarksRecord> opt = iaMarksRecordRepository.findByClassroomIdAndUsnIgnoreCaseAndIaNumber(classroomId, cleanUsn, iaNumber);
+        if (opt.isEmpty()) {
+            opt = iaMarksRecordRepository.findFirstByClassroomIdAndUsnIgnoreCaseAndIaNumber(classroomId, cleanUsn, iaNumber);
+        }
+
+        StudentIaMarksRecord rec;
+        if (opt.isEmpty()) {
+            String name = "Student";
+            Classroom classroom = classroomRepository.findById(classroomId).orElse(null);
+            if (classroom != null && classroom.getEnrolledStudents() != null) {
+                for (Classroom.EnrolledStudent es : classroom.getEnrolledStudents()) {
+                    if (es.getUsn() != null && es.getUsn().equalsIgnoreCase(cleanUsn)) {
+                        if (es.getName() != null) name = es.getName();
+                        break;
+                    }
+                }
+            }
+            rec = StudentIaMarksRecord.builder()
+                    .classroomId(classroomId)
+                    .usn(cleanUsn)
+                    .studentName(name)
+                    .iaNumber(iaNumber)
+                    .questionMarks(new HashMap<>())
+                    .totalMarks(0.0)
+                    .moduleMastery(new HashMap<>())
+                    .published(isPublished)
+                    .publishedAt(isPublished ? Instant.now() : null)
+                    .updatedAt(Instant.now())
+                    .build();
+        } else {
+            rec = opt.get();
+            rec.setPublished(isPublished);
+            rec.setPublishedAt(isPublished ? Instant.now() : null);
+            rec.setUpdatedAt(Instant.now());
+        }
+        iaMarksRecordRepository.save(rec);
+
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("success", true);
+        resp.put("classroomId", classroomId);
+        resp.put("usn", cleanUsn);
+        resp.put("iaNumber", iaNumber);
+        resp.put("isPublished", isPublished);
+        resp.put("published", isPublished);
+        resp.put("message", (isPublished ? "Published" : "Unpublished") + " marks for " + rec.getStudentName() + " (" + cleanUsn + ")");
+        return resp;
     }
 
     /**

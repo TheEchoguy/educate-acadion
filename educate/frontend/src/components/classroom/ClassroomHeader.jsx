@@ -1,5 +1,6 @@
 import React from "react";
 import toast from "react-hot-toast";
+import { resolveCourseCode } from "../../services/classroomService";
 import "./ClassroomHeader.css";
 
 export default function ClassroomHeader({
@@ -26,9 +27,7 @@ export default function ClassroomHeader({
   };
 
   const status = (classroom.status || "ACTIVE").toUpperCase();
-  const rawName = (classroom.name || classroom.subjectName || "").toLowerCase();
-  const inferredCode = rawName.includes("energy") ? "BEE755B" : (rawName.includes("internet") || rawName.includes("iot") ? "BCS701" : "COURSE");
-  const courseCode = classroom.courseCode || classroom.subjectCode || inferredCode;
+  const courseCode = resolveCourseCode(classroom);
   const subjectName = classroom.subjectName || classroom.name || "Subject";
   const semSec = `(Sem ${classroom.semester || "7"}-${classroom.section || "A"})`;
 

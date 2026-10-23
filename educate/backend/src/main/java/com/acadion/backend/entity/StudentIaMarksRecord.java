@@ -75,4 +75,22 @@ public class StudentIaMarksRecord {
 
     @Builder.Default
     private Instant updatedAt = Instant.now();
+
+    public boolean isPublished() {
+        return published;
+    }
+
+    public void setPublished(boolean published) {
+        this.published = published;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("isPublished")
+    public boolean getIsPublished() {
+        return published;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("isPublished")
+    public void setIsPublished(boolean isPublished) {
+        this.published = isPublished;
+    }
 }

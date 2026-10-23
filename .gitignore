@@ -1,0 +1,59 @@
+# ==============================================================================
+# Git Ignore Configuration - Acadion Enterprise Ecosystem
+# ==============================================================================
+
+# Compiled binaries and target directories
+target/
+**/target/
+build/
+**/build/
+dist/
+**/dist/
+
+# Dependencies
+node_modules/
+**/node_modules/
+.venv/
+**/venv/
+**/env/
+**/ENV/
+
+# Environment and sensitive configuration
+.env
+**/.env
+.env.local
+.env.*.local
+*.local.properties
+application-local.properties
+**/application-local.properties
+
+# Logs and runtime artifacts
+*.log
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python caches and bytecode
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# IDE and Editor artifacts
+.idea/
+**/.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+**/.vscode/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+**/Thumbs.db
+
+# OCR and temporary upload artifacts
+**/storage/acadion/temp/
+**/storage/acadion/uploads/
